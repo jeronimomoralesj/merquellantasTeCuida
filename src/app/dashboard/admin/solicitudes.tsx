@@ -63,7 +63,7 @@ export default function SolicitudesCard() {
   // helper: format Firestore Timestamp or ISO string
   const formatDate = (d: Timestamp | Date | string | undefined): string => {
     if (!d) return 'Fecha no disponible';
-    const dt = (d as any)?.toDate?.() || new Date(d);
+const dt = (d as Timestamp)?.toDate?.() || new Date(d as string | Date);
     return dt.toLocaleDateString("es-ES", {
       day: "numeric",
       month: "long",
@@ -225,8 +225,8 @@ export default function SolicitudesCard() {
           if (a.status !== "pendiente" && b.status === "pendiente") return 1;
           
           // Then sort by date (oldest first)
-          const da = (a.date as any)?.toDate?.().getTime() || new Date(a.date).getTime();
-          const db_ = (b.date as any)?.toDate?.().getTime() || new Date(b.date).getTime();
+const da = (a.date as Timestamp)?.toDate?.().getTime() || new Date(a.date as string | Date).getTime();
+const db_ = (b.date as Timestamp)?.toDate?.().getTime() || new Date(b.date as string | Date).getTime();
           return da - db_; // Changed to ascending order (oldest first)
         });
 
