@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   User,
   AlertCircle,
@@ -72,6 +72,17 @@ interface MotivosStats {
   educacion: number;
   compraVivienda: number;
   otros: number;
+}
+
+interface FelicidadData {
+  moodDistribution: MoodDistribution[];
+  monthlyTrend: MonthlyMoodData[];
+  departmentStats: Record<string, DepartmentStats>;
+  totalResponses: number;
+  overallSatisfaction: number;
+  workersNeedingAttention: number;
+  topDepartment: TopDepartment | null;
+  error?: string;
 }
 
 interface StatsData {
@@ -169,7 +180,7 @@ export default function StatsCard() {
   };
 
   // Fetch happiness survey data
-  const fetchHappinessData = async () => {
+  const fetchHappinessData = useCallback(async (): Promise<FelicidadData> => {
     try {
       const monthRange = getCurrentMonthRange();
       
@@ -312,10 +323,10 @@ export default function StatsCard() {
       console.error("Error fetching happiness data:", error);
       throw error;
     }
-  };
+  }, []);
 
   // Fetch historical data for charts
-  const fetchHistoricalData = async () => {
+  const fetchHistoricalData = useCallback(async () => {
     // Get the last 5 months
     const months: Array<{ name: string; start: Timestamp; end: Timestamp }> = [];
     const currentDate = new Date();
@@ -374,10 +385,10 @@ export default function StatsCard() {
       solicitudes: solicitudesData,
       cesantias: cesantiasData
     };
-  };
+  }, []);
 
   // Fetch cesantias motivos data
-  const fetchCesantiasMotivos = async (): Promise<MotivosStats> => {
+  const fetchCesantiasMotivos = useCallback(async (): Promise<MotivosStats> => {
     try {
       const monthRange = getCurrentMonthRange();
       
@@ -416,7 +427,7 @@ export default function StatsCard() {
       console.error("Error fetching cesantias motivos:", error);
       return { vivienda: 0, educacion: 0, compraVivienda: 0, otros: 0 };
     }
-  };
+  }, []);
 
   // Fetch data on component mount
   useEffect(() => {
@@ -449,7 +460,7 @@ export default function StatsCard() {
         ]);
         
         // Fetch happiness data
-        let felicidadData;
+        let felicidadData: FelicidadData;
         try {
           felicidadData = await fetchHappinessData();
         } catch (error) {
@@ -483,7 +494,7 @@ export default function StatsCard() {
           felicidad: {
             ...felicidadData,
             loading: false,
-            error: (felicidadData as any).error || null
+            error: felicidadData.error || null
           }
         });
       } catch (error) {
@@ -509,7 +520,7 @@ export default function StatsCard() {
     }
     
     fetchData();
-  }, []);
+  }, [fetchHistoricalData, fetchCesantiasMotivos, fetchHappinessData]);
 
   const handleExportPDF = (type: string) => {
     // In a real application, this would generate and download a PDF
@@ -609,7 +620,7 @@ export default function StatsCard() {
           </div>
         </div>
         
-        {/* Happiness Survey Card - Keeping this as dummy data */}
+        {/* Happiness Survey Card */}
         <div 
           className="p-3 rounded-lg hover:bg-gray-50 border border-gray-100 transition-colors cursor-pointer"
           onClick={() => openModal("felicidad")}
@@ -717,10 +728,13 @@ export default function StatsCard() {
                         <CheckCircle className="h-4 w-4 text-green-500 mr-2" />
                         <span>
                           Solicitudes aprobadas: {statsData.solicitudes.monthly[statsData.solicitudes.monthly.length - 1]?.aprobadas || 0} 
-                          ({statsData.solicitudes.monthly[statsData.solicitudes.monthly.length - 1]?.solicitudes && statsData.solicitudes.monthly[statsData.solicitudes.monthly.length - 1]?.solicitudes! > 0 
-                            ? Math.round((statsData.solicitudes.monthly[statsData.solicitudes.monthly.length - 1]?.aprobadas! / 
-                               statsData.solicitudes.monthly[statsData.solicitudes.monthly.length - 1]?.solicitudes!) * 100) 
-                            : 0}%)
+                          ({(() => {
+                            const lastMonth = statsData.solicitudes.monthly[statsData.solicitudes.monthly.length - 1];
+                            if (lastMonth?.solicitudes && lastMonth.solicitudes > 0 && lastMonth.aprobadas !== undefined) {
+                              return Math.round((lastMonth.aprobadas / lastMonth.solicitudes) * 100);
+                            }
+                            return 0;
+                          })()}%)
                         </span>
                       </li>
                       <li className="flex items-center">
