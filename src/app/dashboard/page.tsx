@@ -276,8 +276,8 @@ const Dashboard = () => {
           >
             <span className="mr-1 group-hover:-translate-x-1 transition-transform">&larr;</span> Volver al Dashboard
           </button>
-          <Solicitudes />
-        </div>
+<Solicitudes onClose={() => setShowSolicitudes(false)} />
+          </div>
       </>
     );
   }
