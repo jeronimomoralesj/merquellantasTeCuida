@@ -11,6 +11,14 @@ import {
 import { collection, getDocs, query } from 'firebase/firestore';
 import { db } from '../../../firebase'; // Adjust path as needed
 
+interface MoodEntry {
+  mood: string;
+  date: {
+    toMillis: () => number;
+    toDate: () => Date;
+  };
+}
+
 export default function TristesCard() {
   const [trabajadoresTriste, setTrabajadoresTriste] = useState([]);
   const [loading, setLoading] = useState(true);
