@@ -26,8 +26,7 @@ const countWords = (text: string) => {
   };
 
   // Calculate total word count in the conversation
-const calculateTotalWordCount = (messageList: any[]) => {
-    return messageList.reduce((total, msg) => {
+const calculateTotalWordCount = (messageList: Array<{role: string, content: string}>) => {    return messageList.reduce((total, msg) => {
       if (msg.role !== 'system') {
         return total + countWords(msg.content);
       }
@@ -36,7 +35,7 @@ const calculateTotalWordCount = (messageList: any[]) => {
   };
 
   // Check if mood needs to be asked (older than today)
-const shouldAskMood = (lastMoodDate: any) => {
+const shouldAskMood = (lastMoodDate: {toDate: () => Date} | null) => {
     if (!lastMoodDate) return true;
     
     const today = new Date();
@@ -81,7 +80,7 @@ const shouldAskMood = (lastMoodDate: any) => {
     });
 
     return () => unsubscribe();
-  }, []);
+}, [setMood]);
 
   // Load messages from memory storage on mount (removed localStorage)
   useEffect(() => {
@@ -98,7 +97,7 @@ const shouldAskMood = (lastMoodDate: any) => {
       setWordCount(newWordCount);
       setLimitReached(newWordCount >= maxWords);
     }
-  }, [messages]);
+}, [messages, calculateTotalWordCount]);
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -181,7 +180,7 @@ const selectMood = async (selectedMood: string) => {
   };
 
   // Updated fetchGeminiResponse function
-const fetchGeminiResponse = async (messageHistory: any[]) => {
+const fetchGeminiResponse = async (messageHistory: Array<{role: string, content: string}>) => {
     try {
       console.log('Sending messages to API:', messageHistory);
       
