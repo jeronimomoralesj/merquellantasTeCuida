@@ -17,7 +17,7 @@ export default function TristesCard() {
   const [error, setError] = useState(null);
 
   // Function to check if a user has 3 consecutive "triste" moods
-  const hasConsecutiveSadMoods = (moodHistory, consecutiveCount = 3) => {
+const hasConsecutiveSadMoods = (moodHistory: any[], consecutiveCount = 3) => {
     if (!moodHistory || moodHistory.length < consecutiveCount) {
       return { hasConsecutive: false, count: 0 };
     }
@@ -43,7 +43,7 @@ export default function TristesCard() {
   };
 
   // Function to get avatar initials from name
-  const getAvatarInitials = (name) => {
+const getAvatarInitials = (name: string) => {
     return name
       .split(' ')
       .map(word => word.charAt(0))
@@ -53,7 +53,7 @@ export default function TristesCard() {
   };
 
   // Function to get random avatar color
-  const getAvatarColor = (index) => {
+const getAvatarColor = (index: number) => {
     const colors = [
       "bg-blue-100 text-blue-600",
       "bg-green-100 text-green-600", 
