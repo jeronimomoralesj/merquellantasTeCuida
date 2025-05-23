@@ -118,7 +118,7 @@ const shouldAskMood = (lastMoodDate: {toDate: () => Date} | null) => {
   };
 
   // Store mood in Firebase
-  const storeMoodInFirebase = async (selectedMood) => {
+const storeMoodInFirebase = async (selectedMood: string) => {
     if (!userId) return;
 
     try {
