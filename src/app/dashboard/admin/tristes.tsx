@@ -19,6 +19,18 @@ interface MoodEntry {
   };
 }
 
+interface SadWorker {
+  id: string;
+  name: string;
+  position: string;
+  department: string;
+  consecutiveSadDays: number;
+  avatar: string;
+  avatarColor: string;
+  email: string;
+  lastMoodDate: Date;
+}
+
 export default function TristesCard() {
   const [trabajadoresTriste, setTrabajadoresTriste] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -85,7 +97,7 @@ const getAvatarColor = (index: number) => {
       const usersQuery = query(collection(db, 'users'));
       const usersSnapshot = await getDocs(usersQuery);
       
-      const sadWorkers = [];
+const sadWorkers: SadWorker[] = [];
 
       usersSnapshot.forEach((doc) => {
         const userData = doc.data();
