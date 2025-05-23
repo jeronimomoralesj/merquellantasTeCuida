@@ -6,7 +6,7 @@ import { auth, db } from '../../../firebase'; // Adjust path as needed
 
 export default function GeminiChat() {
   const [isOpen, setIsOpen] = useState(false);
-  const [messages, setMessages] = useState([]);
+const [messages, setMessages] = useState<Array<{role: string, content: string}>>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
 const [, setMood] = useState<string|null>(null);
