@@ -17,7 +17,7 @@ export default function TristesCard() {
   const [error, setError] = useState(null);
 
   // Function to check if a user has 3 consecutive "triste" moods
-const hasConsecutiveSadMoods = (moodHistory: any[], consecutiveCount = 3) => {
+const hasConsecutiveSadMoods = (moodHistory: MoodEntry[], consecutiveCount = 3) => {
     if (!moodHistory || moodHistory.length < consecutiveCount) {
       return { hasConsecutive: false, count: 0 };
     }
