@@ -35,9 +35,90 @@ import {
 } from "firebase/firestore";
 import { db } from "../../../firebase"; // adjust to your path
 
+// Type definitions
+interface MonthlyData {
+  name: string;
+  solicitudes?: number;
+  aprobadas?: number;
+  cantidad?: number;
+}
+
+interface MoodData {
+  feliz: number;
+  neutral: number;
+  triste: number;
+}
+
+interface MonthlyMoodData extends MoodData {
+  name: string;
+}
+
+interface DepartmentStats extends MoodData {
+  total: number;
+}
+
+interface MoodDistribution {
+  name: string;
+  value: number;
+}
+
+interface TopDepartment {
+  name: string;
+  satisfaction: number;
+}
+
+interface MotivosStats {
+  vivienda: number;
+  educacion: number;
+  compraVivienda: number;
+  otros: number;
+}
+
+interface StatsData {
+  solicitudes: {
+    total: number;
+    loading: boolean;
+    error: string | null;
+    monthly: MonthlyData[];
+  };
+  cesantias: {
+    total: number;
+    loading: boolean;
+    error: string | null;
+    monthly: MonthlyData[];
+    motivosStats: MotivosStats;
+  };
+  felicidad: {
+    loading: boolean;
+    error: string | null;
+    moodDistribution: MoodDistribution[];
+    monthlyTrend: MonthlyMoodData[];
+    departmentStats: Record<string, DepartmentStats>;
+    totalResponses: number;
+    overallSatisfaction: number;
+    workersNeedingAttention: number;
+    topDepartment: TopDepartment | null;
+  };
+}
+
+interface MoodEntry {
+  mood: string;
+  date: Timestamp;
+}
+
+interface UserData {
+  department?: string;
+  departamento?: string;
+  mood?: {
+    mood: string;
+    date: Timestamp;
+  };
+  moodHistory?: MoodEntry[];
+}
+
 export default function StatsCard() {
-  const [activeModal, setActiveModal] = useState(null);
-  const [statsData, setStatsData] = useState({
+  const [activeModal, setActiveModal] = useState<string | null>(null);
+  const [statsData, setStatsData] = useState<StatsData>({
     solicitudes: {
       total: 0,
       loading: true,
@@ -49,7 +130,12 @@ export default function StatsCard() {
       loading: true,
       error: null,
       monthly: [],
-      motivosStats: {}
+      motivosStats: {
+        vivienda: 0,
+        educacion: 0,
+        compraVivienda: 0,
+        otros: 0
+      }
     },
     felicidad: {
       loading: true,
@@ -78,7 +164,7 @@ export default function StatsCard() {
   };
 
   // Helper function to get month name from date
-  const getMonthName = (date) => {
+  const getMonthName = (date: Date): string => {
     return date.toLocaleString('es-ES', { month: 'short' });
   };
 
@@ -91,9 +177,9 @@ export default function StatsCard() {
       const usersQuery = query(collection(db, "users"));
       const usersSnapshot = await getDocs(usersQuery);
       
-      const moodCounts = { feliz: 0, neutral: 0, triste: 0 };
-      const departmentMoods = {};
-      const monthlyMoodData = Array(5).fill().map((_, i) => {
+      const moodCounts: MoodData = { feliz: 0, neutral: 0, triste: 0 };
+      const departmentMoods: Record<string, DepartmentStats> = {};
+      const monthlyMoodData: MonthlyMoodData[] = Array(5).fill(null).map((_, i) => {
         const date = new Date();
         date.setMonth(date.getMonth() - (4 - i));
         return {
@@ -108,7 +194,7 @@ export default function StatsCard() {
       let workersNeedingAttention = 0;
       
       usersSnapshot.forEach((doc) => {
-        const userData = doc.data();
+        const userData = doc.data() as UserData;
         const department = userData.department || userData.departamento || 'Sin Departamento';
         
         // Initialize department stats if not exists
@@ -122,15 +208,15 @@ export default function StatsCard() {
             const moodDate = moodEntry.date?.toDate();
             if (moodDate && moodDate >= monthRange.start.toDate() && moodDate <= monthRange.end.toDate()) {
               totalResponses++;
-              const mood = moodEntry.mood;
+              const mood = moodEntry.mood as keyof MoodData;
               
               // Count overall moods
-              if (moodCounts.hasOwnProperty(mood)) {
+              if (mood in moodCounts) {
                 moodCounts[mood]++;
               }
               
               // Count department moods
-              if (departmentMoods[department] && moodCounts.hasOwnProperty(mood)) {
+              if (departmentMoods[department] && mood in moodCounts) {
                 departmentMoods[department][mood]++;
                 departmentMoods[department].total++;
               }
@@ -139,7 +225,7 @@ export default function StatsCard() {
               const monthIndex = monthlyMoodData.findIndex(m => 
                 m.name === getMonthName(moodDate)
               );
-              if (monthIndex !== -1 && moodCounts.hasOwnProperty(mood)) {
+              if (monthIndex !== -1 && mood in moodCounts) {
                 monthlyMoodData[monthIndex][mood]++;
               }
             }
@@ -167,13 +253,13 @@ export default function StatsCard() {
           const moodDate = userData.mood.date?.toDate();
           if (moodDate && moodDate >= monthRange.start.toDate() && moodDate <= monthRange.end.toDate()) {
             totalResponses++;
-            const mood = userData.mood.mood;
+            const mood = userData.mood.mood as keyof MoodData;
             
-            if (moodCounts.hasOwnProperty(mood)) {
+            if (mood in moodCounts) {
               moodCounts[mood]++;
             }
             
-            if (departmentMoods[department] && moodCounts.hasOwnProperty(mood)) {
+            if (departmentMoods[department] && mood in moodCounts) {
               departmentMoods[department][mood]++;
               departmentMoods[department].total++;
             }
@@ -192,7 +278,7 @@ export default function StatsCard() {
         : 0;
       
       // Find top department by satisfaction
-      let topDepartment = null;
+      let topDepartment: TopDepartment | null = null;
       let highestSatisfaction = 0;
       
       Object.entries(departmentMoods).forEach(([dept, stats]) => {
@@ -206,7 +292,7 @@ export default function StatsCard() {
       });
       
       // Format data for charts
-      const moodDistribution = [
+      const moodDistribution: MoodDistribution[] = [
         { name: "Feliz", value: moodCounts.feliz },
         { name: "Neutral", value: moodCounts.neutral },
         { name: "Triste", value: moodCounts.triste },
@@ -231,7 +317,7 @@ export default function StatsCard() {
   // Fetch historical data for charts
   const fetchHistoricalData = async () => {
     // Get the last 5 months
-    const months = [];
+    const months: Array<{ name: string; start: Timestamp; end: Timestamp }> = [];
     const currentDate = new Date();
     
     for (let i = 4; i >= 0; i--) {
@@ -244,8 +330,8 @@ export default function StatsCard() {
     }
     
     // Initialize result arrays
-    const solicitudesData = [];
-    const cesantiasData = [];
+    const solicitudesData: MonthlyData[] = [];
+    const cesantiasData: MonthlyData[] = [];
     
     // Fetch data for each month
     for (const month of months) {
@@ -291,7 +377,7 @@ export default function StatsCard() {
   };
 
   // Fetch cesantias motivos data
-  const fetchCesantiasMotivos = async () => {
+  const fetchCesantiasMotivos = async (): Promise<MotivosStats> => {
     try {
       const monthRange = getCurrentMonthRange();
       
@@ -303,7 +389,7 @@ export default function StatsCard() {
       
       const cesantiasSnapshot = await getDocs(cesantiasQuery);
       
-      const motivosStats = {
+      const motivosStats: MotivosStats = {
         vivienda: 0,
         educacion: 0,
         compraVivienda: 0,
@@ -312,7 +398,7 @@ export default function StatsCard() {
       
       cesantiasSnapshot.forEach((doc) => {
         const data = doc.data();
-        const motivo = data.motivoSolicitud?.toLowerCase() || '';
+        const motivo = (data.motivoSolicitud?.toLowerCase() || '') as string;
         
         if (motivo.includes('vivienda') || motivo.includes('arreglo')) {
           motivosStats.vivienda++;
@@ -397,7 +483,7 @@ export default function StatsCard() {
           felicidad: {
             ...felicidadData,
             loading: false,
-            error: felicidadData.error || null
+            error: (felicidadData as any).error || null
           }
         });
       } catch (error) {
@@ -425,12 +511,12 @@ export default function StatsCard() {
     fetchData();
   }, []);
 
-  const handleExportPDF = (type) => {
+  const handleExportPDF = (type: string) => {
     // In a real application, this would generate and download a PDF
     alert(`Exportando informe de ${type} como PDF...`);
   };
 
-  const openModal = async (type) => {
+  const openModal = async (type: string) => {
     setActiveModal(type);
     
     // If opening felicidad modal and data hasn't been loaded yet, fetch it
@@ -631,9 +717,9 @@ export default function StatsCard() {
                         <CheckCircle className="h-4 w-4 text-green-500 mr-2" />
                         <span>
                           Solicitudes aprobadas: {statsData.solicitudes.monthly[statsData.solicitudes.monthly.length - 1]?.aprobadas || 0} 
-                          ({statsData.solicitudes.monthly[statsData.solicitudes.monthly.length - 1]?.solicitudes > 0 
-                            ? Math.round((statsData.solicitudes.monthly[statsData.solicitudes.monthly.length - 1]?.aprobadas / 
-                               statsData.solicitudes.monthly[statsData.solicitudes.monthly.length - 1]?.solicitudes) * 100) 
+                          ({statsData.solicitudes.monthly[statsData.solicitudes.monthly.length - 1]?.solicitudes && statsData.solicitudes.monthly[statsData.solicitudes.monthly.length - 1]?.solicitudes! > 0 
+                            ? Math.round((statsData.solicitudes.monthly[statsData.solicitudes.monthly.length - 1]?.aprobadas! / 
+                               statsData.solicitudes.monthly[statsData.solicitudes.monthly.length - 1]?.solicitudes!) * 100) 
                             : 0}%)
                         </span>
                       </li>
