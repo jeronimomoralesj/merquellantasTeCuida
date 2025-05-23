@@ -17,11 +17,19 @@ export default function CalendarPage() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [eventsForSelectedDate, setEventsForSelectedDate] = useState([]);
-  const [viewTransition, setViewTransition] = useState(false);
-const [allEvents, setAllEvents] = useState<any[]>([]);
+const [eventsForSelectedDate, setEventsForSelectedDate] = useState<CalendarEvent[]>([]);  
+const [viewTransition, setViewTransition] = useState(false);
+const [allEvents, setAllEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
   
+  interface CalendarEvent {
+  id: string;
+  title: string;
+  description: string;
+  date: Date;
+  time?: string;
+  type: string;
+}
   // Fetch all calendar events on component mount
   useEffect(() => {
     async function fetchEvents() {
