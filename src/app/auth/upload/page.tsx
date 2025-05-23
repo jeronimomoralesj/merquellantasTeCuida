@@ -466,10 +466,10 @@ export default function MassRegisterPage() {
                 <ul className="text-sm text-blue-800 space-y-1">
                   <li>• El archivo Excel debe contener las columnas mencionadas</li>
                   <li>• El PIN se generará automáticamente usando los últimos 4 dígitos de la cédula</li>
-                  <li>• Se crearán usuarios en Firebase Auth y en la colección 'users'</li>
+                  <li>• Se crearán usuarios en Firebase Auth y en la colección users</li>
                   <li>• Se agregarán eventos de cumpleaños al calendario automáticamente</li>
-                  <li>• Todos los usuarios tendrán rol 'user' por defecto</li>
-                  <li>• Los campos adicionales se guardarán en el campo 'extra'</li>
+                  <li>• Todos los usuarios tendrán rol user por defecto</li>
+                  <li>• Los campos adicionales se guardarán en el campo extra</li>
                 </ul>
               </div>
             </div>

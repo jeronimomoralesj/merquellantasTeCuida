@@ -8,9 +8,8 @@ import {
   CheckCircle,
   Loader2,
 } from "lucide-react";
-import { collection, getDocs, query, orderBy } from 'firebase/firestore';
+import { collection, getDocs, query } from 'firebase/firestore';
 import { db } from '../../../firebase'; // Adjust path as needed
-import DashboardNavbar from "../navbar";
 
 export default function TristesCard() {
   const [trabajadoresTriste, setTrabajadoresTriste] = useState([]);
@@ -209,7 +208,7 @@ export default function TristesCard() {
             <p className="text-gray-500">No hay trabajadores con estados de ánimo consecutivamente tristes.</p>
           </div>
         ) : (
-          trabajadoresTriste.map((trabajador, index) => (
+          trabajadoresTriste.map((trabajador) => (
             <div
               key={trabajador.id}
               className="flex items-center p-3 rounded-xl hover:bg-gray-50 transition-colors border border-gray-100 hover:border-red-200 hover:shadow-sm"

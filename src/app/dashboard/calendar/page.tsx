@@ -10,7 +10,7 @@ import {
   Clock, 
   Gift
 } from 'lucide-react';
-import { collection, query, getDocs, where, orderBy, Timestamp } from 'firebase/firestore';
+import { collection, query, getDocs, orderBy } from 'firebase/firestore';
 import { db } from '../../../firebase';
 
 export default function CalendarPage() {

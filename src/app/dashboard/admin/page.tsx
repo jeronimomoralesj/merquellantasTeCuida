@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   FileText,
   Calendar,
@@ -13,7 +13,7 @@ import StatsCard from "./stats";
 import TristesCard from "./tristes";
 import SolicitudesCard from "./solicitudes";
 import CalendarCard from "./calendar";
-import CertificadoCuentaAdminCard from "./certificado";
+
 
 // Sample data for solicitudes
 const solicitudesData = [
@@ -79,55 +79,7 @@ const solicitudesData = [
   },
 ];
 
-// Sample data for trabajadores tristes
-const trabajadoresTristeData = [
-  {
-    id: 1,
-    name: "Carlos Mendoza",
-    position: "Desarrollador Frontend",
-    department: "Tecnología",
-    consecutiveSadDays: 5,
-    avatar: "CM",
-    avatarColor: "bg-blue-100 text-blue-600",
-  },
-  {
-    id: 2,
-    name: "Elena Torres",
-    position: "Analista de Datos",
-    department: "Business Intelligence",
-    consecutiveSadDays: 3,
-    avatar: "ET",
-    avatarColor: "bg-green-100 text-green-600",
-  },
-  {
-    id: 3,
-    name: "Miguel Ángel Ruiz",
-    position: "Diseñador UX/UI",
-    department: "Diseño",
-    consecutiveSadDays: 7,
-    avatar: "MR",
-    avatarColor: "bg-purple-100 text-purple-600",
-  },
-  {
-    id: 4,
-    name: "Sofia Castro",
-    position: "Ejecutiva de Ventas",
-    department: "Comercial",
-    consecutiveSadDays: 4,
-    avatar: "SC",
-    avatarColor: "bg-pink-100 text-pink-600",
-  },
-];
-
 export default function AdminPage() {
-  const [selectedFilter, setSelectedFilter] = useState("Todas");
-  const [showAllSolicitudes, setShowAllSolicitudes] = useState(false);
-
-
-  // Sort solicitudes by date (closest to today first)
-  const sortedSolicitudes = [...solicitudesData].sort(
-    (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
-  );
 
   return (
     <div className="min-h-screen bg-gray-50">

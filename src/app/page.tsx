@@ -17,7 +17,7 @@ const MerqeuBienestarLanding = () => {
   const [submitted, setSubmitted] = useState(false);
 
   // Sample job listings - can be empty array to show "no opportunities" message
-  const [jobListings, setJobListings] = useState([
+  const [jobListings] = useState([
     {
       id: 1,
       title: "Contador/a Senior",

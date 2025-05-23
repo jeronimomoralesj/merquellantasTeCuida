@@ -14,7 +14,6 @@ import {
   Briefcase,
 } from 'lucide-react';
 // Imports for Firebase
-import { getAuth } from 'firebase/auth';
 import { addDoc, collection, doc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { auth, db } from '../../../firebase';    // adjust path if needed

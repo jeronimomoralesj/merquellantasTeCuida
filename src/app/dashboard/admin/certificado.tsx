@@ -67,17 +67,6 @@ export default function CertificadoCuentaAdminCard() {
       currency: 'COP'
     }).format(amount);
   };
-
-  // Format date to display as "15 de Mayo, 2025"
-  const formatDate = (dateString) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString("es-CO", {
-      day: "numeric",
-      month: "long",
-      year: "numeric"
-    });
-  };
-
   return (
     <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100 hover:shadow-md transition-shadow duration-300 relative overflow-hidden text-black">
       <div className="absolute top-0 left-0 w-1 h-full bg-blue-500"></div>

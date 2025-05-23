@@ -72,9 +72,9 @@ export default function RegisterPage() {
       })
 
       router.push('/auth/login')
-    } catch (err: any) {
-      console.error('Firestore write failed:', err.code, err.message)
-      setError(err.message || 'Error al registrar usuario')
+    } catch (err: unknown) {
+      console.error('Firestore write failed:')
+      setError('Error al registrar usuario')
     } finally {
       setLoading(false)
     }

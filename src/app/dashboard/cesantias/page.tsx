@@ -18,6 +18,12 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc, collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 
+// Type definitions
+interface UserProfile {
+  nombre?: string;
+  [key: string]: unknown;
+}
+
 export default function CesantiasPage() {
   // form state
   const [motivoSolicitud, setMotivoSolicitud] = useState('');
@@ -47,7 +53,7 @@ export default function CesantiasPage() {
       try {
         const snap = await getDoc(doc(db, 'users', u.uid));
         if (snap.exists()) {
-          const data = snap.data() as any;
+          const data = snap.data() as UserProfile;
           setUserNombre(data.nombre || '');
         }
       } catch (e) {
@@ -119,7 +125,7 @@ export default function CesantiasPage() {
 
       // 3) done
       setSubmitted(true);
-    } catch (err:any) {
+    } catch (err: unknown) {
       console.error("Error submitting cesantias:", err);
       setFormError('Ocurrió un error al enviar. Intente de nuevo.');
     } finally {

@@ -62,9 +62,9 @@ export default function MerqeuBienestarLogin() {
       console.log('Perfil:', profile)
       
       router.push('/dashboard')
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Login error:', err)
-      setError(err.message || 'Usuario o PIN inválidos')
+      setError('Usuario o PIN inválidos')
     } finally {
       setLoading(false)
     }

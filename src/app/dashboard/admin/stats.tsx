@@ -32,8 +32,6 @@ import {
   orderBy, 
   getDocs, 
   Timestamp,
-  startOfMonth,
-  endOfMonth 
 } from "firebase/firestore";
 import { db } from "../../../firebase"; // adjust to your path
 
@@ -152,7 +150,7 @@ export default function StatsCard() {
             .sort((a, b) => b.date.toMillis() - a.date.toMillis());
           
           let consecutiveSad = 0;
-          for (let mood of sortedMoods) {
+          for (const mood of sortedMoods) {
             if (mood.mood === 'triste') {
               consecutiveSad++;
               if (consecutiveSad >= 3) {

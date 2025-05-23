@@ -9,7 +9,7 @@ export default function GeminiChat() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [mood, setMood] = useState(null);
+  const [mood, setMood] = useState<string|null>(null);
   const [showMoodSelector, setShowMoodSelector] = useState(false);
   const [wordCount, setWordCount] = useState(0);
   const [limitReached, setLimitReached] = useState(false);
@@ -261,15 +261,6 @@ export default function GeminiChat() {
       e.preventDefault();
       handleSendMessage();
     }
-  };
-
-  // Reset conversation
-  const resetConversation = () => {
-    setMessages([]);
-    setWordCount(0);
-    setLimitReached(false);
-    setShowMoodSelector(true);
-    setMood(null);
   };
 
   return (

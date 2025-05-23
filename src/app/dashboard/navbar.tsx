@@ -41,13 +41,6 @@ const DashboardNavbar = ({ activePage = 'home' }) => {
     }
   }
 
-  // Usuario de ejemplo
-  const user = {
-    name: "Carlos Mendoza",
-    email: "carlos.mendoza@merquellantas.com",
-    role: "Analista de Recursos Humanos",
-  };
-
   useEffect(() => {
     const handleScroll = () => {
       setScrolled(window.scrollY > 10);
@@ -220,21 +213,6 @@ const MobileNavItem = ({ href, icon, label, active = false }) => {
       }`}
     >
       <span className="mr-3">{icon}</span>
-      {label}
-    </a>
-  );
-};
-
-// Componente para ítems del menú de perfil
-const ProfileMenuItem = ({ href, icon, label, danger = false }) => {
-  return (
-    <a
-      href={href}
-      className={`flex items-center px-4 py-2 text-sm hover:bg-gray-50 transition-colors duration-150 ${
-        danger ? 'text-red-600' : 'text-gray-700'
-      }`}
-    >
-      <span className="mr-3 opacity-70">{icon}</span>
       {label}
     </a>
   );

@@ -1,6 +1,4 @@
 "use client";
-
-import { useState } from "react";
 import {
   User,
   CalendarIcon,
@@ -58,20 +56,6 @@ import {
 
 export default function UpcomingCard() {
 
-  // Sort solicitudes by date (closest to today first)
-  const sortedSolicitudes = [...solicitudesData].sort(
-    (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
-  );
-
-  // Format date to display as "10 de Mayo, 2025"
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString("es-ES", {
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-    });
-  };
 
   return (
 <div className="mt-6 bg-white rounded-xl shadow-sm p-6 border border-gray-100 hover:shadow-md transition-shadow duration-300 relative overflow-hidden">
