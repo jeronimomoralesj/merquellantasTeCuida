@@ -1,0 +1,494 @@
+"use client";
+
+import React, { useState, useEffect } from "react";
+import {
+  Calendar,
+  Gift,
+  Briefcase,
+  Clock,
+  CheckCircle,
+  XCircle,
+  Plane,
+  Download,
+  Eye,
+  X,
+  Anchor,
+  AlertCircle,
+  Loader2,
+  Search,
+  List,
+} from "lucide-react";
+import { 
+  collection, 
+  query, 
+  orderBy, 
+  getDocs, 
+  doc, 
+  updateDoc,
+  Timestamp 
+} from "firebase/firestore";
+import { db } from "../../../firebase"; // adjust to your path
+
+export default function SolicitudesCard() {
+  const [requests, setRequests] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [processingId, setProcessingId] = useState(null);
+  const [showAll, setShowAll] = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
+  const [selected, setSelected] = useState(null);
+  const [notification, setNotification] = useState(null);
+  const [searchTerm, setSearchTerm] = useState("");
+
+  // helper: format Firestore Timestamp or ISO string
+  const formatDate = (d) => {
+    const dt = d?.toDate?.() || new Date(d);
+    return dt.toLocaleDateString("es-ES", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
+  };
+
+  // helper: initials from full name
+  const initials = (name) =>
+    name
+      .split(" ")
+      .map((w) => w[0])
+      .join("")
+      .slice(0, 2)
+      .toUpperCase();
+
+  // map status → badge color
+  const statusColor = (st) => {
+    switch(st) {
+      case "pendiente":
+        return "bg-yellow-100 text-yellow-800 border border-yellow-200";
+      case "aprobado":
+        return "bg-green-100 text-green-800 border border-green-200";
+      case "rechazado":
+        return "bg-red-100 text-red-800 border border-red-200";
+      default:
+        return "bg-blue-100 text-blue-800 border border-blue-200";
+    }
+  };
+
+  // pick icon by request type
+  const typeIcon = (t) => {
+    switch (t) {
+      case "Vacaciones":
+        return <Plane className="h-5 w-5 text-blue-600" />;
+      case "Reembolso":
+        return <Gift className="h-5 w-5 text-purple-600" />;
+      case "RRHH":
+      case "Permiso":
+        return <Briefcase className="h-5 w-5 text-orange-600" />;
+      case "Horario":
+        return <Clock className="h-5 w-5 text-green-600" />;
+      case "Cesantías":
+        return <Anchor className="h-5 w-5 text-indigo-600" />;
+      case "Incapacidad":
+        return <AlertCircle className="h-5 w-5 text-red-600" />;
+      default:
+        return <Briefcase className="h-5 w-5 text-gray-600" />;
+    }
+  };
+
+  // Function to show notification
+  const showNotification = (message, type = "success") => {
+    setNotification({ message, type });
+    setTimeout(() => setNotification(null), 3000);
+  };
+
+  // Handle approval/rejection
+  const handleStatusUpdate = async (requestId, newStatus, isPermiso) => {
+    if (!requestId) return;
+    
+    try {
+      setProcessingId(requestId);
+      
+      // Determine which collection to update based on request type
+      const collectionName = isPermiso ? "solicitudes" : "cesantias";
+      const requestRef = doc(db, collectionName, requestId);
+      
+      // Update the document with new status and timestamp
+      await updateDoc(requestRef, {
+        estado: newStatus,
+        updatedAt: Timestamp.now()
+      });
+      
+      // Update local state
+      setRequests(requests.map(req => 
+        req.id === requestId 
+          ? {...req, status: newStatus, statusColor: statusColor(newStatus)} 
+          : req
+      ));
+      
+      // Close modal if open
+      if (showDetails && selected?.id === requestId) {
+        setSelected({...selected, status: newStatus, statusColor: statusColor(newStatus)});
+      }
+      
+      showNotification(`Solicitud ${newStatus === "aprobado" ? "aprobada" : "rechazada"} correctamente`);
+    } catch (error) {
+      console.error("Error updating request:", error);
+      showNotification(`Error al ${newStatus === "aprobado" ? "aprobar" : "rechazar"} la solicitud`, "error");
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  useEffect(() => {
+    async function loadAll() {
+      setLoading(true);
+      try {
+        // 1) fetch cesantias
+        const qCes = query(
+          collection(db, "cesantias"),
+          orderBy("createdAt", "desc")
+        );
+        // 2) fetch solicitudes
+        const qSol = query(
+          collection(db, "solicitudes"),
+          orderBy("createdAt", "desc")
+        );
+        const [cesSnap, solSnap] = await Promise.all([
+          getDocs(qCes),
+          getDocs(qSol),
+        ]);
+
+        const ces = cesSnap.docs.map((d) => {
+          const data = d.data();
+          return {
+            id: d.id,
+            title: "Solicitud de Cesantías",
+            employee: data.nombre,
+            date: data.createdAt,
+            status: data.estado,
+            statusColor: statusColor(data.estado),
+            type: "Cesantías",
+            avatarColor: "bg-indigo-100",
+            avatarText: initials(data.nombre),
+            description: data.motivoSolicitud,
+            attachment: data.fileUrl,
+            isPermiso: false,
+          };
+        });
+
+        const sol = solSnap.docs.map((d) => {
+          const data = d.data();
+          const isInc = data.tipo === "enfermedad";
+          const typ = isInc ? "Incapacidad" : "Permiso";
+          return {
+            id: d.id,
+            title: `Solicitud de ${typ}`,
+            employee: data.nombre,
+            date: data.createdAt,
+            status: data.estado,
+            statusColor: statusColor(data.estado),
+            type: typ,
+            avatarColor: isInc ? "bg-red-100" : "bg-orange-100",
+            avatarText: initials(data.nombre),
+            description: isInc ? data.description : data.description,
+            attachment: data.documentUrl,
+            isPermiso: true,
+          };
+        });
+
+        // merge & sort:
+        // 1. Pending requests first
+        // 2. Then by date (oldest first)
+        const merged = [...ces, ...sol].sort((a, b) => {
+          // First prioritize pending status
+          if (a.status === "pendiente" && b.status !== "pendiente") return -1;
+          if (a.status !== "pendiente" && b.status === "pendiente") return 1;
+          
+          // Then sort by date (oldest first)
+          const da = a.date?.toDate?.().getTime() || new Date(a.date).getTime();
+          const db_ = b.date?.toDate?.().getTime() || new Date(b.date).getTime();
+          return da - db_; // Changed to ascending order (oldest first)
+        });
+
+        setRequests(merged);
+      } catch (error) {
+        console.error("Error loading requests:", error);
+        showNotification("Error al cargar las solicitudes", "error");
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadAll();
+  }, []);
+
+  // Filter requests by search term
+  const filteredRequests = requests.filter(req => 
+    req.employee.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+  
+  const shown = requests.slice(0, 3);
+  
+  // Status tag component
+  const StatusTag = ({ status }) => {
+    const text = status.charAt(0).toUpperCase() + status.slice(1);
+    return (
+      <span className={`px-3 py-1 text-xs font-medium ${statusColor(status)} rounded-full`}>
+        {text}
+      </span>
+    );
+  };
+
+  // Individual request card component
+  const RequestCard = ({ s, isInModal = false }) => (
+    <div
+      className={`border border-gray-200 rounded-xl p-5 hover:shadow-md transition-all duration-200 bg-white ${
+        processingId === s.id ? "opacity-70" : ""
+      }`}
+    >
+      <div className="flex justify-between items-start">
+        <div className="flex items-start">
+          <div
+            className={`w-12 h-12 rounded-lg ${s.avatarColor} flex items-center justify-center mr-4 shadow-sm`}
+          >
+            {typeIcon(s.type)}
+          </div>
+          <div>
+            <h3 className="font-semibold text-lg text-gray-800">{s.title}</h3>
+            <p className="text-gray-700 font-medium">{s.employee}</p>
+            <p className="text-sm text-gray-500 flex items-center mt-1">
+              <Calendar className="h-4 w-4 mr-1" />
+              {formatDate(s.date)}
+            </p>
+          </div>
+        </div>
+        <StatusTag status={s.status} />
+      </div>
+      
+      {/* Only show action buttons if status is pending */}
+      {s.status === "pendiente" && (
+        <div className="mt-4 flex space-x-2 justify-end">
+          <button
+            onClick={() => {
+              setSelected(s);
+              setShowDetails(true);
+              if (isInModal) setShowAll(false);
+            }}
+            className="text-sm px-3 py-1.5 bg-gray-100 rounded-lg hover:bg-gray-200 flex items-center transition-colors duration-200"
+          >
+            <Eye className="mr-1.5 h-4 w-4" /> Ver detalles
+          </button>
+          
+          <button 
+            onClick={() => handleStatusUpdate(s.id, "aprobado", s.isPermiso)}
+            disabled={processingId === s.id}
+            className="text-sm px-3 py-1.5 bg-green-500 text-white rounded-lg flex items-center hover:bg-green-600 transition-colors duration-200"
+          >
+            {processingId === s.id ? (
+              <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+            ) : (
+              <CheckCircle className="mr-1.5 h-4 w-4" />
+            )}
+            Aprobar
+          </button>
+          
+          <button 
+            onClick={() => handleStatusUpdate(s.id, "rechazado", s.isPermiso)}
+            disabled={processingId === s.id}
+            className="text-sm px-3 py-1.5 bg-red-500 text-white rounded-lg flex items-center hover:bg-red-600 transition-colors duration-200"
+          >
+            {processingId === s.id ? (
+              <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+            ) : (
+              <XCircle className="mr-1.5 h-4 w-4" />
+            )}
+            Rechazar
+          </button>
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="space-y-4 text-black">
+      {/* Notification */}
+      {notification && (
+        <div className={`fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg flex items-center space-x-2 
+        ${notification.type === 'error' ? 'bg-red-50 text-red-800 border border-red-200' : 'bg-green-50 text-green-800 border border-green-200'}`}>
+          {notification.type === 'error' ? 
+            <XCircle className="h-5 w-5" /> : 
+            <CheckCircle className="h-5 w-5" />
+          }
+          <p>{notification.message}</p>
+        </div>
+      )}
+
+      
+      {loading ? (
+        <div className="w-full flex justify-center items-center py-12">
+          <Loader2 className="h-8 w-8 text-blue-500 animate-spin" />
+          <span className="ml-2 text-gray-600">Cargando solicitudes...</span>
+        </div>
+      ) : requests.length === 0 ? (
+        <div className="text-center py-10 border rounded-xl bg-gray-50">
+          <p className="text-gray-500">No hay solicitudes disponibles</p>
+        </div>
+      ) : (
+        <div className="grid gap-4">
+          {shown.map((s) => (
+            <RequestCard key={s.id} s={s} />
+          ))}
+        </div>
+      )}
+
+      {!loading && (
+        <div className="text-center mt-4">
+          {requests.length > 3 && (
+            <button
+              onClick={() => setShowAll(true)}
+              className="px-4 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors duration-200 font-medium flex items-center justify-center mx-auto"
+            >
+              <List className="mr-2 h-4 w-4" />
+              Ver todas las solicitudes ({requests.length})
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* All Requests Modal */}
+      {showAll && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-bold text-gray-800">Todas las solicitudes</h2>
+              <button 
+                onClick={() => setShowAll(false)}
+                className="p-1 hover:bg-gray-100 rounded-full transition-colors"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+            
+            {/* Search */}
+            <div className="mb-6 relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Search className="h-5 w-5 text-gray-400" />
+              </div>
+              <input
+                type="text"
+                placeholder="Buscar por nombre..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10 w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+              />
+            </div>
+            
+            {filteredRequests.length === 0 ? (
+              <div className="text-center py-10 border rounded-xl bg-gray-50">
+                <p className="text-gray-500">No se encontraron solicitudes</p>
+              </div>
+            ) : (
+              <div className="grid gap-4">
+                {filteredRequests.map((s) => (
+                  <RequestCard key={s.id} s={s} isInModal={true} />
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Details modal */}
+      {showDetails && selected && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <div className="flex items-center">
+                <div className={`w-10 h-10 rounded-lg ${selected.avatarColor} flex items-center justify-center mr-3`}>
+                  {typeIcon(selected.type)}
+                </div>
+                <h2 className="text-xl font-bold text-gray-800">{selected.title}</h2>
+              </div>
+              <button 
+                onClick={() => setShowDetails(false)}
+                className="p-1 hover:bg-gray-100 rounded-full transition-colors"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+            
+            <div className="bg-gray-50 p-4 rounded-lg mb-4">
+              <div className="flex justify-between items-center mb-2">
+                <p className="text-gray-700 font-medium">{selected.employee}</p>
+                <StatusTag status={selected.status} />
+              </div>
+              <p className="text-sm text-gray-600 flex items-center">
+                <Calendar className="h-4 w-4 mr-1" />
+                Enviada el {formatDate(selected.date)}
+              </p>
+            </div>
+            
+            <div className="mb-6">
+              <h4 className="font-medium mb-2 text-gray-700">Descripción</h4>
+              <p className="bg-gray-50 p-3 rounded-lg text-gray-800">{selected.description || "No hay descripción disponible"}</p>
+            </div>
+            
+            {selected.attachment && (
+              <div className="mb-6">
+                <h4 className="font-medium mb-2 text-gray-700">Documento adjunto</h4>
+                <button
+                  onClick={() => window.open(selected.attachment, "_blank")}
+                  className="flex items-center px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors duration-200"
+                >
+                  <Download className="mr-2 h-4 w-4" /> Ver documento
+                </button>
+              </div>
+            )}
+            
+            <div className="flex justify-end space-x-3 mt-4 pt-4 border-t">
+              <button
+                onClick={() => setShowDetails(false)}
+                className="px-4 py-2 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors duration-200"
+              >
+                Cerrar
+              </button>
+              
+              {selected.status === "pendiente" && (
+                <>
+                  <button 
+                    onClick={() => {
+                      handleStatusUpdate(selected.id, "aprobado", selected.isPermiso);
+                      setShowDetails(false);
+                    }}
+                    disabled={processingId === selected.id}
+                    className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 flex items-center transition-colors duration-200"
+                  >
+                    {processingId === selected.id ? (
+                      <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                    ) : (
+                      <CheckCircle className="mr-1.5" />
+                    )}
+                    Aprobar
+                  </button>
+                  
+                  <button 
+                    onClick={() => {
+                      handleStatusUpdate(selected.id, "rechazado", selected.isPermiso);
+                      setShowDetails(false);
+                    }}
+                    disabled={processingId === selected.id}
+                    className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 flex items-center transition-colors duration-200"
+                  >
+                    {processingId === selected.id ? (
+                      <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                    ) : (
+                      <XCircle className="mr-1.5" />
+                    )}
+                    Rechazar
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
