@@ -25,7 +25,7 @@ interface CalendarEvent {
   type: 'general' | 'birthday';
   image: string;
   userId: string;
-  createdAt: any; // Firebase timestamp
+  createdAt: import('firebase/firestore').Timestamp;
 }
 
 interface NewEventForm {
