@@ -16,12 +16,33 @@ import { auth, db, storage } from '../../../firebase';
 import { collection, addDoc, serverTimestamp, getDocs, query, where, orderBy } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 
+// Type definitions
+interface CalendarEvent {
+  id: string;
+  title: string;
+  date: Date;
+  description: string;
+  type: 'general' | 'birthday';
+  image: string;
+  userId: string;
+  createdAt: any; // Firebase timestamp
+}
+
+interface NewEventForm {
+  title: string;
+  date: string;
+  time: string;
+  description: string;
+  type: 'general' | 'birthday';
+  image: File | null;
+}
+
 export default function CalendarCard() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [events, setEvents] = useState([]);
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
-  const [newEvent, setNewEvent] = useState({
+  const [newEvent, setNewEvent] = useState<NewEventForm>({
     title: "",
     date: "",
     time: "",
@@ -29,7 +50,7 @@ export default function CalendarCard() {
     type: "general",
     image: null
   });
-  const [selectedImage, setSelectedImage] = useState(null);
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imageFileName, setImageFileName] = useState("");
   const [imageError, setImageError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -58,13 +79,13 @@ export default function CalendarCard() {
       );
       
       const querySnapshot = await getDocs(q);
-      const fetchedEvents = [];
+      const fetchedEvents: CalendarEvent[] = [];
       querySnapshot.forEach((doc) => {
         fetchedEvents.push({
           id: doc.id,
           ...doc.data(),
           date: doc.data().date.toDate() // Convert Firestore timestamp to JS Date
-        });
+        } as CalendarEvent);
       });
       
       setEvents(fetchedEvents);
@@ -76,22 +97,22 @@ export default function CalendarCard() {
   };
 
   // Calendar generation functions
-  const getDaysInMonth = (year, month) => {
+  const getDaysInMonth = (year: number, month: number): number => {
     return new Date(year, month + 1, 0).getDate();
   };
 
-  const getFirstDayOfMonth = (year, month) => {
+  const getFirstDayOfMonth = (year: number, month: number): number => {
     return new Date(year, month, 1).getDay();
   };
 
-  const generateCalendarDays = () => {
+  const generateCalendarDays = (): (number | null)[] => {
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
     
     const daysInMonth = getDaysInMonth(year, month);
     const firstDayOfMonth = getFirstDayOfMonth(year, month);
     
-    const days = [];
+    const days: (number | null)[] = [];
     
     // Add empty cells for days before the first day of the month
     for (let i = 0; i < firstDayOfMonth; i++) {
@@ -106,7 +127,7 @@ export default function CalendarCard() {
     return days;
   };
 
-  const formatMonthYear = (date) => {
+  const formatMonthYear = (date: Date): string => {
     return date.toLocaleDateString("es-ES", {
       month: "long",
       year: "numeric",
@@ -114,7 +135,7 @@ export default function CalendarCard() {
   };
 
   // Check if a day has events
-  const hasEvents = (day) => {
+  const hasEvents = (day: number | null): boolean => {
     if (!day) return false;
     
     const checkDate = new Date(
@@ -166,7 +187,7 @@ export default function CalendarCard() {
     setIsModalOpen(false);
   };
 
-  const handleInputChange = (e) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setNewEvent({
       ...newEvent,
@@ -174,7 +195,7 @@ export default function CalendarCard() {
     });
   };
 
-  const handleImageChange = (e) => {
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] ?? null;
     if (file) {
       if (file.size > 5 * 1024 * 1024) {
@@ -199,7 +220,7 @@ export default function CalendarCard() {
     setImageError("");
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
     
@@ -269,7 +290,7 @@ export default function CalendarCard() {
   };
 
   // Format date for display
-  const formatEventDate = (date) => {
+  const formatEventDate = (date: Date): string => {
     return date.toLocaleDateString("es-ES", {
       day: "numeric",
       month: "long",
@@ -278,13 +299,13 @@ export default function CalendarCard() {
   };
 
   // Get upcoming events (limited to 3)
-  const getUpcomingEvents = () => {
+  const getUpcomingEvents = (): CalendarEvent[] => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     
     return events
       .filter(event => new Date(event.date) >= today)
-      .sort((a, b) => new Date(a.date) - new Date(b.date))
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
       .slice(0, 3);
   };
 
