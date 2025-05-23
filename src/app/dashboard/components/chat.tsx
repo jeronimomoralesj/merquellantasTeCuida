@@ -14,7 +14,7 @@ export default function GeminiChat() {
   const [wordCount, setWordCount] = useState(0);
   const [limitReached, setLimitReached] = useState(false);
   const [userName, setUserName] = useState('');
-  const [userId, setUserId] = useState(null);
+  const [userId, setUserId] = useState<string | null>(null);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   const maxChars = 120;
