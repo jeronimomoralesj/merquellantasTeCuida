@@ -34,7 +34,7 @@ interface SadWorker {
 export default function TristesCard() {
 const [trabajadoresTriste, setTrabajadoresTriste] = useState<SadWorker[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+const [error, setError] = useState<string | null>(null);
 
   // Function to check if a user has 3 consecutive "triste" moods
 const hasConsecutiveSadMoods = (moodHistory: MoodEntry[], consecutiveCount = 3) => {
