@@ -2,10 +2,6 @@
 
 import {
   FileText,
-  Calendar,
-  Gift,
-  Briefcase,
-  Clock,
 } from "lucide-react";
 import DashboardNavbar from "../navbar";
 import StatsCard from "./stats";
