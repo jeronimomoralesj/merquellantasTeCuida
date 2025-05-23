@@ -15,7 +15,7 @@ import { db } from '../../../firebase';
 
 export default function CalendarPage() {
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [selectedDate, setSelectedDate] = useState(null);
+const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 const [eventsForSelectedDate, setEventsForSelectedDate] = useState<CalendarEvent[]>([]);  
 const [viewTransition, setViewTransition] = useState(false);
@@ -80,7 +80,7 @@ const [allEvents, setAllEvents] = useState<CalendarEvent[]>([]);
   };
   
   // Get events for a specific date, including recurring birthdays
-  const getEventsForDate = (date) => {
+const getEventsForDate = (date: Date) => {
     if (!allEvents.length) return [];
     
     const year = date.getFullYear();
@@ -103,7 +103,7 @@ const [allEvents, setAllEvents] = useState<CalendarEvent[]>([]);
   };
   
   // Handle date selection
-  const handleDateClick = (date) => {
+const handleDateClick = (date: Date) => {
     setSelectedDate(date);
     
     // Find events for the selected date
@@ -167,12 +167,12 @@ const [allEvents, setAllEvents] = useState<CalendarEvent[]>([]);
   };
   
   // Check if a date has events (including recurring birthdays)
-  const hasEvents = (date) => {
+const hasEvents = (date: Date) => {
     return getEventsForDate(date).length > 0;
   };
   
   // Check if a date is today
-  const isToday = (date) => {
+const isToday = (date: Date) => {
     const today = new Date();
     return date.getDate() === today.getDate() && 
            date.getMonth() === today.getMonth() && 
@@ -180,7 +180,7 @@ const [allEvents, setAllEvents] = useState<CalendarEvent[]>([]);
   };
   
   // Check if a date is selected
-  const isSelected = (date) => {
+const isSelected = (date: Date) => {
     if (!selectedDate) return false;
     return date.getDate() === selectedDate.getDate() && 
            date.getMonth() === selectedDate.getMonth() && 
@@ -188,7 +188,7 @@ const [allEvents, setAllEvents] = useState<CalendarEvent[]>([]);
   };
   
   // Format date for display in sidebar
-  const formatDate = (date) => {
+const formatDate = (date: Date) => {
     const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
     return date.toLocaleDateString('es-ES', options);
   };
