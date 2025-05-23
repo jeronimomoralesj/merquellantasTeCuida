@@ -189,7 +189,7 @@ const isSelected = (date: Date) => {
   
   // Format date for display in sidebar
 const formatDate = (date: Date) => {
-    const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+const options: Intl.DateTimeFormatOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
     return date.toLocaleDateString('es-ES', options);
   };
   
