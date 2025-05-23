@@ -821,8 +821,7 @@ export default function StatsCard() {
                   {/* We'll implement the dynamic category grouping in the useEffect */}
                   <div className="bg-white p-3 rounded-lg shadow-sm">
                     <p className="text-sm font-medium">Arreglos de Vivienda</p>
-                    <p className="text-lg font-bold">{statsData.cesantias.motivoSolicitud?.vivienda || 0}</p>
-                  </div>
+<p className="text-lg font-bold">{statsData.cesantias.motivosStats?.vivienda || 0}</p>                  </div>
                   <div className="bg-white p-3 rounded-lg shadow-sm">
                     <p className="text-sm font-medium">Educación</p>
                     <p className="text-lg font-bold">{statsData.cesantias.motivosStats?.educacion || 0}</p>
