@@ -6,53 +6,6 @@ import {
   PieChart,
 } from "lucide-react";
 
-  const solicitudesData = [
-    {
-      id: 1,
-      title: "Solicitud de vacaciones",
-      employee: "María Rodríguez",
-      date: "2025-05-10",
-      status: "Pendiente",
-      statusColor: "bg-yellow-100 text-yellow-800",
-      type: "Vacaciones",
-    },
-    {
-      id: 2,
-      title: "Reembolso de gastos",
-      employee: "Juan Pérez",
-      date: "2025-05-08",
-      status: "Pendiente",
-      statusColor: "bg-yellow-100 text-yellow-800",
-      type: "Finanzas",
-    },
-    {
-      id: 3,
-      title: "Solicitud de aumento",
-      employee: "Ana López",
-      date: "2025-05-12",
-      status: "En revisión",
-      statusColor: "bg-blue-100 text-blue-800",
-      type: "Compensación",
-    },
-    {
-      id: 4,
-      title: "Solicitud de permiso",
-      employee: "Pedro Sánchez",
-      date: "2025-05-07",
-      status: "Pendiente",
-      statusColor: "bg-yellow-100 text-yellow-800",
-      type: "Permisos",
-    },
-    {
-      id: 5,
-      title: "Cambio de horario",
-      employee: "Laura Martínez",
-      date: "2025-05-15",
-      status: "En revisión",
-      statusColor: "bg-blue-100 text-blue-800",
-      type: "Horarios",
-    },
-  ];
 
 export default function UpcomingCard() {
 

@@ -5,23 +5,34 @@ import { doc, getDoc }              from 'firebase/firestore'
 import { auth, db }                 from '../../firebase'    // adjust to your path
 import { useRouter }         from 'next/navigation'
 
+// Type definition for user profile data
+interface UserProfile {
+  nombre: string;
+  rol: string;
+  antiguedad: number;
+}
+
+// Type definition for Firestore user document
+interface FirestoreUserData {
+  nombre: string;
+  rol: string;
+  antiguedad: number;
+  [key: string]: unknown; // Allow for additional fields
+}
+
 const DashboardNavbar = ({ activePage = 'home' }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const router = useRouter()
-  const [profile, setProfile] = useState<{
-    nombre: string
-    rol: string
-    antiguedad: number
-  }|null>(null)
+  const [profile, setProfile] = useState<UserProfile | null>(null)
 
     useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
       if (!u) return setProfile(null)
       const snap = await getDoc(doc(db, 'users', u.uid))
       if (snap.exists()) {
-        const data = snap.data() as any
+        const data = snap.data() as FirestoreUserData
         setProfile({
           nombre: data.nombre,
           rol:    data.rol,
@@ -50,8 +61,8 @@ const DashboardNavbar = ({ activePage = 'home' }) => {
   }, []);
 
   useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (isProfileOpen && !event.target.closest('#profile-menu')) {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (isProfileOpen && !(event.target as Element)?.closest('#profile-menu')) {
         setIsProfileOpen(false);
       }
     };
@@ -136,13 +147,12 @@ const DashboardNavbar = ({ activePage = 'home' }) => {
                     </div>
                     <div className="py-1">
                       <button
-  onClick={handleLogout}
-  className="flex items-center px-4 py-2 text-sm hover:bg-gray-50 transition-colors duration-150 text-gray-700"
->
-  <LogOut size={16} className="mr-3 opacity-70" />
-  Cerrar Sesión
-</button>
-
+                        onClick={handleLogout}
+                        className="flex items-center px-4 py-2 text-sm hover:bg-gray-50 transition-colors duration-150 text-gray-700"
+                      >
+                        <LogOut size={16} className="mr-3 opacity-70" />
+                        Cerrar Sesión
+                      </button>
                     </div>
                   </div>
                 )}
@@ -184,8 +194,16 @@ const DashboardNavbar = ({ activePage = 'home' }) => {
   );
 };
 
+// Interface for navigation item props
+interface NavItemProps {
+  href: string;
+  icon: React.ReactNode;
+  label: string;
+  active?: boolean;
+}
+
 // Componente para ítems de navegación en escritorio
-const NavItem = ({ href, icon, label, active = false }) => {
+const NavItem: React.FC<NavItemProps> = ({ href, icon, label, active = false }) => {
   return (
     <a
       href={href}
@@ -202,7 +220,7 @@ const NavItem = ({ href, icon, label, active = false }) => {
 };
 
 // Componente para ítems de navegación en móvil
-const MobileNavItem = ({ href, icon, label, active = false }) => {
+const MobileNavItem: React.FC<NavItemProps> = ({ href, icon, label, active = false }) => {
   return (
     <a
       href={href}

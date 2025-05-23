@@ -170,12 +170,6 @@ export default function MerqeuBienestarLogin() {
               <span className="px-4 text-sm text-gray-500">o</span>
               <div className="flex-grow border-t border-gray-200" />
             </div>
-            <p className="text-sm text-gray-600 text-center">
-              ¿No tienes cuenta?{' '}
-              <a href="/merquebienestar/register" className="font-medium text-[#ff9900] hover:text-[#e68a00]">
-                Regístrate
-              </a>
-            </p>
           </div>
         </div>
       </div>

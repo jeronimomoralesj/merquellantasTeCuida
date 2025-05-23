@@ -6,8 +6,25 @@ import { X, Send, Check, AlertCircle } from 'lucide-react';
 import { addDoc, collection, doc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../../../firebase';
 
+type PqrsfType = 'Pregunta' | 'Queja' | 'Reclamo' | 'Sugerencia' | 'Felicitación';
+
+interface UserData {
+  nombre: string;
+  cedula: string;
+}
+
+interface PqrsfPayload {
+  type: PqrsfType;
+  message: string;
+  isAnonymous: boolean;
+  createdAt: ReturnType<typeof serverTimestamp>;
+  userId: string;
+  nombre?: string;
+  cedula?: string;
+}
+
 export default function PqrsfPage() {
-  const [type, setType] = useState<'Pregunta'|'Queja'|'Reclamo'|'Sugerencia'|'Felicitación'>('Pregunta');
+  const [type, setType] = useState<PqrsfType>('Pregunta');
   const [message, setMessage] = useState('');
   const [isAnonymous, setIsAnonymous] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -38,7 +55,7 @@ export default function PqrsfPage() {
       if (!user) throw new Error('Debes iniciar sesión antes de enviar.');
 
       // base payload
-      const payload: any = {
+      const payload: PqrsfPayload = {
         type,
         message: message.trim(),
         isAnonymous,
@@ -50,7 +67,7 @@ export default function PqrsfPage() {
       if (!isAnonymous) {
         const uSnap = await getDoc(doc(db, 'users', user.uid));
         if (uSnap.exists()) {
-          const data = uSnap.data() as any;
+          const data = uSnap.data() as UserData;
           payload.nombre = data.nombre;
           payload.cedula = data.cedula;
         }
@@ -60,9 +77,10 @@ export default function PqrsfPage() {
       await addDoc(collection(db, 'pqrsf'), payload);
 
       setSubmitted(true);
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setSubmitError(err.message || 'Error al enviar. Intenta de nuevo.');
+      const errorMessage = err instanceof Error ? err.message : 'Error al enviar. Intenta de nuevo.';
+      setSubmitError(errorMessage);
     } finally {
       setSubmitting(false);
     }
@@ -121,7 +139,7 @@ export default function PqrsfPage() {
                 <select
                   id="type"
                   value={type}
-                  onChange={e => setType(e.target.value as any)}
+                  onChange={e => setType(e.target.value as PqrsfType)}
                   className="mt-1 block w-full rounded-xl border-gray-300 shadow-sm focus:ring-amber-500 focus:border-amber-500 py-3 px-4 bg-white appearance-none"
                 >
                   {['Pregunta','Queja','Reclamo','Sugerencia','Felicitación']

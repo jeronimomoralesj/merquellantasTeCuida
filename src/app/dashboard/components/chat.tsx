@@ -9,7 +9,7 @@ export default function GeminiChat() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [mood, setMood] = useState<string|null>(null);
+  const [setMood] = useState<string|null>(null);
   const [showMoodSelector, setShowMoodSelector] = useState(false);
   const [wordCount, setWordCount] = useState(0);
   const [limitReached, setLimitReached] = useState(false);
