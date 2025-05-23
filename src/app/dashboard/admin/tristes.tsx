@@ -32,7 +32,7 @@ interface SadWorker {
 }
 
 export default function TristesCard() {
-  const [trabajadoresTriste, setTrabajadoresTriste] = useState([]);
+const [trabajadoresTriste, setTrabajadoresTriste] = useState<SadWorker[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
