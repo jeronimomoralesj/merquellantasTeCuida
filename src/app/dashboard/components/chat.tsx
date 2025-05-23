@@ -248,7 +248,7 @@ const fetchGeminiResponse = async (messageHistory: Array<{role: string, content:
       console.error('Error fetching from Gemini:', error);
       setMessages(prev => [...prev, { 
         role: 'assistant', 
-        content: `Lo siento, tuve problemas conectando. Error: ${error.message}` 
+        content: `Lo siento, tuve problemas conectando. Error: ${error instanceof Error ? error.message : 'Unknown error'}`
       }]);
     } finally {
       setLoading(false);
