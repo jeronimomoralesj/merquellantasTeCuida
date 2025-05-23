@@ -21,12 +21,12 @@ export default function GeminiChat() {
   const maxWords = 2000; // Maximum word limit for the entire conversation
 
   // Calculate word count for a string
-  const countWords = (text) => {
+const countWords = (text: string) => {
     return text.trim().split(/\s+/).filter(word => word.length > 0).length;
   };
 
   // Calculate total word count in the conversation
-  const calculateTotalWordCount = (messageList) => {
+const calculateTotalWordCount = (messageList: any[]) => {
     return messageList.reduce((total, msg) => {
       if (msg.role !== 'system') {
         return total + countWords(msg.content);
@@ -36,7 +36,7 @@ export default function GeminiChat() {
   };
 
   // Check if mood needs to be asked (older than today)
-  const shouldAskMood = (lastMoodDate) => {
+const shouldAskMood = (lastMoodDate: any) => {
     if (!lastMoodDate) return true;
     
     const today = new Date();
@@ -135,7 +135,7 @@ export default function GeminiChat() {
     }
   };
 
-  const selectMood = async (selectedMood) => {
+const selectMood = async (selectedMood: string) => {
     setMood(selectedMood);
     setShowMoodSelector(false);
     setLoading(true);
@@ -181,7 +181,7 @@ export default function GeminiChat() {
   };
 
   // Updated fetchGeminiResponse function
-  const fetchGeminiResponse = async (messageHistory) => {
+const fetchGeminiResponse = async (messageHistory: any[]) => {
     try {
       console.log('Sending messages to API:', messageHistory);
       
@@ -256,8 +256,8 @@ export default function GeminiChat() {
     }
   };
 
-  const handleKeyDown = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+const handleKeyDown = (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSendMessage();
     }
