@@ -29,19 +29,41 @@ import {
 } from "firebase/firestore";
 import { db } from "../../../firebase"; // adjust to your path
 
+// Type definitions
+interface RequestData {
+  id: string;
+  title: string;
+  employee: string;
+  date: Timestamp | Date | string;
+  status: string;
+  statusColor: string;
+  type: string;
+  avatarColor: string;
+  avatarText: string;
+  description?: string;
+  attachment?: string;
+  isPermiso: boolean;
+}
+
+interface NotificationState {
+  message: string;
+  type: 'success' | 'error';
+}
+
 export default function SolicitudesCard() {
-  const [requests, setRequests] = useState([]);
+  const [requests, setRequests] = useState<RequestData[]>([]);
   const [loading, setLoading] = useState(true);
-  const [processingId, setProcessingId] = useState(null);
+  const [processingId, setProcessingId] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
-  const [selected, setSelected] = useState(null);
-  const [notification, setNotification] = useState(null);
+  const [selected, setSelected] = useState<RequestData | null>(null);
+  const [notification, setNotification] = useState<NotificationState | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
 
   // helper: format Firestore Timestamp or ISO string
-  const formatDate = (d) => {
-    const dt = d?.toDate?.() || new Date(d);
+  const formatDate = (d: Timestamp | Date | string | undefined): string => {
+    if (!d) return 'Fecha no disponible';
+    const dt = (d as any)?.toDate?.() || new Date(d);
     return dt.toLocaleDateString("es-ES", {
       day: "numeric",
       month: "long",
@@ -50,7 +72,7 @@ export default function SolicitudesCard() {
   };
 
   // helper: initials from full name
-  const initials = (name) =>
+  const initials = (name: string): string =>
     name
       .split(" ")
       .map((w) => w[0])
@@ -59,7 +81,7 @@ export default function SolicitudesCard() {
       .toUpperCase();
 
   // map status → badge color
-  const statusColor = (st) => {
+  const statusColor = (st: string): string => {
     switch(st) {
       case "pendiente":
         return "bg-yellow-100 text-yellow-800 border border-yellow-200";
@@ -73,7 +95,7 @@ export default function SolicitudesCard() {
   };
 
   // pick icon by request type
-  const typeIcon = (t) => {
+  const typeIcon = (t: string) => {
     switch (t) {
       case "Vacaciones":
         return <Plane className="h-5 w-5 text-blue-600" />;
@@ -94,13 +116,13 @@ export default function SolicitudesCard() {
   };
 
   // Function to show notification
-  const showNotification = (message, type = "success") => {
+  const showNotification = (message: string, type: 'success' | 'error' = "success") => {
     setNotification({ message, type });
     setTimeout(() => setNotification(null), 3000);
   };
 
   // Handle approval/rejection
-  const handleStatusUpdate = async (requestId, newStatus, isPermiso) => {
+  const handleStatusUpdate = async (requestId: string, newStatus: string, isPermiso: boolean) => {
     if (!requestId) return;
     
     try {
@@ -156,7 +178,7 @@ export default function SolicitudesCard() {
           getDocs(qSol),
         ]);
 
-        const ces = cesSnap.docs.map((d) => {
+        const ces: RequestData[] = cesSnap.docs.map((d) => {
           const data = d.data();
           return {
             id: d.id,
@@ -174,7 +196,7 @@ export default function SolicitudesCard() {
           };
         });
 
-        const sol = solSnap.docs.map((d) => {
+        const sol: RequestData[] = solSnap.docs.map((d) => {
           const data = d.data();
           const isInc = data.tipo === "enfermedad";
           const typ = isInc ? "Incapacidad" : "Permiso";
@@ -203,8 +225,8 @@ export default function SolicitudesCard() {
           if (a.status !== "pendiente" && b.status === "pendiente") return 1;
           
           // Then sort by date (oldest first)
-          const da = a.date?.toDate?.().getTime() || new Date(a.date).getTime();
-          const db_ = b.date?.toDate?.().getTime() || new Date(b.date).getTime();
+          const da = (a.date as any)?.toDate?.().getTime() || new Date(a.date).getTime();
+          const db_ = (b.date as any)?.toDate?.().getTime() || new Date(b.date).getTime();
           return da - db_; // Changed to ascending order (oldest first)
         });
 
@@ -227,7 +249,7 @@ export default function SolicitudesCard() {
   const shown = requests.slice(0, 3);
   
   // Status tag component
-  const StatusTag = ({ status }) => {
+  const StatusTag: React.FC<{ status: string }> = ({ status }) => {
     const text = status.charAt(0).toUpperCase() + status.slice(1);
     return (
       <span className={`px-3 py-1 text-xs font-medium ${statusColor(status)} rounded-full`}>
@@ -237,7 +259,7 @@ export default function SolicitudesCard() {
   };
 
   // Individual request card component
-  const RequestCard = ({ s, isInModal = false }) => (
+  const RequestCard: React.FC<{ s: RequestData; isInModal?: boolean }> = ({ s, isInModal = false }) => (
     <div
       className={`border border-gray-200 rounded-xl p-5 hover:shadow-md transition-all duration-200 bg-white ${
         processingId === s.id ? "opacity-70" : ""
