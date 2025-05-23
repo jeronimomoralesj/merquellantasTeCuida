@@ -16,8 +16,8 @@ const [, setMood] = useState<string|null>(null);
   const [userName, setUserName] = useState('');
   const [userId, setUserId] = useState<string | null>(null);
 const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef(null);
-  const maxChars = 120;
+const inputRef = useRef<HTMLTextAreaElement>(null);  
+const maxChars = 120;
   const maxWords = 2000; // Maximum word limit for the entire conversation
 
   // Calculate word count for a string
