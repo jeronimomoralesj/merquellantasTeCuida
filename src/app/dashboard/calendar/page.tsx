@@ -19,7 +19,7 @@ export default function CalendarPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [eventsForSelectedDate, setEventsForSelectedDate] = useState([]);
   const [viewTransition, setViewTransition] = useState(false);
-  const [allEvents, setAllEvents] = useState([]);
+const [allEvents, setAllEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   
   // Fetch all calendar events on component mount
