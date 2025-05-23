@@ -41,11 +41,18 @@ const [allEvents, setAllEvents] = useState<CalendarEvent[]>([]);
         );
         const snapshot = await getDocs(q);
         
-        const events = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-          date: doc.data().date.toDate() // Convert Firestore Timestamp to JS Date
-        }));
+        const events = snapshot.docs.map(doc => {
+  const data = doc.data();
+  return {
+    id: doc.id,
+    title: data.title || '',
+    description: data.description || '',
+    date: data.date.toDate(),
+    time: data.time,
+    type: data.type || 'event',
+    ...data
+  };
+});
         
         setAllEvents(events);
       } catch (error) {
