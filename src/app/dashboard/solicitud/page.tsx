@@ -156,7 +156,7 @@ const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
       
 // 2) upload the file to Storage
 const storage = getStorage();
-const file = formData.document as File;
+const file = formData.document;
 if (!file) {
   setFormError('Debe adjuntar un documento');
   setIsSubmitting(false);
