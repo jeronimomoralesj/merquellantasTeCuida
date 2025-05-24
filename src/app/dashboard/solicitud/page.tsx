@@ -162,9 +162,9 @@ if (!file) {
   setIsSubmitting(false);
   return;
 }
-const path = `solicitudes/${user.uid}/${Date.now()}_${file.name}`;
+const path = `solicitudes/${user.uid}/${Date.now()}_${fileToUpload.name}`;
 const fileRef = storageRef(storage, path);
-const snap = await uploadBytes(fileRef, file);
+const snap = await uploadBytes(fileRef, fileToUpload);
 const url = await getDownloadURL(snap.ref);
 
       // 3) fetch user profile info from users collection
@@ -185,7 +185,7 @@ const url = await getDownloadURL(snap.ref);
         startDate: formData.startDate,
         endDate: formData.endDate,
         numDias: numDias,
-        documentName: file.name,
+        documentName: fileToUpload.name,
         documentUrl: url,
         createdAt: serverTimestamp(),
       };
