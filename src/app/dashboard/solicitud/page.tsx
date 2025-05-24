@@ -56,7 +56,7 @@ const SolicitudPage = () => {
     if (formData.startDate && formData.endDate) {
       const start = new Date(formData.startDate);
       const end = new Date(formData.endDate);
-      const diffTime = Math.abs(end - start);
+const diffTime = Math.abs(end.getTime() - start.getTime());
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // +1 because both days are inclusive
       setNumDias(diffDays);
     } else {
