@@ -162,9 +162,7 @@ if (!file) {
   setIsSubmitting(false);
   return;
 }
-const path = `solicitudes/${user.uid}/${Date.now()}_${file.name}`;
-const fileRef = storageRef(storage, path);
-const snap = await uploadBytes(fileRef, file);
+const path = `solicitudes/${user.uid}/${Date.now()}_${(file as File).name}`;
       const url = await getDownloadURL(snap.ref);
 
       // 3) fetch user profile info from users collection
