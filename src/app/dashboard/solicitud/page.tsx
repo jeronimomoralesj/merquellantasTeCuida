@@ -156,14 +156,16 @@ const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
       
 // 2) upload the file to Storage
 const storage = getStorage();
-const file = formData.document;
+const file = formData.document as File;
 if (!file) {
   setFormError('Debe adjuntar un documento');
   setIsSubmitting(false);
   return;
 }
-const path = `solicitudes/${user.uid}/${Date.now()}_${(file as File).name}`;
-      const url = await getDownloadURL(snap.ref);
+const path = `solicitudes/${user.uid}/${Date.now()}_${file.name}`;
+const fileRef = storageRef(storage, path);
+const snap = await uploadBytes(fileRef, file);
+const url = await getDownloadURL(snap.ref);
 
       // 3) fetch user profile info from users collection
       const userDoc = await getDoc(doc(db, 'users', user.uid));
