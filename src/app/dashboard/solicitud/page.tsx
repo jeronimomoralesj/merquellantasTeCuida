@@ -20,23 +20,40 @@ import { auth, db } from '../../../firebase';    // adjust path if needed
 
 const SolicitudPage = () => {
   const [requestType, setRequestType] = useState('enfermedad');
-  const [formData, setFormData] = useState({
-    name: '',
-    cedula: '',
-    edad: '',
-    gender: '',
-    cargo: '',
-    tipoContrato: 'directo', // directo or temporal
-    ubicacion: '',
-    tipoEvento: '',
-    codigoIncap: '',
-    cie10: '',
-    mesDiagnostico: '',
-    startDate: '',
-    endDate: '',
-    description: '',
-    document: null,
-  });
+const [formData, setFormData] = useState<FormData>({
+  name: '',
+  cedula: '',
+  edad: '',
+  gender: '',
+  cargo: '',
+  tipoContrato: 'directo', // directo or temporal
+  ubicacion: '',
+  tipoEvento: '',
+  codigoIncap: '',
+  cie10: '',
+  mesDiagnostico: '',
+  startDate: '',
+  endDate: '',
+  description: '',
+  document: null,
+});
+interface FormData {
+  name: string;
+  cedula: string;
+  edad: string;
+  gender: string;
+  cargo: string;
+  tipoContrato: string;
+  ubicacion: string;
+  tipoEvento: string;
+  codigoIncap: string;
+  cie10: string;
+  mesDiagnostico: string;
+  startDate: string;
+  endDate: string;
+  description: string;
+  document: File | null;
+}
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [formError, setFormError] = useState('');
