@@ -4,16 +4,23 @@ import React, { useState, useEffect } from 'react';
 import { Menu, X, User, Calendar, DollarSign, Activity, MessageSquare, ChevronRight, Briefcase, Send, AlertCircle } from 'lucide-react';
 import Link from 'next/link';
 
+  interface Job {
+  id: number;
+  title: string;
+  department: string;
+  location: string;
+  type: string;
+}
 const MerqeuBienestarLanding = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [showJobModal, setShowJobModal] = useState(false);
-  const [selectedJob, setSelectedJob] = useState(null);
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    cv: null
-  });
+  const [selectedJob, setSelectedJob] = useState<Job | null>(null);
+const [formData, setFormData] = useState({
+  name: '',
+  email: '',
+  cv: null as File | null
+});
   const [submitted, setSubmitted] = useState(false);
 
   // Sample job listings - can be empty array to show "no opportunities" message
@@ -36,7 +43,7 @@ const MerqeuBienestarLanding = () => {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  const handleApply = (job) => {
+const handleApply = (job: Job) => {
     setSelectedJob(job);
     setShowJobModal(true);
   };
@@ -52,7 +59,7 @@ const MerqeuBienestarLanding = () => {
     });
   };
 
-  const handleInputChange = (e) => {
+const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData({
       ...formData,
@@ -60,14 +67,14 @@ const MerqeuBienestarLanding = () => {
     });
   };
 
-  const handleFileChange = (e) => {
-    setFormData({
+const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {    
+  setFormData({
       ...formData,
-      cv: e.target.files[0]
+cv: e.target.files?.[0] || null
     });
   };
 
-  const handleSubmit = (e) => {
+const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     // Here you would normally process the form data and send to backend
     console.log("Form submitted:", formData);
@@ -411,7 +418,7 @@ const MerqeuBienestarLanding = () => {
 };
 
 // Feature Card Component
-const FeatureCard = ({ icon, title, description }) => {
+const FeatureCard = ({ icon, title, description }: { icon: React.ReactNode; title: string; description: string }) => {
   return (
     <div className="bg-gray-50 rounded-xl p-6 transition-transform duration-300 hover:scale-105">
       <div className="bg-white w-16 h-16 rounded-full flex items-center justify-center shadow-sm mb-6">
@@ -424,7 +431,7 @@ const FeatureCard = ({ icon, title, description }) => {
 };
 
 // Job Card Component
-const JobCard = ({ job, onApply }) => {
+const JobCard = ({ job, onApply }: { job: Job; onApply: () => void }) => {
   return (
     <div className="bg-white rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow duration-300">
       <div className="flex items-center mb-4">

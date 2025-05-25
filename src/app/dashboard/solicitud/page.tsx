@@ -14,7 +14,7 @@ import {
   Briefcase,
 } from 'lucide-react';
 // Imports for Firebase
-import { addDoc, collection, doc, getDoc, serverTimestamp } from 'firebase/firestore';
+import { addDoc, collection, doc, getDoc, serverTimestamp, FieldValue } from 'firebase/firestore';
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { auth, db } from '../../../firebase';    // adjust path if needed
 
@@ -199,7 +199,33 @@ const SolicitudPage = () => {
       calculateDays();
 
       // 5) write the solicitud to Firestore with all required fields
-      const solicitudData: Record<string, any> = {
+      interface SolicitudData {
+        userId: string;
+        nombre: string;
+        cedula: string;
+        tipo: string;
+        estado: string;
+        startDate: string;
+        endDate: string;
+        numDias: number;
+        documentName: string;
+        documentUrl: string;
+        createdAt: FieldValue; // Firebase serverTimestamp type
+        // Optional fields for enfermedad type
+        edad?: string;
+        gender?: string;
+        cargo?: string;
+        tipoContrato?: string;
+        ubicacion?: string;
+        tipoEvento?: string;
+        codigoIncap?: string;
+        cie10?: string;
+        mesDiagnostico?: string;
+        // Optional field for permiso type
+        description?: string;
+      }
+
+      const solicitudData: SolicitudData = {
         userId: user.uid,
         nombre: nombre || formData.name,
         cedula: cedula || formData.cedula,
