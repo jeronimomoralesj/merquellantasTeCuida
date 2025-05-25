@@ -18,25 +18,7 @@ import { addDoc, collection, doc, getDoc, serverTimestamp } from 'firebase/fires
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { auth, db } from '../../../firebase';    // adjust path if needed
 
-const SolicitudPage = () => {
-  const [requestType, setRequestType] = useState('enfermedad');
-const [formData, setFormData] = useState<FormData>({
-  name: '',
-  cedula: '',
-  edad: '',
-  gender: '',
-  cargo: '',
-  tipoContrato: 'directo', // directo or temporal
-  ubicacion: '',
-  tipoEvento: '',
-  codigoIncap: '',
-  cie10: '',
-  mesDiagnostico: '',
-  startDate: '',
-  endDate: '',
-  description: '',
-  document: null,
-});
+// Move interface definition before component
 interface FormData {
   name: string;
   cedula: string;
@@ -54,6 +36,27 @@ interface FormData {
   description: string;
   document: File | null;
 }
+
+const SolicitudPage = () => {
+  const [requestType, setRequestType] = useState('enfermedad');
+  const [formData, setFormData] = useState<FormData>({
+    name: '',
+    cedula: '',
+    edad: '',
+    gender: '',
+    cargo: '',
+    tipoContrato: 'directo', // directo or temporal
+    ubicacion: '',
+    tipoEvento: '',
+    codigoIncap: '',
+    cie10: '',
+    mesDiagnostico: '',
+    startDate: '',
+    endDate: '',
+    description: '',
+    document: null,
+  });
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [formError, setFormError] = useState('');
@@ -73,7 +76,7 @@ interface FormData {
     if (formData.startDate && formData.endDate) {
       const start = new Date(formData.startDate);
       const end = new Date(formData.endDate);
-const diffTime = Math.abs(end.getTime() - start.getTime());
+      const diffTime = Math.abs(end.getTime() - start.getTime());
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // +1 because both days are inclusive
       setNumDias(diffDays);
     } else {
@@ -153,7 +156,8 @@ const diffTime = Math.abs(end.getTime() - start.getTime());
     
     return true;
   };
-const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     if (!validateForm()) return;
@@ -195,7 +199,7 @@ const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
       calculateDays();
 
       // 5) write the solicitud to Firestore with all required fields
-      const solicitudData = {
+      const solicitudData: Record<string, any> = {
         userId: user.uid,
         nombre: nombre || formData.name,
         cedula: cedula || formData.cedula,
@@ -239,39 +243,39 @@ const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     }
   };
 
-const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-  if (e.target.files && e.target.files[0]) {
-    const file = e.target.files[0];
-    
-    if (file.size > 5 * 1024 * 1024) { // 5MB limit
-      setFileError(true);
-      setFormData({
-        ...formData,
-        document: null
-      });
-    } else {
-      setFileError(false);
-      setFormData({
-        ...formData,
-        document: file
-      });
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      
+      if (file.size > 5 * 1024 * 1024) { // 5MB limit
+        setFileError(true);
+        setFormData({
+          ...formData,
+          document: null
+        });
+      } else {
+        setFileError(false);
+        setFormData({
+          ...formData,
+          document: file
+        });
+      }
     }
-  }
-};
+  };
 
-const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-  const { name, value } = e.target;
-  setFormData({
-    ...formData,
-    [name]: value
-  });
-  setFormError('');
-  
-  // Calculate days whenever start or end date changes
-  if (name === 'startDate' || name === 'endDate') {
-    setTimeout(calculateDays, 0);
-  }
-};
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setFormData({
+      ...formData,
+      [name]: value
+    });
+    setFormError('');
+    
+    // Calculate days whenever start or end date changes
+    if (name === 'startDate' || name === 'endDate') {
+      setTimeout(calculateDays, 0);
+    }
+  };
   
   const handleNewRequest = () => {
     setFormData({
