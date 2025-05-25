@@ -222,39 +222,39 @@ const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     }
   };
 
-  const handleFileChange = (e) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      
-      if (file.size > 5 * 1024 * 1024) { // 5MB limit
-        setFileError(true);
-        setFormData({
-          ...formData,
-          document: null
-        });
-      } else {
-        setFileError(false);
-        setFormData({
-          ...formData,
-          document: file
-        });
-      }
-    }
-  };
-
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData({
-      ...formData,
-      [name]: value
-    });
-    setFormError('');
+const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  if (e.target.files && e.target.files[0]) {
+    const file = e.target.files[0];
     
-    // Calculate days whenever start or end date changes
-    if (name === 'startDate' || name === 'endDate') {
-      setTimeout(calculateDays, 0);
+    if (file.size > 5 * 1024 * 1024) { // 5MB limit
+      setFileError(true);
+      setFormData({
+        ...formData,
+        document: null
+      });
+    } else {
+      setFileError(false);
+      setFormData({
+        ...formData,
+        document: file
+      });
     }
-  };
+  }
+};
+
+const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+  const { name, value } = e.target;
+  setFormData({
+    ...formData,
+    [name]: value
+  });
+  setFormError('');
+  
+  // Calculate days whenever start or end date changes
+  if (name === 'startDate' || name === 'endDate') {
+    setTimeout(calculateDays, 0);
+  }
+};
   
   const handleNewRequest = () => {
     setFormData({
