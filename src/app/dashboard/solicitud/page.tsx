@@ -136,7 +136,6 @@ const diffTime = Math.abs(end.getTime() - start.getTime());
     
     return true;
   };
-
 const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
@@ -154,18 +153,21 @@ const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         return;
       }
       
-// 2) upload the file to Storage
-const storage = getStorage();
-const fileToUpload = formData.document;
-if (!fileToUpload) {
-  setFormError('Debe adjuntar un documento');
-  setIsSubmitting(false);
-  return;
-}
-const path = `solicitudes/${user.uid}/${Date.now()}_${fileToUpload.name}`;
-const fileRef = storageRef(storage, path);
-const snap = await uploadBytes(fileRef, fileToUpload);
-const url = await getDownloadURL(snap.ref);
+      // 2) upload the file to Storage
+      const storage = getStorage();
+      const fileToUpload = formData.document;
+      if (!fileToUpload) {
+        setFormError('Debe adjuntar un documento');
+        setIsSubmitting(false);
+        return;
+      }
+      
+      // Type assertion to tell TypeScript that fileToUpload is definitely a File
+      const file = fileToUpload as File;
+      const path = `solicitudes/${user.uid}/${Date.now()}_${file.name}`;
+      const fileRef = storageRef(storage, path);
+      const snap = await uploadBytes(fileRef, file);
+      const url = await getDownloadURL(snap.ref);
 
       // 3) fetch user profile info from users collection
       const userDoc = await getDoc(doc(db, 'users', user.uid));
@@ -185,7 +187,7 @@ const url = await getDownloadURL(snap.ref);
         startDate: formData.startDate,
         endDate: formData.endDate,
         numDias: numDias,
-        documentName: fileToUpload.name,
+        documentName: file.name,
         documentUrl: url,
         createdAt: serverTimestamp(),
       };
