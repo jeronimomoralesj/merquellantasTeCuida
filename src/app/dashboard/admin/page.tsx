@@ -8,6 +8,7 @@ import StatsCard from "./stats";
 import TristesCard from "./tristes";
 import SolicitudesCard from "./solicitudes";
 import CalendarCard from "./calendar";
+import PQRSFCard from "./pqrsf";
 
 
 export default function AdminPage() {
@@ -60,7 +61,7 @@ export default function AdminPage() {
 
               {/* Trabajadores tristes card */}
               <TristesCard />
-              
+              <PQRSFCard />
             </div>
           </div>
         </div>

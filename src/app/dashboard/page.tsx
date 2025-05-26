@@ -4,9 +4,7 @@ import React, { useState, useEffect } from 'react';
 import DashboardNavbar from './navbar';
 import { useRouter } from 'next/navigation';
 import { 
-  Calendar, DollarSign, Briefcase, ChevronRight, 
-  Gift, Clock, MessageSquare, FileText, Activity, User,
-  UserIcon, CheckCircle
+  Calendar, DollarSign, Briefcase, ChevronRight, Clock, MessageSquare, FileText, Activity, User, CheckCircle
 } from 'lucide-react';
 import Solicitudes from "./components/solicitudes";
 import AdminPage from './admin/page';
@@ -81,8 +79,8 @@ const Dashboard = () => {
   const [loadingEvents, setLoadingEvents] = useState(true);
 
   // Birthdays state
-  const [upcomingBirthdays, setUpcomingBirthdays] = useState<Birthday[]>([]);
-  const [loadingBirthdays, setLoadingBirthdays] = useState(true);
+  const [setUpcomingBirthdays] = useState<Birthday[]>([]);
+  const [setLoadingBirthdays] = useState(true);
 const [todayEventsCount, setTodayEventsCount] = useState(0);
 const [additionalTodayEvents, setAdditionalTodayEvents] = useState<CalendarEvent[]>([]);
 
