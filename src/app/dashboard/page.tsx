@@ -41,12 +41,6 @@ interface UserProfile {
   arl: string;
 }
 
-interface Birthday {
-  name: string;
-  position: string;
-  date: Timestamp;
-}
-
 interface UserData {
   nombre: string;
   rol: string;
