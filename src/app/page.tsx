@@ -151,10 +151,10 @@ const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
                 Tu portal completo para gestionar todo sobre tu tiempo en esta hermosa empresa. Actividades, beneficios y más, todo en un solo lugar.
               </p>
               <div className="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4">
-                <button className="py-3 px-8 bg-[#ff9900] text-white rounded-full font-medium hover:bg-[#e68a00] transition-colors flex items-center justify-center">
+                <a href='/auth/login'><button className="py-3 px-8 bg-[#ff9900] text-white rounded-full font-medium hover:bg-[#e68a00] transition-colors flex items-center justify-center">
                   <span>Comenzar</span>
                   <ChevronRight className="ml-2 h-5 w-5" />
-                </button>
+                </button></a>
               </div>
             </div>
             <div className="relative">

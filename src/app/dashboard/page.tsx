@@ -83,6 +83,37 @@ const Dashboard = () => {
   // Birthdays state
   const [upcomingBirthdays, setUpcomingBirthdays] = useState<Birthday[]>([]);
   const [loadingBirthdays, setLoadingBirthdays] = useState(true);
+const [todayEventsCount, setTodayEventsCount] = useState(0);
+const [additionalTodayEvents, setAdditionalTodayEvents] = useState<CalendarEvent[]>([]);
+
+// Helper function to determine if an event is happening today
+const isEventToday = (eventDate: Date) => {
+  const today = new Date();
+  return eventDate.toDateString() === today.toDateString();
+};
+
+// Helper function to determine event status
+const getEventStatus = (eventDate: Date) => {
+  const now = new Date();
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  const eventDateOnly = new Date(eventDate);
+  eventDateOnly.setHours(0, 0, 0, 0);
+  
+  if (eventDateOnly.getTime() === today.getTime()) {
+    // Check if it's an all-day event or if the time has passed
+    const isAllDay = eventDate.getHours() === 0 && eventDate.getMinutes() === 0 && eventDate.getSeconds() === 0;
+    if (isAllDay || eventDate > now) {
+      return { status: 'today', label: 'Hoy', color: 'bg-green-500' };
+    } else {
+      return { status: 'happening', label: 'En curso', color: 'bg-blue-500' };
+    }
+  } else if (eventDateOnly > today) {
+    return { status: 'upcoming', label: 'Próximo', color: 'bg-[#ff9900]' };
+  }
+  return { status: 'past', label: 'Pasado', color: 'bg-gray-500' };
+};
 
   const router = useRouter();
 
@@ -158,32 +189,58 @@ const Dashboard = () => {
   }, []);
 
   // Fetch the next calendar event
-  useEffect(() => {
-    async function fetchNext() {
-      try {
-        const q = query(
-          collection(db, 'calendar'),
-          where('date', '>=', Timestamp.now()),
-          orderBy('date', 'asc'),
-          limit(1)
-        );
-        const snap = await getDocs(q);
+useEffect(() => {
+  async function fetchNext() {
+    try {
+      // Get start of today to include today's events
+      const startOfToday = new Date();
+      startOfToday.setHours(0, 0, 0, 0);
+      
+      const q = query(
+        collection(db, 'calendar'),
+        where('date', '>=', Timestamp.fromDate(startOfToday)),
+        orderBy('date', 'asc'),
+        limit(5) // Get more events to check for multiple today
+      );
+      const snap = await getDocs(q);
 
-        if (!snap.empty) {
-          const eventData = snap.docs[0].data() as Omit<CalendarEvent, 'date'> & { date: Timestamp };
-          setNextEvent(eventData);
-        } else {
-          setNextEvent(null);
-        }
-      } catch (e) {
-        console.error("Error fetching calendar:", e);
+      if (!snap.empty) {
+        const events = snap.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as (CalendarEvent & { id: string })[];
+        
+        // Set the first/next event as the main event
+        setNextEvent(events[0]);
+        
+        // Check for multiple events today
+        const today = new Date();
+        today.setHours(23, 59, 59, 999); // End of today
+        
+        const todayEvents = events.filter(event => {
+          const eventDate = event.date.toDate();
+          return eventDate >= startOfToday && eventDate <= today;
+        });
+        
+        // Store additional today events info
+        setTodayEventsCount(todayEvents.length);
+        setAdditionalTodayEvents(todayEvents.slice(1)); // Exclude the main event
+      } else {
         setNextEvent(null);
-      } finally {
-        setLoadingEvent(false);
+        setTodayEventsCount(0);
+        setAdditionalTodayEvents([]);
       }
+    } catch (e) {
+      console.error("Error fetching calendar:", e);
+      setNextEvent(null);
+      setTodayEventsCount(0);
+      setAdditionalTodayEvents([]);
+    } finally {
+      setLoadingEvent(false);
     }
-    fetchNext();
-  }, []);
+  }
+  fetchNext();
+}, []);
 
   // Load user profile
   useEffect(() => {
@@ -355,88 +412,125 @@ const Dashboard = () => {
               <div className="lg:col-span-2 space-y-6">
                 {/* Welcome banner with gradient */}
                 <div className="bg-white rounded-2xl shadow-sm overflow-hidden border border-gray-100 hover:shadow-md transition-shadow duration-300">
-                  <div className="relative p-6 md:p-8 flex flex-col md:flex-row items-center">
-                    <div className="absolute top-0 right-0 w-full h-1 bg-gradient-to-r from-[#ff9900] via-[#ffb347] to-white"></div>
+  <div className="relative p-6 md:p-8 flex flex-col md:flex-row items-center">
+    <div className="absolute top-0 right-0 w-full h-1 bg-gradient-to-r from-[#ff9900] via-[#ffb347] to-white"></div>
 
-                    <div className="md:flex-1 mb-6 md:mb-0 md:pr-6">
-                      <div className="inline-block px-3 py-1 rounded-full bg-[#ff9900]/10 text-[#ff9900] text-xs font-medium mb-3">
-                        Evento destacado
-                      </div>
-
-                      {loadingEvent ? (
-                        <p className="text-gray-500">Cargando evento…</p>
-                      ) : nextEvent ? (
-                        <>
-                          <h2 className="text-xl md:text-2xl font-bold text-gray-900 mb-2">
-                            {nextEvent.title}
-                          </h2>
-
-                          {/* Format date/time or "All day" */}
-                          {(() => {
-                            const dt = nextEvent.date.toDate();
-                            const isAllDay =
-                              dt.getHours() === 0 &&
-                              dt.getMinutes() === 0 &&
-                              dt.getSeconds() === 0;
-
-                            if (isAllDay) {
-                              return (
-                                <p className="text-xs text-gray-500 mb-3">
-                                  {dt.toLocaleDateString('es-ES', {
-                                    day: 'numeric',
-                                    month: 'long',
-                                    year: 'numeric'
-                                  })} — Todo el día
-                                </p>
-                              );
-                            } else {
-                              return (
-                                <p className="text-xs text-gray-500 mb-3">
-                                  {dt.toLocaleDateString('es-ES', {
-                                    day: 'numeric',
-                                    month: 'long',
-                                    year: 'numeric'
-                                  })},{' '}
-                                  {dt.toLocaleTimeString('es-ES', {
-                                    hour: '2-digit',
-                                    minute: '2-digit'
-                                  })}
-                                </p>
-                              );
-                            }
-                          })()}
-
-                          <p className="mb-4 text-gray-600">{nextEvent.description}</p>
-                          <a href='dashboard/calendar'>
-                            <button className="inline-flex items-center px-5 py-2.5 bg-gradient-to-r from-[#ff9900] to-[#ffb347] text-white rounded-full font-medium text-sm hover:from-[#e68a00] hover:to-[#ff9900] transition-all shadow-sm hover:shadow transform hover:-translate-y-0.5 duration-200">
-                              Ver detalles
-                              <ChevronRight className="ml-1 h-4 w-4" />
-                            </button>
-                          </a>
-                        </>
-                      ) : (
-                        <p className="text-gray-500">No hay eventos próximos</p>
-                      )}
-                    </div>
-
-                    {/* Event image or placeholder */}
-                    <div className="flex-shrink-0 w-full md:w-auto">
-                      {loadingEvent ? (
-                        <div className="h-40 w-full md:w-64 bg-gray-100 rounded-xl animate-pulse" />
-                      ) : nextEvent ? (
-                        <img
-                          src={nextEvent.image}
-                          alt={nextEvent.title}
-                          className="rounded-xl shadow h-40 w-full object-cover md:w-64"
-                        />
-                      ) : (
-                        <div className="h-40 w-full md:w-64 flex items-center justify-center text-gray-400 rounded-xl border border-gray-200">
-                          No hay imagen
-                        </div>
-                      )}
-                    </div>
-                  </div>
+    <div className="md:flex-1 mb-6 md:mb-0 md:pr-6">
+      {loadingEvent ? (
+        <p className="text-gray-500">Cargando evento…</p>
+      ) : nextEvent ? (
+        <>
+          <div className="flex items-center gap-2 mb-3">
+            <div className="inline-block px-3 py-1 rounded-full bg-[#ff9900]/10 text-[#ff9900] text-xs font-medium">
+              Evento destacado
+            </div>
+            {(() => {
+              const eventStatus = getEventStatus(nextEvent.date.toDate());
+              return (
+                <div className={`inline-block px-2 py-1 rounded-full ${eventStatus.color} text-white text-xs font-medium`}>
+                  {eventStatus.label}
                 </div>
+              );
+            })()}
+          </div>
+
+          <h2 className="text-xl md:text-2xl font-bold text-gray-900 mb-2">
+            {nextEvent.title}
+          </h2>
+
+          {/* Format date/time or "All day" */}
+          {(() => {
+            const dt = nextEvent.date.toDate();
+            const isAllDay = dt.getHours() === 0 && dt.getMinutes() === 0 && dt.getSeconds() === 0;
+            const isToday = isEventToday(dt);
+
+            if (isAllDay) {
+              return (
+                <p className="text-xs text-gray-500 mb-3">
+                  {isToday ? 'Hoy' : dt.toLocaleDateString('es-ES', {
+                    day: 'numeric',
+                    month: 'long',
+                    year: 'numeric'
+                  })} — Todo el día
+                </p>
+              );
+            } else {
+              return (
+                <p className="text-xs text-gray-500 mb-3">
+                  {isToday ? 'Hoy' : dt.toLocaleDateString('es-ES', {
+                    day: 'numeric',
+                    month: 'long',
+                    year: 'numeric'
+                  })},{' '}
+                  {dt.toLocaleTimeString('es-ES', {
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  })}
+                </p>
+              );
+            }
+          })()}
+
+          <p className="mb-4 text-gray-600">{nextEvent.description}</p>
+          
+          {/* Show additional events today if any */}
+          {todayEventsCount > 1 && (
+            <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+              <p className="text-sm text-blue-800 font-medium mb-2">
+                📅 Hay {todayEventsCount} eventos hoy
+              </p>
+              {additionalTodayEvents.length > 0 && (
+                <div className="space-y-1">
+                  {additionalTodayEvents.slice(0, 2).map((event, idx) => (
+                    <p key={idx} className="text-xs text-blue-700">
+                      • {event.title}
+                      {(() => {
+                        const dt = event.date.toDate();
+                        const isAllDay = dt.getHours() === 0 && dt.getMinutes() === 0 && dt.getSeconds() === 0;
+                        return isAllDay ? '' : ` (${dt.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })})`;
+                      })()}
+                    </p>
+                  ))}
+                  {additionalTodayEvents.length > 2 && (
+                    <p className="text-xs text-blue-600">
+                      y {additionalTodayEvents.length - 2} más...
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+          
+          <a href='dashboard/calendar'>
+            <button className="inline-flex items-center px-5 py-2.5 bg-gradient-to-r from-[#ff9900] to-[#ffb347] text-white rounded-full font-medium text-sm hover:from-[#e68a00] hover:to-[#ff9900] transition-all shadow-sm hover:shadow transform hover:-translate-y-0.5 duration-200">
+              Ver detalles
+              <ChevronRight className="ml-1 h-4 w-4" />
+            </button>
+          </a>
+        </>
+      ) : (
+        <p className="text-gray-500">No hay eventos próximos</p>
+      )}
+    </div>
+
+    {/* Event image or placeholder */}
+    <div className="flex-shrink-0 w-full md:w-auto">
+      {loadingEvent ? (
+        <div className="h-40 w-full md:w-64 bg-gray-100 rounded-xl animate-pulse" />
+      ) : nextEvent ? (
+        <img
+          src={nextEvent.image}
+          alt={nextEvent.title}
+          className="rounded-xl shadow h-40 w-full object-cover md:w-64"
+        />
+      ) : (
+        <div className="h-40 w-full md:w-64 flex items-center justify-center text-gray-400 rounded-xl border border-gray-200">
+          No hay imagen
+        </div>
+      )}
+    </div>
+  </div>
+</div>
 
                 {/* Quick actions with improved design */}
                 <div className="bg-white rounded-2xl shadow-sm p-6 border border-gray-100 hover:shadow-md transition-shadow duration-300 relative overflow-hidden">
@@ -625,60 +719,8 @@ const Dashboard = () => {
                   </div>
                 </div>
 
-                {/* Upcoming birthdays */}
-                <div className="bg-white rounded-2xl shadow-sm p-6 border border-gray-100 hover:shadow-md transition-shadow duration-300 relative overflow-hidden">
-                  <div className="absolute top-0 right-0 w-full h-1 bg-gradient-to-l from-green-500 via-green-400 to-white"></div>
-                  <div className="flex justify-between items-center mb-5">
-                    <h2 className="text-lg font-bold text-gray-900 flex items-center">
-                      <Gift className="h-5 w-5 mr-2 text-[#ff9900]" />
-                      Próximos cumpleaños
-                    </h2>
-                  </div>
+                {/* Salario emocional section */}
 
-  <div className="space-y-4">
-    {loadingBirthdays ? (
-      // tres esqueletos de carga
-      [1, 2, 3].map(i => (
-        <div key={i} className="h-14 rounded-xl bg-gray-100 animate-pulse" />
-      ))
-    ) : upcomingBirthdays.length > 0 ? (
-      upcomingBirthdays.map((person, idx) => {
-        const dt = person.date.toDate()
-        const dayMonth = dt.toLocaleDateString('es-ES', {
-          day:   'numeric',
-          month: 'long'
-        })
-        return (
-          <div
-            key={idx}
-            className="flex items-center p-2 rounded-xl hover:bg-gray-50 transition-colors hover:shadow-sm transform hover:-translate-y-0.5 duration-200"
-          >
-            <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-[#ff9900]/20 bg-gray-100 flex items-center justify-center">
-              <UserIcon className="w-6 h-6 text-gray-500" />
-            </div>
-            <div className="flex-1 ml-3">
-              <h3 className="font-medium text-gray-900 truncate">{person.name}</h3>
-              <p className="text-xs text-gray-500">{person.position}</p>
-              <p className="text-xs text-gray-500">{dayMonth}</p>
-            </div>
-          </div>
-        )
-      })
-    ) : (
-      <p className="text-gray-500">No hay próximos cumpleaños</p>
-    )}
-  </div>
-
-  <div className="mt-4 pt-4 border-t border-gray-100 text-center">
-    <a
-      href="/dashboard/calendar"
-      className="text-sm font-medium text-[#ff9900] inline-flex items-center hover:underline group"
-    >
-      Ver calendario completo
-      <ChevronRight className="ml-1 h-4 w-4 group-hover:translate-x-1 transition-transform" />
-    </a>
-  </div>
-</div>
 
 
             </div>

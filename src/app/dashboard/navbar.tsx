@@ -76,7 +76,7 @@ const DashboardNavbar = ({ activePage = 'home' }) => {
     { id: 'home', href: '/dashboard', icon: <Home size={18} />, label: 'Inicio' },
     { id: 'cesantias', href: '/dashboard/cesantias', icon: <HeartPlus size={18} />, label: 'Cesantías' },
     { id: 'permisos', href: '/dashboard/solicitud', icon: <Palmtree size={18} />, label: 'Permisos' },
-    { id: 'documentos', href: '/dashboard/solicitud', icon: <FileText size={18} />, label: 'Documentos' },
+    { id: 'documentos', href: '/dashboard/documents', icon: <FileText size={18} />, label: 'Documentos' },
     { id: 'pqrsf', href: '/dashboard/pqrsf', icon: <HelpCircle size={18} />, label: 'PQRSF' },
   ];
 

@@ -60,6 +60,7 @@ export default function AdminPage() {
 
               {/* Trabajadores tristes card */}
               <TristesCard />
+              
             </div>
           </div>
         </div>

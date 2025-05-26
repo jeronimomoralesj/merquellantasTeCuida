@@ -31,40 +31,38 @@ const [allEvents, setAllEvents] = useState<CalendarEvent[]>([]);
   type: string;
 }
   // Fetch all calendar events on component mount
-  useEffect(() => {
-    async function fetchEvents() {
-      try {
-        setLoading(true);
-        const q = query(
-          collection(db, 'calendar'),
-          orderBy('date', 'asc')
-        );
-        const snapshot = await getDocs(q);
-        
-        const events = snapshot.docs.map(doc => {
-  const data = doc.data();
-  return {
-    id: doc.id,
-    title: data.title || '',
-    description: data.description || '',
-    date: data.date.toDate(),
-    time: data.time,
-    type: data.type || 'event',
-    ...data
-  };
-});
-        
-        setAllEvents(events);
-      } catch (error) {
-        console.error("Error fetching events:", error);
-      } finally {
-        setLoading(false);
-      }
+useEffect(() => {
+  async function fetchEvents() {
+    try {
+      setLoading(true);
+      const q = query(
+        collection(db, 'calendar'),
+        orderBy('date', 'asc')
+      );
+      const snapshot = await getDocs(q);
+
+      const events = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,                       // spread raw fields first
+          date: data.date.toDate(),      // convert Firestore Timestamp to JS Date
+          time: data.time || undefined,  // ensure time is a string or undefined
+          type: data.type || 'event',    // default type if missing
+        };
+      });
+
+      setAllEvents(events);
+    } catch (error) {
+      console.error("Error fetching events:", error);
+    } finally {
+      setLoading(false);
     }
-    
-    fetchEvents();
-  }, []);
-  
+  }
+
+  fetchEvents();
+}, []);
+
   // Calendar navigation functions
   const goToPreviousMonth = () => {
     setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
@@ -78,6 +76,7 @@ const [allEvents, setAllEvents] = useState<CalendarEvent[]>([]);
     setCurrentDate(new Date());
     setSelectedDate(new Date());
   };
+
   
   // Get events for a specific date, including recurring birthdays
 const getEventsForDate = (date: Date) => {
