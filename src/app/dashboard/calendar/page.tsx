@@ -44,12 +44,13 @@ useEffect(() => {
       const events = snapshot.docs.map(doc => {
         const data = doc.data();
         return {
-          id: doc.id,
-          ...data,                       // spread raw fields first
-          date: data.date.toDate(),      // convert Firestore Timestamp to JS Date
-          time: data.time || undefined,  // ensure time is a string or undefined
-          type: data.type || 'event',    // default type if missing
-        };
+  id: doc.id,
+  title: data.title || '',
+  description: data.description || '',
+  date: data.date.toDate(),
+  time: data.time || undefined,
+  type: data.type || 'event',
+};
       });
 
       setAllEvents(events);
