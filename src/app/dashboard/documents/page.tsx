@@ -12,13 +12,25 @@ import {
   ExternalLink
 } from 'lucide-react';
 
+// Type definitions
+interface Document {
+  id: number;
+  title: string;
+  description: string;
+  type: 'pdf' | 'excel' | 'word';
+  category: string;
+  url: string;
+  size: string;
+  uploadDate: string;
+}
+
 export default function DocumentsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [loading, setLoading] = useState(false);
 
   // Document data with the provided URLs
-  const documents = [
+  const documents: Document[] = [
     {
       id: 1,
       title: "Estándares mínimos SG-SST SURA",
@@ -73,7 +85,7 @@ export default function DocumentsPage() {
   });
 
   // Get file icon based on type
-  const getFileIcon = (type: string) => {
+  const getFileIcon = (type: Document['type']) => {
     switch (type) {
       case 'pdf':
         return <FileText className="text-red-500" size={24} />;
@@ -87,7 +99,7 @@ export default function DocumentsPage() {
   };
 
   // Handle document download/view
-  const handleDocumentAction = (doc: any) => {
+  const handleDocumentAction = (doc: Document) => {
     setLoading(true);
     // Open document in new tab
     window.open(doc.url, '_blank');
