@@ -78,9 +78,6 @@ const Dashboard = () => {
   const [upcomingEvents, setUpcomingEvents] = useState<CalendarEvent[]>([]);
   const [loadingEvents, setLoadingEvents] = useState(true);
 
-  // Birthdays state
-  const [setUpcomingBirthdays] = useState<Birthday[]>([]);
-  const [setLoadingBirthdays] = useState(true);
 const [todayEventsCount, setTodayEventsCount] = useState(0);
 const [additionalTodayEvents, setAdditionalTodayEvents] = useState<CalendarEvent[]>([]);
 
@@ -293,31 +290,7 @@ useEffect(() => {
     fetchUpcoming();
   }, []);
 
-  // Load upcoming birthdays
-  useEffect(() => {
-    async function fetchBirthdays() {
-      try {
-        const q = query(
-          collection(db, 'calendar'),
-          where('type', '==', 'birthday'),
-          where('date', '>=', Timestamp.now()),
-          orderBy('date', 'asc'),
-          limit(3)
-        );
-        const snap = await getDocs(q);
-        setUpcomingBirthdays(snap.docs.map(d => ({
-          name: d.data().title,
-          position: d.data().description,
-          date: d.data().date as Timestamp
-        })));
-      } catch (e) {
-        console.error("Error fetching birthdays:", e);
-      } finally {
-        setLoadingBirthdays(false);
-      }
-    }
-    fetchBirthdays();
-  }, []);
+
 
   // If flagged, render the solicitudes screen instead of the dashboard
   if (showSolicitudes) {
