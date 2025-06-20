@@ -13,7 +13,7 @@ import {
   Clock,
   DollarSign
 } from "lucide-react";
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs, Timestamp } from 'firebase/firestore';
 import { db } from '../../../firebase'; // Adjust path as needed
 
 interface CesantiasData {
