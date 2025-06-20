@@ -52,18 +52,6 @@ interface UserData {
   extra?: Record<string, unknown>;
 }
 
-interface UserProfile {
-  nombre: string;
-  rol: string;
-  posicion: string;
-  dpto: string;
-  eps: string;
-  banco: string;
-  pensiones: string;
-  arl: string;
-  antiguedad: number;
-}
-
 
 export default function DocumentsPage() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -103,11 +91,6 @@ export default function DocumentsPage() {
       const snap = await getDoc(doc(db, 'users', u.uid));
       if (snap.exists()) {
         const data = snap.data() as UserData;
-        const dpto = data.extra?.["Nombre Área Funcional"] ?? "";
-        const eps = data.extra?.["EPS"] ?? "";
-        const banco = data.extra?.["Banco"] ?? "";
-        const pensiones = data.extra?.["FONDO DE PENSIONES"] ?? "";
-        const arl = data.extra?.["ARL"] ?? "";
 
         // Handle antiguedad calculation
         let calculatedAntiguedad = 0;
