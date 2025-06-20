@@ -48,26 +48,28 @@ const Users: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
 
   // Initial form data - Fixed default values
-  const initialFormData: Omit<User, 'id' | 'email' | 'createdAt'> = {
-    cedula: '',
-    extra: {
-      'Dpto Donde Labora': '',
-      'ARL': '',
-      'Banco': '',
-      'CAJA DE COMPENSACION': '',
-      'EPS': '',
-      'FONDO DE PENSIONES': '',
-      'Fecha Ingreso': '', // Changed from 0 to empty string
-      'Fondo Cesantías': '',
-      'Nombre Área Funcional': '',
-      'Número Cuenta': '',
-      'Tipo Cuenta': '',
-      'Tipo de Documento': '',
-      'nombre': '',
-      'posicion': '',
-      'rol': 'user'
-    }
-  };
+const initialFormData: Omit<User, 'id' | 'email' | 'createdAt'> = {
+  cedula: '',
+  nombre: '', // ✅ Add this
+  extra: {
+    'Dpto Donde Labora': '',
+    'ARL': '',
+    'Banco': '',
+    'CAJA DE COMPENSACION': '',
+    'EPS': '',
+    'FONDO DE PENSIONES': '',
+    'Fecha Ingreso': '',
+    'Fondo Cesantías': '',
+    'Nombre Área Funcional': '',
+    'Número Cuenta': '',
+    'Tipo Cuenta': '',
+    'Tipo de Documento': '',
+    'nombre': '',
+    'posicion': '',
+    'rol': 'user'
+  }
+};
+
   const [formData, setFormData] = useState(initialFormData);
 
 const generateCredentials = (cedula: string) => {
