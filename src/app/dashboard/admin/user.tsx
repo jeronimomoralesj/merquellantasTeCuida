@@ -173,38 +173,39 @@ const fetched: User[] = snap.docs.map(doc => {
 };
 
   // Update user
-  const updateUser = async () => {
-    if (!editingUser) return;
-    
-    const updatedPayload = {
-      cedula: formData.cedula,
-      extra: {
-        ...formData.extra,
-        'Fecha Ingreso': dateToExcelSerial(formData.extra['Fecha Ingreso']) /
-      }
-    };
-
-    try {
-      const res = await fetch(`/api/users/${editingUser.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updatedPayload)
-      });
-
-      if (!res.ok) throw new Error(`API error ${res.status}`);
-      const updated = await res.json();
-      
-      setUsers(prevUsers => 
-        prevUsers.map(user => 
-          user.id === editingUser.id ? updated : user
-        )
-      );
-      
-      cancelEdit();
-    } catch (err) {
-      console.error('Error updating user:', err);
+const updateUser = async () => {
+  if (!editingUser) return;
+  
+  const updatedPayload = {
+    cedula: formData.cedula,
+    extra: {
+      ...formData.extra,
+      'Fecha Ingreso': dateToExcelSerial(formData.extra['Fecha Ingreso']) // ✅ fixed here
     }
   };
+
+  try {
+    const res = await fetch(`/api/users/${editingUser.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updatedPayload)
+    });
+
+    if (!res.ok) throw new Error(`API error ${res.status}`);
+    const updated = await res.json();
+    
+    setUsers(prevUsers => 
+      prevUsers.map(user => 
+        user.id === editingUser.id ? updated : user
+      )
+    );
+    
+    cancelEdit();
+  } catch (err) {
+    console.error('Error updating user:', err);
+  }
+};
+
 
   // Delete user
   const deleteUser = async (userId: string) => {
