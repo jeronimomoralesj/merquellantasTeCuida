@@ -71,7 +71,7 @@ export default function DocumentsPage() {
   const [loading, setLoading] = useState(false);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [userRole, setUserRole] = useState<string>('user');
-  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [_profile, setProfile] = useState<UserProfile | null>(null);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadName, setUploadName] = useState('');
