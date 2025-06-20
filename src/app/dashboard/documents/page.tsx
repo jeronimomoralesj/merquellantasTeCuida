@@ -94,25 +94,29 @@ export default function DocumentsPage() {
 
         // Handle antiguedad calculation
         let calculatedAntiguedad = 0;
-        
-        if (data.extra?.["Fecha Ingreso"]) {
-          const fechaIngreso = data.extra["Fecha Ingreso"];
-          console.log("Fecha Ingreso found:", fechaIngreso);
-          const startDate = convertExcelDateToJSDate(fechaIngreso);
-          console.log("Converted start date:", startDate);
-          calculatedAntiguedad = calculateYearsOfService(startDate);
-          console.log("Calculated antiguedad:", calculatedAntiguedad);
-        } else if (data.antiguedad) {
-          if (typeof data.antiguedad === 'number' && data.antiguedad > 1000) {
-            const startDate = convertExcelDateToJSDate(data.antiguedad);
-            calculatedAntiguedad = calculateYearsOfService(startDate);
-            console.log("Converted antiguedad from Excel date:", calculatedAntiguedad);
-          } else {
-            calculatedAntiguedad = typeof data.antiguedad === 'string' 
-              ? parseInt(data.antiguedad) || 0 
-              : data.antiguedad;
-          }
-        }
+
+// Check if Fecha Ingreso exists and is a number
+const rawFechaIngreso = data.extra?.["Fecha Ingreso"];
+if (typeof rawFechaIngreso === 'number' && rawFechaIngreso > 1000) {
+  console.log("Fecha Ingreso found:", rawFechaIngreso);
+  const startDate = convertExcelDateToJSDate(rawFechaIngreso);
+  console.log("Converted start date:", startDate);
+  calculatedAntiguedad = calculateYearsOfService(startDate);
+  console.log("Calculated antiguedad:", calculatedAntiguedad);
+} else if (data.antiguedad) {
+  if (typeof data.antiguedad === 'number' && data.antiguedad > 1000) {
+    const startDate = convertExcelDateToJSDate(data.antiguedad);
+    calculatedAntiguedad = calculateYearsOfService(startDate);
+    console.log("Converted antiguedad from Excel date:", calculatedAntiguedad);
+  } else if (typeof data.antiguedad === 'string') {
+    calculatedAntiguedad = parseInt(data.antiguedad) || 0;
+    console.log("Parsed antiguedad from string:", calculatedAntiguedad);
+  } else {
+    calculatedAntiguedad = data.antiguedad as number;
+    console.log("Assigned antiguedad as number:", calculatedAntiguedad);
+  }
+}
+
 
         setUserRole(data.rol || "user");
       }
