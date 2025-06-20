@@ -52,6 +52,18 @@ interface UserData {
   extra?: Record<string, unknown>;
 }
 
+interface UserProfile {
+  nombre: string;
+  rol: string;
+  posicion: string;
+  dpto: string;
+  eps: string;
+  banco: string;
+  pensiones: string;
+  arl: string;
+  antiguedad: number;
+}
+
 
 export default function DocumentsPage() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -59,7 +71,7 @@ export default function DocumentsPage() {
   const [loading, setLoading] = useState(false);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [userRole, setUserRole] = useState<string>('user');
- // const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadName, setUploadName] = useState('');
@@ -87,7 +99,7 @@ export default function DocumentsPage() {
   // Auth and user profile setup
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
-      if (!u) return setProfile(null);
+      if (!u) return;
       
       const snap = await getDoc(doc(db, 'users', u.uid));
       if (snap.exists()) {
