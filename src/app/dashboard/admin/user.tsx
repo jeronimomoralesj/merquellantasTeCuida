@@ -225,7 +225,7 @@ const updateUser = async () => {
   };
 
   // Handle input
-  const handleInputChange = (field: string, value: any, isExtra = false) => {
+  const handleInputChange = (field: string, value: string | number | boolean, isExtra = false): void => {
     if (isExtra) {
       setFormData(prev => ({
         ...prev,

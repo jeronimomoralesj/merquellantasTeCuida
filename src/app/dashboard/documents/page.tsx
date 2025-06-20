@@ -52,17 +52,6 @@ interface UserData {
   extra?: Record<string, unknown>;
 }
 
-interface UserProfile {
-  nombre: string;
-  rol: string;
-  posicion: string;
-  dpto: string;
-  eps: string;
-  banco: string;
-  pensiones: string;
-  arl: string;
-  antiguedad: number;
-}
 
 export default function DocumentsPage() {
   const [searchTerm, setSearchTerm] = useState('');

@@ -5,7 +5,6 @@ import {
   Umbrella,
   X,
   Calendar,
-  FileText,
   TrendingUp,
   CheckCircle,
   XCircle,

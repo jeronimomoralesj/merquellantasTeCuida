@@ -31,6 +31,18 @@ import {
 } from "firebase/firestore";
 import { db } from "../../../firebase"; // adjust to your path
 
+// Base interface for common document fields
+interface BaseDocumentData {
+  nombre: string;
+  cedula: string;
+  estado: string;
+  createdAt: Timestamp;
+  updatedAt?: Timestamp;
+  description?: string;
+  documentUrl?: string;
+  documentName?: string;
+}
+
 // Type definitions
 interface RequestData {
   id: string;
@@ -45,7 +57,7 @@ interface RequestData {
   description?: string;
   attachment?: string;
   isPermiso: boolean;
-  rawData?: any;
+  rawData?: BaseDocumentData | IncapacidadData | VacacionesData | PermisoData | CesantiasData;
 }
 
 interface NotificationState {
@@ -53,9 +65,8 @@ interface NotificationState {
   type: 'success' | 'error';
 }
 
-interface IncapacidadData {
-  nombre: string;
-  cedula: string;
+interface IncapacidadData extends BaseDocumentData {
+  tipo: 'enfermedad';
   edad: string;
   gender: string;
   tipoContrato: string;
@@ -68,33 +79,26 @@ interface IncapacidadData {
   startDate: string;
   endDate: string;
   numDias: number;
-  documentUrl?: string;
-  documentName?: string;
-  description?: string;
 }
 
-interface VacacionesData {
-  nombre: string;
-  cedula: string;
+interface VacacionesData extends BaseDocumentData {
+  tipo: 'vacaciones';
   fechaInicio: string;
   fechaFin: string;
   diasVacaciones: number;
-  documentUrl?: string;
-  documentName?: string;
-  description?: string;
 }
 
-interface PermisoData {
-  nombre: string;
-  cedula: string;
+interface PermisoData extends BaseDocumentData {
+  tipo: 'permiso';
   fecha: string;
   tiempoInicio: string;
   tiempoFin: string;
-  documentUrl?: string;
-  documentName?: string;
-  description?: string;
 }
 
+interface CesantiasData extends BaseDocumentData {
+  motivoSolicitud: string;
+  fileUrl?: string;
+}
 
 export default function SolicitudesCard() {
   const [requests, setRequests] = useState<RequestData[]>([]);
@@ -236,7 +240,7 @@ export default function SolicitudesCard() {
         ]);
 
         const ces: RequestData[] = cesSnap.docs.map((d) => {
-          const data = d.data();
+          const data = d.data() as CesantiasData;
           return {
             id: d.id,
             title: "Solicitud de Cesantías",
@@ -255,7 +259,7 @@ export default function SolicitudesCard() {
         });
 
         const sol: RequestData[] = solSnap.docs.map((d) => {
-          const data = d.data();
+          const data = d.data() as IncapacidadData | VacacionesData | PermisoData;
           let typ = "";
           let avatarColor = "";
           
@@ -400,8 +404,13 @@ export default function SolicitudesCard() {
     </div>
   );
 
+  // Type guard to check if data is IncapacidadData
+  const isIncapacidadData = (data: RequestData['rawData']): data is IncapacidadData => {
+    return data !== undefined && 'tipo' in data && data.tipo === 'enfermedad';
+  };
+
   // Enhanced details modal for different types
-const EnfermedadDetails: React.FC<{ data: IncapacidadData }> = ({ data }) => (
+  const EnfermedadDetails: React.FC<{ data: IncapacidadData }> = ({ data }) => (
     <div className="space-y-6">
       {/* Personal Information */}
       <div className="bg-blue-50 p-4 rounded-lg">
@@ -519,7 +528,6 @@ const EnfermedadDetails: React.FC<{ data: IncapacidadData }> = ({ data }) => (
       )}
     </div>
   );
-
 
   return (
     <div className="space-y-4 text-black">
@@ -641,7 +649,7 @@ const EnfermedadDetails: React.FC<{ data: IncapacidadData }> = ({ data }) => (
             </div>
             
             {/* Show enhanced details for enfermedad type */}
-            {selected.rawData?.tipo === "enfermedad" ? (
+            {isIncapacidadData(selected.rawData) ? (
               <EnfermedadDetails data={selected.rawData} />
             ) : (
               <>
