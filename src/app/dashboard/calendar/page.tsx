@@ -30,6 +30,14 @@ const [allEvents, setAllEvents] = useState<CalendarEvent[]>([]);
   time?: string;
   type: string;
 }
+
+  // Helper function to add one day to a date
+  const addOneDay = (date: Date) => {
+    const newDate = new Date(date);
+    newDate.setDate(newDate.getDate() + 1);
+    return newDate;
+  };
+
   // Fetch all calendar events on component mount
 useEffect(() => {
   async function fetchEvents() {
@@ -43,11 +51,12 @@ useEffect(() => {
 
       const events = snapshot.docs.map(doc => {
         const data = doc.data();
+        const storedDate = data.date.toDate();
         return {
   id: doc.id,
   title: data.title || '',
   description: data.description || '',
-  date: data.date.toDate(),
+  date: addOneDay(storedDate), // Add one day to the stored date
   time: data.time || undefined,
   type: data.type || 'event',
 };
@@ -88,7 +97,7 @@ const getEventsForDate = (date: Date) => {
     const day = date.getDate();
     
     return allEvents.filter(event => {
-      const eventDate = new Date(event.date);
+      const eventDate = new Date(event.date); // This date is already +1 day from stored date
       
       // For birthdays, match just day and month (recurring yearly)
       if (event.type === 'birthday') {

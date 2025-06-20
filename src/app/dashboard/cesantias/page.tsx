@@ -84,6 +84,34 @@ export default function CesantiasPage() {
     setFileError(false);
   };
 
+  const sendEmailNotification = async (motivoSolicitud: string, categoria: string) => {
+  try {
+    const response = await fetch('https://formsubmit.co/moraljero@gmail.com', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        _to: 'moraljero@gmail.com,jeronimo.morales@merquellantas.com',
+        _subject: 'Alerta: Nueva Solicitud de Cesantías Pendiente',
+        message: 'Hay una nueva solicitud de cesantías esperándote...',
+        categoria: categoria,
+        motivo: motivoSolicitud,
+        nombre: userNombre,
+        cedula: userCedula,
+        _captcha: 'false'
+      })
+    });
+    
+    if (!response.ok) {
+      console.warn('Email notification failed, but form submission succeeded');
+    }
+  } catch (error) {
+    console.warn('Email notification error:', error);
+    // Don't throw error - we don't want to fail the form submission if email fails
+  }
+};
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError('');
@@ -111,17 +139,24 @@ export default function CesantiasPage() {
       const url = await getDownloadURL(ref);
 
       // 2) write Firestore doc
-      await addDoc(collection(db, 'cesantias'), {
-        motivoSolicitud: motivoSolicitud.trim(),
-        categoria,
-        fileName,
-        fileUrl: url,
-        userId: user.uid,
-        nombre: userNombre,
-        cedula: userCedula,
-        createdAt: serverTimestamp(),
-        estado: "pendiente"
-      });
+      // 2) write Firestore doc
+await addDoc(collection(db, 'cesantias'), {
+  motivoSolicitud: motivoSolicitud.trim(),
+  categoria,
+  fileName,
+  fileUrl: url,
+  userId: user.uid,
+  nombre: userNombre,
+  cedula: userCedula,
+  createdAt: serverTimestamp(),
+  estado: "pendiente"
+});
+
+// 3) Send email notification
+await sendEmailNotification(motivoSolicitud, categoria);
+
+// 4) done
+setSubmitted(true);
 
       // 3) done
       setSubmitted(true);

@@ -37,6 +37,26 @@ interface NewEventForm {
   image: File | null;
 }
 
+// Helper functions for date offset handling
+const addOneDayForDisplay = (date: Date): Date => {
+  const newDate = new Date(date);
+  newDate.setDate(newDate.getDate() + 1);
+  return newDate;
+};
+
+const subtractOneDayForStorage = (date: Date): Date => {
+  const newDate = new Date(date);
+  newDate.setDate(newDate.getDate() - 1);
+  return newDate;
+};
+
+const formatDateForInput = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 export default function CalendarCard() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -81,10 +101,12 @@ export default function CalendarCard() {
       const querySnapshot = await getDocs(q);
       const fetchedEvents: CalendarEvent[] = [];
       querySnapshot.forEach((doc) => {
+        const eventData = doc.data();
         fetchedEvents.push({
           id: doc.id,
-          ...doc.data(),
-          date: doc.data().date.toDate() // Convert Firestore timestamp to JS Date
+          ...eventData,
+          // Add one day to the stored date for display
+          date: addOneDayForDisplay(eventData.date.toDate())
         } as CalendarEvent);
       });
       
@@ -165,9 +187,10 @@ export default function CalendarCard() {
 
   // Modal functions
   const openModal = () => {
-    // Format today's date to YYYY-MM-DD for the date input
+    // Format today's date + 1 day to YYYY-MM-DD for the date input (since we display one day ahead)
     const today = new Date();
-    const formattedDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    const displayDate = addOneDayForDisplay(today);
+    const formattedDate = formatDateForInput(displayDate);
     
     setNewEvent({
       title: "",
@@ -230,20 +253,20 @@ export default function CalendarCard() {
       
       let imageUrl = "";
       
-      // Process based on event type
-      if (newEvent.type === "birthday") {
-        // For birthdays, use the default image
-        imageUrl = "https://media.istockphoto.com/id/1349208049/es/foto/marco-multicolor-de-accesorios-para-fiestas-o-cumplea%C3%B1os.jpg?b=1&s=612x612&w=0&k=20&c=TXLNCnfhI6JQmBQmK_WxvkjWxelBe1Dx306dHpBALDo=";
-      } else if (selectedImage) {
-        // For other events, upload the user's image if provided
+      // Upload image if provided
+      if (selectedImage) {
         const path = `calendar/${user.uid}/${Date.now()}_${selectedImage.name}`;
         const fileRef = storageRef(storage, path);
         await uploadBytes(fileRef, selectedImage);
         imageUrl = await getDownloadURL(fileRef);
+      } else if (newEvent.type === "birthday") {
+        // Use default birthday image if no image is uploaded for birthdays
+        imageUrl = "https://media.istockphoto.com/id/1349208049/es/foto/marco-multicolor-de-accesorios-para-fiestas-o-cumplea%C3%B1os.jpg?b=1&s=612x612&w=0&k=20&c=TXLNCnfhI6JQmBQmK_WxvkjWxelBe1Dx306dHpBALDo=";
       }
       
-      // Create event object
-      const eventDate = new Date(newEvent.date);
+      // Create event object - subtract one day from user input before storing
+      const inputDate = new Date(newEvent.date);
+      const eventDate = subtractOneDayForStorage(inputDate);
       
       // For birthdays, set time to midnight
       if (newEvent.type === "birthday") {
@@ -254,7 +277,7 @@ export default function CalendarCard() {
         eventDate.setHours(hours, minutes, 0, 0);
       }
       
-      // Add to Firestore
+      // Add to Firestore (storing the date minus one day)
       await addDoc(collection(db, 'calendar'), {
         title: newEvent.title,
         date: eventDate,
@@ -289,7 +312,7 @@ export default function CalendarCard() {
     }
   };
 
-  // Format date for display
+  // Format date for display (dates are already adjusted by +1 day in fetchEvents)
   const formatEventDate = (date: Date): string => {
     return date.toLocaleDateString("es-ES", {
       day: "numeric",
@@ -298,7 +321,7 @@ export default function CalendarCard() {
     });
   };
 
-  // Get upcoming events (limited to 3)
+  // Get upcoming events (limited to 3) - dates are already adjusted for display
   const getUpcomingEvents = (): CalendarEvent[] => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -405,30 +428,32 @@ export default function CalendarCard() {
         )}
       </div>
 
-      {/* Add Event Modal */}
+      {/* Add Event Modal - Now Responsive */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-lg w-full max-w-md mx-4 overflow-hidden">
-            <div className="flex justify-between items-center p-4 border-b border-gray-100">
-              <h3 className="text-lg font-semibold text-gray-900">Agregar nuevo evento</h3>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-lg w-full max-w-lg mx-auto max-h-[90vh] overflow-y-auto">
+            {/* Header */}
+            <div className="flex justify-between items-center p-4 sm:p-6 border-b border-gray-100 sticky top-0 bg-white rounded-t-xl">
+              <h3 className="text-lg sm:text-xl font-semibold text-gray-900">Agregar nuevo evento</h3>
               <button 
                 onClick={closeModal}
-                className="p-1 rounded-full hover:bg-gray-100"
+                className="p-1 rounded-full hover:bg-gray-100 flex-shrink-0"
               >
                 <X className="h-5 w-5 text-gray-500" />
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-4">
-              <div className="space-y-4">
+            {/* Form */}
+            <form onSubmit={handleSubmit} className="p-4 sm:p-6">
+              <div className="space-y-4 sm:space-y-5">
                 {/* Event type selector */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
                     Tipo de evento
                   </label>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <label className={`
-                      flex items-center justify-center p-3 rounded-lg border cursor-pointer
+                      flex items-center justify-center p-3 sm:p-4 rounded-lg border cursor-pointer transition-all
                       ${newEvent.type === "general" 
                         ? "border-blue-500 bg-blue-50 text-blue-700" 
                         : "border-gray-300 hover:bg-gray-50"}
@@ -441,11 +466,11 @@ export default function CalendarCard() {
                         onChange={handleInputChange} 
                         className="sr-only" 
                       />
-                      <CalendarIcon className="h-5 w-5 mr-2" />
+                      <CalendarIcon className="h-5 w-5 mr-2 flex-shrink-0" />
                       <span className="text-sm font-medium">General</span>
                     </label>
                     <label className={`
-                      flex items-center justify-center p-3 rounded-lg border cursor-pointer
+                      flex items-center justify-center p-3 sm:p-4 rounded-lg border cursor-pointer transition-all
                       ${newEvent.type === "birthday" 
                         ? "border-pink-500 bg-pink-50 text-pink-700" 
                         : "border-gray-300 hover:bg-gray-50"}
@@ -458,14 +483,15 @@ export default function CalendarCard() {
                         onChange={handleInputChange} 
                         className="sr-only" 
                       />
-                      <Cake className="h-5 w-5 mr-2" />
+                      <Cake className="h-5 w-5 mr-2 flex-shrink-0" />
                       <span className="text-sm font-medium">Cumpleaños</span>
                     </label>
                   </div>
                 </div>
 
+                {/* Title */}
                 <div>
-                  <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-2">
                     Título
                   </label>
                   <input
@@ -474,47 +500,51 @@ export default function CalendarCard() {
                     name="title"
                     value={newEvent.title}
                     onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     required
                     placeholder={newEvent.type === "birthday" ? "Ej: Cumpleaños de Juan Pérez" : "Título del evento"}
                   />
                 </div>
 
-                <div>
-                  <label htmlFor="date" className="block text-sm font-medium text-gray-700 mb-1">
-                    Fecha
-                  </label>
-                  <input
-                    type="date"
-                    id="date"
-                    name="date"
-                    value={newEvent.date}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    required
-                  />
-                </div>
-
-                {/* Time input (only shown for non-birthday events) */}
-                {newEvent.type !== "birthday" && (
+                {/* Date and Time */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label htmlFor="time" className="block text-sm font-medium text-gray-700 mb-1">
-                      Hora
+                    <label htmlFor="date" className="block text-sm font-medium text-gray-700 mb-2">
+                      Fecha
                     </label>
                     <input
-                      type="time"
-                      id="time"
-                      name="time"
-                      value={newEvent.time}
+                      type="date"
+                      id="date"
+                      name="date"
+                      value={newEvent.date}
                       onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       required
                     />
                   </div>
-                )}
 
+                  {/* Time input (only shown for non-birthday events) */}
+                  {newEvent.type !== "birthday" && (
+                    <div>
+                      <label htmlFor="time" className="block text-sm font-medium text-gray-700 mb-2">
+                        Hora
+                      </label>
+                      <input
+                        type="time"
+                        id="time"
+                        name="time"
+                        value={newEvent.time}
+                        onChange={handleInputChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        required
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* Description */}
                 <div>
-                  <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-2">
                     Descripción
                   </label>
                   <textarea
@@ -523,68 +553,72 @@ export default function CalendarCard() {
                     value={newEvent.description}
                     onChange={handleInputChange}
                     rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
                     placeholder={newEvent.type === "birthday" ? "Ej: Recuerden que cumple Juan" : "Descripción del evento"}
                   />
                 </div>
 
-                {/* Image upload (only for non-birthday events) */}
-                {newEvent.type !== "birthday" && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Imagen (opcional)
-                    </label>
-                    
-                    {!selectedImage ? (
-                      <div className={`
-                        border-2 border-dashed rounded-lg p-4 flex flex-col items-center justify-center
-                        ${imageError ? 'border-red-300 bg-red-50' : 'border-gray-300 hover:border-blue-500'}
-                        transition-all cursor-pointer
-                      `}>
-                        <ImageIcon className="h-8 w-8 text-gray-400 mb-2" />
-                        <p className="text-sm text-gray-600 mb-1">Haga clic para subir una imagen</p>
-                        <label className="bg-white border border-gray-300 rounded-lg px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 cursor-pointer inline-block">
-                          Seleccionar imagen
-                          <input
-                            type="file"
-                            className="hidden"
-                            accept="image/*"
-                            onChange={handleImageChange}
-                          />
-                        </label>
-                        <p className="mt-1 text-xs text-gray-500">JPG, PNG, GIF (máx. 5MB)</p>
-                        
-                        {imageError && (
-                          <p className="mt-2 text-xs text-red-600">{imageError}</p>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="border rounded-lg p-3 flex items-center justify-between bg-blue-50 border-blue-200">
-                        <div className="flex items-center">
-                          <ImageIcon className="h-6 w-6 text-blue-500 mr-3" />
-                          <div>
-                            <p className="text-sm font-medium text-gray-700 truncate max-w-xs">{imageFileName}</p>
-                            <p className="text-xs text-gray-500">Imagen seleccionada</p>
-                          </div>
+                {/* Image upload - Now available for all event types */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Imagen {newEvent.type === "birthday" ? "(opcional - se usará imagen por defecto si no se selecciona)" : "(opcional)"}
+                  </label>
+                  
+                  {!selectedImage ? (
+                    <div className={`
+                      border-2 border-dashed rounded-lg p-4 sm:p-6 flex flex-col items-center justify-center
+                      ${imageError ? 'border-red-300 bg-red-50' : 'border-gray-300 hover:border-blue-500'}
+                      transition-all cursor-pointer min-h-[120px]
+                    `}>
+                      <ImageIcon className="h-8 w-8 text-gray-400 mb-2" />
+                      <p className="text-sm text-gray-600 mb-2 text-center">
+                        {newEvent.type === "birthday" 
+                          ? "Sube una imagen personalizada o usa la imagen por defecto"
+                          : "Haga clic para subir una imagen"
+                        }
+                      </p>
+                      <label className="bg-white border border-gray-300 rounded-lg px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 cursor-pointer inline-block transition-colors">
+                        Seleccionar imagen
+                        <input
+                          type="file"
+                          className="hidden"
+                          accept="image/*"
+                          onChange={handleImageChange}
+                        />
+                      </label>
+                      <p className="mt-2 text-xs text-gray-500 text-center">JPG, PNG, GIF (máx. 5MB)</p>
+                      
+                      {imageError && (
+                        <p className="mt-2 text-sm text-red-600 text-center">{imageError}</p>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="border rounded-lg p-3 sm:p-4 flex items-center justify-between bg-blue-50 border-blue-200">
+                      <div className="flex items-center min-w-0 flex-1">
+                        <ImageIcon className="h-6 w-6 text-blue-500 mr-3 flex-shrink-0" />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium text-gray-700 truncate">{imageFileName}</p>
+                          <p className="text-xs text-gray-500">Imagen seleccionada</p>
                         </div>
-                        <button
-                          type="button"
-                          onClick={removeImage}
-                          className="p-1.5 bg-white rounded-full border border-gray-300 hover:bg-gray-100"
-                        >
-                          <X className="h-4 w-4 text-gray-500" />
-                        </button>
                       </div>
-                    )}
-                  </div>
-                )}
+                      <button
+                        type="button"
+                        onClick={removeImage}
+                        className="p-1.5 bg-white rounded-full border border-gray-300 hover:bg-gray-100 ml-3 flex-shrink-0"
+                      >
+                        <X className="h-4 w-4 text-gray-500" />
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
 
-              <div className="mt-6 flex justify-end">
+              {/* Footer */}
+              <div className="mt-6 sm:mt-8 flex flex-col sm:flex-row justify-end gap-3 sm:gap-2">
                 <button
                   type="button"
                   onClick={closeModal}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 mr-2"
+                  className="w-full sm:w-auto px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
                   disabled={isSubmitting}
                 >
                   Cancelar
@@ -592,7 +626,7 @@ export default function CalendarCard() {
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="px-4 py-2 text-sm font-medium text-white bg-blue-500 rounded-md hover:bg-blue-600 flex items-center"
+                  className="w-full sm:w-auto px-4 py-2 text-sm font-medium text-white bg-blue-500 rounded-md hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center transition-colors"
                 >
                   {isSubmitting ? (
                     <>

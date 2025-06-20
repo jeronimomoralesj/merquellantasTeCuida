@@ -9,6 +9,7 @@ import TristesCard from "./tristes";
 import SolicitudesCard from "./solicitudes";
 import CalendarCard from "./calendar";
 import PQRSFCard from "./pqrsf";
+import Users from "./user";
 
 
 export default function AdminPage() {
@@ -50,6 +51,7 @@ export default function AdminPage() {
               <br />
 
 <CalendarCard />
+<Users />
               <br />
               
             </div>

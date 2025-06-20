@@ -1,6 +1,22 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { onAuthStateChanged } from 'firebase/auth';
+import { 
+  collection, 
+  getDocs, 
+  addDoc, 
+  deleteDoc, 
+  doc, 
+  getDoc
+} from 'firebase/firestore';
+import { 
+  ref, 
+  uploadBytes, 
+  getDownloadURL, 
+  deleteObject 
+} from 'firebase/storage';
+import { db, storage, auth } from '../../../firebase'; // Adjust path as needed
 import DashboardNavbar from '../navbar';
 import { 
   FileText, 
@@ -9,77 +25,186 @@ import {
   Filter,
   File,
   FileSpreadsheet,
-  ExternalLink
+  ExternalLink,
+  Plus,
+  Trash2,
+  Upload,
+  X
 } from 'lucide-react';
 
 // Type definitions
 interface Document {
-  id: number;
-  title: string;
-  description: string;
-  type: 'pdf' | 'excel' | 'word';
+  id: string;
+  name: string;
   category: string;
-  url: string;
-  size: string;
-  uploadDate: string;
+  dateUploaded: any; // Firestore timestamp
+  document: string; // Firebase storage URL
+  size?: string;
+  type?: 'pdf' | 'excel' | 'word' | 'other';
+}
+
+interface UserData {
+  nombre: string;
+  rol: string;
+  posicion: string;
+  antiguedad?: number | string;
+  extra?: {
+    [key: string]: any;
+  };
+}
+
+interface UserProfile {
+  nombre: string;
+  rol: string;
+  posicion: string;
+  dpto: string;
+  eps: string;
+  banco: string;
+  pensiones: string;
+  arl: string;
+  antiguedad: number;
 }
 
 export default function DocumentsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [loading, setLoading] = useState(false);
+  const [documents, setDocuments] = useState<Document[]>([]);
+  const [userRole, setUserRole] = useState<string>('user');
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadName, setUploadName] = useState('');
+  const [uploadCategory, setUploadCategory] = useState('');
+  const [uploading, setUploading] = useState(false);
 
-  // Document data with the provided URLs
-  const documents: Document[] = [
-    {
-      id: 1,
-      title: "Estándares mínimos SG-SST SURA",
-      description: "Documento que establece los estándares mínimos del Sistema de Gestión de Seguridad y Salud en el Trabajo según SURA",
-      type: "pdf",
-      category: "SST",
-      url: "https://firebasestorage.googleapis.com/v0/b/gocktail-1d32b.appspot.com/o/Esta%CC%81ndares%20mi%CC%81nimos%20SG-SST%20SURA.pdf?alt=media&token=1bad3d0c-0467-4948-92a7-18ddf31bece0",
-      size: "2.3 MB",
-      uploadDate: "2024-01-15"
-    },
-    {
-      id: 2,
-      title: "Formato Inspección General Sedes",
-      description: "Formato FT-SST-25 para realizar inspecciones generales en las diferentes sedes de la empresa",
-      type: "excel",
-      category: "SST",
-      url: "https://firebasestorage.googleapis.com/v0/b/gocktail-1d32b.appspot.com/o/FT-SST-25.%20FORMATO%20INSPECCION%20GENERAL%20sedes.xlsx?alt=media&token=73aa351f-1b43-4bf3-84ff-9547582ebe81",
-      size: "45 KB",
-      uploadDate: "2024-01-12"
-    },
-    {
-      id: 3,
-      title: "Modelo Carta de Vacaciones",
-      description: "Plantilla de RRHH para la elaboración de cartas de solicitud y aprobación de vacaciones del personal",
-      type: "word",
-      category: "RRHH",
-      url: "https://firebasestorage.googleapis.com/v0/b/gocktail-1d32b.appspot.com/o/RRHH%20-%20MODELO%20CARTA%20DE%20VACACIONES.docx?alt=media&token=dce8172f-a108-4f85-b880-e7b6403bad7b",
-      size: "28 KB",
-      uploadDate: "2024-01-10"
-    },
-    {
-      id: 4,
-      title: "Formato Acta de Reuniones",
-      description: "Formato estándar para documentar y registrar las actas de reuniones corporativas y operativas",
-      type: "pdf",
-      category: "Administrativo",
-      url: "https://firebasestorage.googleapis.com/v0/b/gocktail-1d32b.appspot.com/o/FORMATO%20ACTA%20DE%20REUNIONES.pdf?alt=media&token=50cb2ee4-a304-494d-a99a-5c92db62ecc6",
-      size: "156 KB",
-      uploadDate: "2024-01-08"
+  // Helper functions
+  const convertExcelDateToJSDate = (excelDate: number): Date => {
+    const excelEpoch = new Date(1900, 0, 1);
+    const jsDate = new Date(excelEpoch.getTime() + (excelDate - 2) * 24 * 60 * 60 * 1000);
+    return jsDate;
+  };
+
+  const calculateYearsOfService = (startDate: Date): number => {
+    const today = new Date();
+    const years = today.getFullYear() - startDate.getFullYear();
+    const monthDiff = today.getMonth() - startDate.getMonth();
+    
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < startDate.getDate())) {
+      return years - 1;
     }
-  ];
+    return years;
+  };
+
+  // Auth and user profile setup
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, async (u) => {
+      if (!u) return setProfile(null);
+      
+      const snap = await getDoc(doc(db, 'users', u.uid));
+      if (snap.exists()) {
+        const data = snap.data() as UserData;
+        const dpto = data.extra?.["Nombre Área Funcional"] ?? "";
+        const eps = data.extra?.["EPS"] ?? "";
+        const banco = data.extra?.["Banco"] ?? "";
+        const pensiones = data.extra?.["FONDO DE PENSIONES"] ?? "";
+        const arl = data.extra?.["ARL"] ?? "";
+
+        // Handle antiguedad calculation
+        let calculatedAntiguedad = 0;
+        
+        if (data.extra?.["Fecha Ingreso"]) {
+          const fechaIngreso = data.extra["Fecha Ingreso"];
+          console.log("Fecha Ingreso found:", fechaIngreso);
+          const startDate = convertExcelDateToJSDate(fechaIngreso);
+          console.log("Converted start date:", startDate);
+          calculatedAntiguedad = calculateYearsOfService(startDate);
+          console.log("Calculated antiguedad:", calculatedAntiguedad);
+        } else if (data.antiguedad) {
+          if (typeof data.antiguedad === 'number' && data.antiguedad > 1000) {
+            const startDate = convertExcelDateToJSDate(data.antiguedad);
+            calculatedAntiguedad = calculateYearsOfService(startDate);
+            console.log("Converted antiguedad from Excel date:", calculatedAntiguedad);
+          } else {
+            calculatedAntiguedad = typeof data.antiguedad === 'string' 
+              ? parseInt(data.antiguedad) || 0 
+              : data.antiguedad;
+          }
+        }
+
+        setProfile({
+          nombre: data.nombre,
+          rol: data.rol,
+          posicion: data.posicion,
+          dpto: dpto,
+          eps: eps,
+          banco: banco,
+          pensiones: pensiones,
+          arl: arl,
+          antiguedad: calculatedAntiguedad
+        });
+        setUserRole(data.rol || "user");
+      }
+    });
+    
+    return () => unsub();
+  }, []);
+
+  // Fetch documents from Firestore
+  useEffect(() => {
+    fetchDocuments();
+  }, []);
+
+  const fetchDocuments = async () => {
+    setLoading(true);
+    try {
+      const querySnapshot = await getDocs(collection(db, 'documentos'));
+      const docs: Document[] = [];
+      
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        docs.push({
+          id: doc.id,
+          name: data.name,
+          category: data.category,
+          dateUploaded: data.dateUploaded,
+          document: data.document,
+          size: data.size || 'N/A',
+          type: getFileTypeFromUrl(data.document)
+        });
+      });
+      
+      setDocuments(docs);
+    } catch (error) {
+      console.error('Error fetching documents:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Get file type from URL
+  const getFileTypeFromUrl = (url: string): 'pdf' | 'excel' | 'word' | 'other' => {
+    const extension = url.split('.').pop()?.toLowerCase();
+    switch (extension) {
+      case 'pdf':
+        return 'pdf';
+      case 'xlsx':
+      case 'xls':
+        return 'excel';
+      case 'docx':
+      case 'doc':
+        return 'word';
+      default:
+        return 'other';
+    }
+  };
 
   // Get unique categories
   const categories = ['all', ...Array.from(new Set(documents.map(doc => doc.category)))];
 
   // Filter documents based on search and category
   const filteredDocuments = documents.filter(doc => {
-    const matchesSearch = doc.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         doc.description.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = doc.name.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = selectedCategory === 'all' || doc.category === selectedCategory;
     return matchesSearch && matchesCategory;
   });
@@ -100,21 +225,93 @@ export default function DocumentsPage() {
 
   // Handle document download/view
   const handleDocumentAction = (doc: Document) => {
-    setLoading(true);
-    // Open document in new tab
-    window.open(doc.url, '_blank');
-    setTimeout(() => setLoading(false), 1000);
+    window.open(doc.document, '_blank');
   };
 
   // Format date
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
+  const formatDate = (timestamp: any) => {
+    if (!timestamp) return 'N/A';
+    
+    let date: Date;
+    if (timestamp.toDate) {
+      // Firestore timestamp
+      date = timestamp.toDate();
+    } else if (timestamp instanceof Date) {
+      date = timestamp;
+    } else {
+      date = new Date(timestamp);
+    }
+    
     return date.toLocaleDateString('es-ES', { 
       year: 'numeric', 
       month: 'long', 
       day: 'numeric' 
     });
   };
+
+  // Handle file upload
+  const handleUpload = async () => {
+    if (!uploadFile || !uploadName || !uploadCategory) {
+      alert('Por favor completa todos los campos');
+      return;
+    }
+
+    setUploading(true);
+    try {
+      // Upload file to Firebase Storage
+      const storageRef = ref(storage, `documentos/${uploadFile.name}`);
+      const snapshot = await uploadBytes(storageRef, uploadFile);
+      const downloadURL = await getDownloadURL(snapshot.ref);
+
+      // Add document to Firestore
+      await addDoc(collection(db, 'documentos'), {
+        name: uploadName,
+        category: uploadCategory,
+        dateUploaded: new Date(),
+        document: downloadURL,
+        size: `${(uploadFile.size / (1024 * 1024)).toFixed(2)} MB`
+      });
+
+      // Reset form and refresh documents
+      setUploadFile(null);
+      setUploadName('');
+      setUploadCategory('');
+      setShowUploadModal(false);
+      fetchDocuments();
+      
+      alert('Documento subido exitosamente');
+    } catch (error) {
+      console.error('Error uploading document:', error);
+      alert('Error al subir el documento');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  // Handle file deletion
+  const handleDelete = async (docToDelete: Document) => {
+    if (!confirm('¿Estás seguro de que quieres eliminar este documento?')) {
+      return;
+    }
+
+    try {
+      // Delete from Firestore
+      await deleteDoc(doc(db, 'documentos', docToDelete.id));
+      
+      // Delete from Storage
+      const storageRef = ref(storage, docToDelete.document);
+      await deleteObject(storageRef);
+      
+      // Refresh documents
+      fetchDocuments();
+      alert('Documento eliminado exitosamente');
+    } catch (error) {
+      console.error('Error deleting document:', error);
+      alert('Error al eliminar el documento');
+    }
+  };
+
+  const isAdmin = userRole === "admin";
 
   return (
     <div className="min-h-screen bg-white">
@@ -129,6 +326,25 @@ export default function DocumentsPage() {
             <h1 className="text-2xl font-bold text-gray-900 mb-2">Documentos Merquellantas</h1>
             <p className="text-gray-600">Gestiona y accede a todos los documentos corporativos</p>
           </div>
+
+          {/* Admin Section */}
+          {isAdmin && (
+            <div className="bg-gradient-to-r from-[#ff9900] to-[#e68a00] rounded-xl shadow-xl p-6 mb-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-white text-lg font-semibold mb-2">Panel de Administración</h2>
+                  <p className="text-white/80 text-sm">Gestiona los documentos de la empresa</p>
+                </div>
+                <button
+                  onClick={() => setShowUploadModal(true)}
+                  className="flex items-center px-4 py-2 bg-white text-[#ff9900] rounded-lg hover:bg-gray-100 transition-colors"
+                >
+                  <Plus size={16} className="mr-2" />
+                  Subir Documento
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Search and Filter Bar */}
           <div className="bg-white rounded-xl shadow-xl p-6 mb-6">
@@ -175,7 +391,6 @@ export default function DocumentsPage() {
                 </div>
               </div>
             </div>
-
           </div>
 
           {/* Documents Grid */}
@@ -203,22 +418,27 @@ export default function DocumentsPage() {
                           </span>
                         </div>
                       </div>
+                      {isAdmin && (
+                        <button
+                          onClick={() => handleDelete(doc)}
+                          className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      )}
                     </div>
 
                     {/* Document Info */}
                     <div className="mb-4">
                       <h3 className="text-lg font-semibold text-gray-900 mb-2 group-hover:text-[#ff9900] transition-colors">
-                        {doc.title}
+                        {doc.name}
                       </h3>
-                      <p className="text-gray-600 text-sm line-clamp-3">
-                        {doc.description}
-                      </p>
                     </div>
 
                     {/* Document Metadata */}
                     <div className="flex items-center justify-between text-xs text-gray-500 mb-4">
                       <span>Tamaño: {doc.size}</span>
-                      <span>{formatDate(doc.uploadDate)}</span>
+                      <span>{formatDate(doc.dateUploaded)}</span>
                     </div>
 
                     {/* Action Buttons */}
@@ -255,6 +475,90 @@ export default function DocumentsPage() {
           )}
         </div>
       </div>
+
+      {/* Upload Modal */}
+      {showUploadModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 w-full max-w-md mx-4">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold text-gray-900">Subir Documento</h2>
+              <button
+                onClick={() => setShowUploadModal(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* File Input */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Archivo
+                </label>
+                <input
+                  type="file"
+                  onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ff9900] focus:border-transparent"
+                  accept=".pdf,.xlsx,.xls,.docx,.doc"
+                />
+              </div>
+
+              {/* Name Input */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Nombre del Documento
+                </label>
+                <input
+                  type="text"
+                  value={uploadName}
+                  onChange={(e) => setUploadName(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ff9900] focus:border-transparent"
+                  placeholder="Ingresa el nombre del documento"
+                />
+              </div>
+
+              {/* Category Input */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Categoría
+                </label>
+                <input
+                  type="text"
+                  value={uploadCategory}
+                  onChange={(e) => setUploadCategory(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ff9900] focus:border-transparent"
+                  placeholder="Ingresa la categoría (ej: SST, RRHH, etc.)"
+                />
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-3 pt-4">
+                <button
+                  onClick={() => setShowUploadModal(false)}
+                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleUpload}
+                  disabled={uploading || !uploadFile || !uploadName || !uploadCategory}
+                  className="flex-1 flex items-center justify-center px-4 py-2 bg-[#ff9900] text-white rounded-lg hover:bg-[#e68a00] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {uploading ? (
+                    <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white"></div>
+                  ) : (
+                    <>
+                      <Upload size={16} className="mr-2" />
+                      Subir
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

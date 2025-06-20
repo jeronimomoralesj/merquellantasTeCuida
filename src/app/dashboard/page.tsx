@@ -4,7 +4,8 @@ import React, { useState, useEffect } from 'react';
 import DashboardNavbar from './navbar';
 import { useRouter } from 'next/navigation';
 import { 
-  Calendar, DollarSign, Briefcase, ChevronRight, Clock, MessageSquare, FileText, Activity, User, CheckCircle
+  Calendar, DollarSign, Briefcase, ChevronRight, Clock, MessageSquare, FileText, Activity, User, CheckCircle,
+  PersonStanding
 } from 'lucide-react';
 import Solicitudes from "./components/solicitudes";
 import AdminPage from './admin/page';
@@ -45,13 +46,14 @@ interface UserData {
   nombre: string;
   rol: string;
   posicion: string;
-  antiguedad: number;
+  antiguedad: number | string; // Can be Excel date number or regular number
   extra?: {
     "Nombre Área Funcional"?: string;
     "EPS"?: string;
     "Banco"?: string;
     "FONDO DE PENSIONES"?: string;
     "ARL"?: string;
+    "Fecha Ingreso"?: number | string; // Excel date number or date string
   };
 }
 
@@ -75,25 +77,71 @@ const Dashboard = () => {
 const [todayEventsCount, setTodayEventsCount] = useState(0);
 const [additionalTodayEvents, setAdditionalTodayEvents] = useState<CalendarEvent[]>([]);
 
-// Helper function to determine if an event is happening today
-const isEventToday = (eventDate: Date) => {
-  const today = new Date();
-  return eventDate.toDateString() === today.toDateString();
+// Helper function to convert Excel date number to JavaScript Date
+const convertExcelDateToJSDate = (excelDate: number | string): Date => {
+  if (typeof excelDate === 'string') {
+    // If it's already a string, try to parse it as a date
+    const parsed = new Date(excelDate);
+    if (!isNaN(parsed.getTime())) {
+      return parsed;
+    }
+    // If parsing fails, try to convert to number
+    const num = parseFloat(excelDate);
+    if (!isNaN(num)) {
+      excelDate = num;
+    } else {
+      return new Date(); // fallback to current date
+    }
+  }
+  
+  if (typeof excelDate === 'number') {
+    // Excel date calculation: days since January 1, 1900
+    // Note: Excel incorrectly treats 1900 as a leap year, so we subtract 2 days
+    const millisecondsPerDay = 24 * 60 * 60 * 1000;
+    const excelEpoch = new Date(1900, 0, 1); // January 1, 1900
+    const jsDate = new Date(excelEpoch.getTime() + (excelDate - 2) * millisecondsPerDay);
+    return jsDate;
+  }
+  
+  return new Date(); // fallback
 };
 
-// Helper function to determine event status
+// Helper function to calculate years of service
+const calculateYearsOfService = (startDate: Date): number => {
+  const today = new Date();
+  const diffTime = today.getTime() - startDate.getTime();
+  const diffYears = diffTime / (1000 * 60 * 60 * 24 * 365.25); // Account for leap years
+  return Math.floor(diffYears);
+};
+
+// Helper function to add one day to a date
+const addOneDay = (date: Date) => {
+  const newDate = new Date(date);
+  newDate.setDate(newDate.getDate() + 1);
+  return newDate;
+};
+
+// Helper function to determine if an event is happening today (after adding one day)
+const isEventToday = (eventDate: Date) => {
+  const adjustedDate = addOneDay(eventDate);
+  const today = new Date();
+  return adjustedDate.toDateString() === today.toDateString();
+};
+
+// Helper function to determine event status (with date adjustment)
 const getEventStatus = (eventDate: Date) => {
+  const adjustedDate = addOneDay(eventDate);
   const now = new Date();
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   
-  const eventDateOnly = new Date(eventDate);
+  const eventDateOnly = new Date(adjustedDate);
   eventDateOnly.setHours(0, 0, 0, 0);
   
   if (eventDateOnly.getTime() === today.getTime()) {
     // Check if it's an all-day event or if the time has passed
     const isAllDay = eventDate.getHours() === 0 && eventDate.getMinutes() === 0 && eventDate.getSeconds() === 0;
-    if (isAllDay || eventDate > now) {
+    if (isAllDay || adjustedDate > now) {
       return { status: 'today', label: 'Hoy', color: 'bg-green-500' };
     } else {
       return { status: 'happening', label: 'En curso', color: 'bg-blue-500' };
@@ -181,9 +229,10 @@ const getEventStatus = (eventDate: Date) => {
 useEffect(() => {
   async function fetchNext() {
     try {
-      // Get start of today to include today's events
+      // Get start of today but subtract one day to account for our +1 day display offset
       const startOfToday = new Date();
       startOfToday.setHours(0, 0, 0, 0);
+      startOfToday.setDate(startOfToday.getDate() - 1); // Subtract 1 day for database query
       
       const q = query(
         collection(db, 'calendar'),
@@ -202,13 +251,15 @@ useEffect(() => {
         // Set the first/next event as the main event
         setNextEvent(events[0]);
         
-        // Check for multiple events today
+        // Check for multiple events today (with date adjustment)
         const today = new Date();
         today.setHours(23, 59, 59, 999); // End of today
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
         
         const todayEvents = events.filter(event => {
-          const eventDate = event.date.toDate();
-          return eventDate >= startOfToday && eventDate <= today;
+          const adjustedEventDate = addOneDay(event.date.toDate());
+          return adjustedEventDate >= todayStart && adjustedEventDate <= today;
         });
         
         // Store additional today events info
@@ -231,7 +282,7 @@ useEffect(() => {
   fetchNext();
 }, []);
 
-  // Load user profile
+  // Load user profile with date conversion and antiguedad calculation
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
       if (!u) return setProfile(null);
@@ -245,6 +296,36 @@ useEffect(() => {
         const pensiones = data.extra?.["FONDO DE PENSIONES"] ?? "";
         const arl = data.extra?.["ARL"] ?? "";
         
+        // Handle antiguedad calculation
+        let calculatedAntiguedad = 0;
+        
+        // Check if there's a "Fecha Ingreso" in extra data
+        if (data.extra?.["Fecha Ingreso"]) {
+          const fechaIngreso = data.extra["Fecha Ingreso"];
+          console.log("Fecha Ingreso found:", fechaIngreso);
+          
+          // Convert the Excel date number to JavaScript Date
+          const startDate = convertExcelDateToJSDate(fechaIngreso);
+          console.log("Converted start date:", startDate);
+          
+          // Calculate years of service
+          calculatedAntiguedad = calculateYearsOfService(startDate);
+          console.log("Calculated antiguedad:", calculatedAntiguedad);
+        } else if (data.antiguedad) {
+          // If there's an antiguedad field, check if it's an Excel date or regular number
+          if (typeof data.antiguedad === 'number' && data.antiguedad > 1000) {
+            // Looks like an Excel date number (bigger than reasonable years)
+            const startDate = convertExcelDateToJSDate(data.antiguedad);
+            calculatedAntiguedad = calculateYearsOfService(startDate);
+            console.log("Converted antiguedad from Excel date:", calculatedAntiguedad);
+          } else {
+            // Regular number, use as is
+            calculatedAntiguedad = typeof data.antiguedad === 'string' 
+              ? parseInt(data.antiguedad) || 0 
+              : data.antiguedad;
+          }
+        }
+        
         setProfile({
           nombre: data.nombre,
           rol: data.rol,
@@ -254,7 +335,7 @@ useEffect(() => {
           banco: banco,
           pensiones: pensiones,
           arl: arl,
-          antiguedad: data.antiguedad
+          antiguedad: calculatedAntiguedad
         });
         setUserRole(data.rol || "user");
       }
@@ -266,9 +347,13 @@ useEffect(() => {
   useEffect(() => {
     async function fetchUpcoming() {
       try {
+        // Subtract one day from current time for database query to account for display offset
+        const now = new Date();
+        now.setDate(now.getDate() - 1);
+        
         const q = query(
           collection(db, 'calendar'),
-          where('date', '>=', Timestamp.now()),
+          where('date', '>=', Timestamp.fromDate(now)),
           orderBy('date', 'asc'),
           limit(3)
         );
@@ -335,7 +420,15 @@ useEffect(() => {
       icon: <MessageSquare className="h-5 w-5" />, 
       color: "bg-green-100 text-green-600",
       bgHover: "hover:bg-gradient-to-br from-green-50 to-green-100",
-      href: "https://www.aportesenlinea.com/Home/home.aspx?ReturnUrl=%2f"
+      href: "https://www.aportesenlinea.com/Autoservicio/CertificadoAportes.aspx"
+    },
+    { 
+      id: 5, 
+      title: "Gente útil", 
+      icon: <PersonStanding className="h-5 w-5" />, 
+      color: "bg-red-100 text-red-600",
+      bgHover: "hover:bg-gradient-to-br from-red-50 to-red-100",
+      href: "https://genteutil.net/"
     }
   ];
 
@@ -362,7 +455,7 @@ useEffect(() => {
             <div className="mb-8 mt-4">
               <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1 flex items-center">
                 <span className="bg-gradient-to-r from-[#ff9900] to-[#ffb347] text-transparent bg-clip-text">
-                  ¡Bienvenido a Merque te cuida!
+                  ¡Bienvenido a Nuestra Gente!
                 </span>
                 <div className="ml-3 hidden sm:flex items-center h-8 px-3 text-xs font-medium rounded-full bg-[#ff9900]/10 text-[#ff9900]">
                   <CheckCircle className="h-3.5 w-3.5 mr-1" /> Hoy es un buen día
@@ -403,16 +496,17 @@ useEffect(() => {
             {nextEvent.title}
           </h2>
 
-          {/* Format date/time or "All day" */}
+          {/* Format date/time or "All day" with +1 day adjustment */}
           {(() => {
             const dt = nextEvent.date.toDate();
+            const adjustedDt = addOneDay(dt); // Add one day for display
             const isAllDay = dt.getHours() === 0 && dt.getMinutes() === 0 && dt.getSeconds() === 0;
             const isToday = isEventToday(dt);
 
             if (isAllDay) {
               return (
                 <p className="text-xs text-gray-500 mb-3">
-                  {isToday ? 'Hoy' : dt.toLocaleDateString('es-ES', {
+                  {isToday ? 'Hoy' : adjustedDt.toLocaleDateString('es-ES', {
                     day: 'numeric',
                     month: 'long',
                     year: 'numeric'
@@ -420,9 +514,10 @@ useEffect(() => {
                 </p>
               );
             } else {
+              // For timed events, keep original time but show adjusted date
               return (
                 <p className="text-xs text-gray-500 mb-3">
-                  {isToday ? 'Hoy' : dt.toLocaleDateString('es-ES', {
+                  {isToday ? 'Hoy' : adjustedDt.toLocaleDateString('es-ES', {
                     day: 'numeric',
                     month: 'long',
                     year: 'numeric'
@@ -545,10 +640,11 @@ useEffect(() => {
                     ) : upcomingEvents.length > 0 ? (
                       upcomingEvents.map((evt, idx) => {
                         const dt = evt.date.toDate();
+                        const adjustedDt = addOneDay(dt); // Add one day for display
                         const isAllDay = dt.getHours()===0 && dt.getMinutes()===0 && dt.getSeconds()===0;
                         const dateLabel = isAllDay
-                          ? `${dt.toLocaleDateString('es-ES',{ day: 'numeric', month: 'long', year: 'numeric' })} — Todo el día`
-                          : `${dt.toLocaleDateString('es-ES',{ day: 'numeric', month: 'long', year: 'numeric' })}, ${dt.toLocaleTimeString('es-ES',{ hour:'2-digit',minute:'2-digit' })}`;
+                          ? `${adjustedDt.toLocaleDateString('es-ES',{ day: 'numeric', month: 'long', year: 'numeric' })} — Todo el día`
+                          : `${adjustedDt.toLocaleDateString('es-ES',{ day: 'numeric', month: 'long', year: 'numeric' })}, ${dt.toLocaleTimeString('es-ES',{ hour:'2-digit',minute:'2-digit' })}`;
 
                         return (
                           <div
@@ -571,7 +667,7 @@ useEffect(() => {
                   </div>
                 </div>
               </div>
-
+              
               {/* Right column */}
               <div className="space-y-6">
                 {/* Personal summary with shadow on hover */}
@@ -685,9 +781,6 @@ useEffect(() => {
                 </div>
 
                 {/* Salario emocional section */}
-
-
-
             </div>
           </div>
         </div>

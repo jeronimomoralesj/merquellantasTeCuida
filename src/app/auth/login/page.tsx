@@ -77,7 +77,7 @@ export default function MerqeuBienestarLogin() {
         <div className="w-52 bg-gray rounded-full flex items-center justify-center mb-3">
           <img src="https://www.merquellantas.com/assets/images/logo/Logo-Merquellantas.png" alt="Merquellantas" />
         </div>
-        <h1 className="text-2xl font-bold text-black">¡Merque te cuida!</h1>
+        <h1 className="text-2xl font-bold text-black">¡Nuestra Gente!</h1>
       </div>
 
       {/* Login Card */}

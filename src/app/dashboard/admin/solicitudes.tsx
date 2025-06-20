@@ -17,6 +17,10 @@ import {
   Loader2,
   Search,
   List,
+  User,
+  MapPin,
+  FileText,
+  Hash,
 } from "lucide-react";
 import { 
   collection, 
@@ -43,6 +47,7 @@ interface RequestData {
   description?: string;
   attachment?: string;
   isPermiso: boolean;
+  rawData?: any;
 }
 
 interface NotificationState {
@@ -63,10 +68,21 @@ export default function SolicitudesCard() {
   // helper: format Firestore Timestamp or ISO string
   const formatDate = (d: Timestamp | Date | string | undefined): string => {
     if (!d) return 'Fecha no disponible';
-const dt = (d as Timestamp)?.toDate?.() || new Date(d as string | Date);
+    const dt = (d as Timestamp)?.toDate?.() || new Date(d as string | Date);
     return dt.toLocaleDateString("es-ES", {
       day: "numeric",
       month: "long",
+      year: "numeric",
+    });
+  };
+
+  // helper: format date for display (shorter format)
+  const formatShortDate = (dateStr: string): string => {
+    if (!dateStr) return 'No disponible';
+    const date = new Date(dateStr);
+    return date.toLocaleDateString("es-ES", {
+      day: "numeric",
+      month: "short",
       year: "numeric",
     });
   };
@@ -193,13 +209,27 @@ const dt = (d as Timestamp)?.toDate?.() || new Date(d as string | Date);
             description: data.motivoSolicitud,
             attachment: data.fileUrl,
             isPermiso: false,
+            rawData: data,
           };
         });
 
         const sol: RequestData[] = solSnap.docs.map((d) => {
           const data = d.data();
-          const isInc = data.tipo === "enfermedad";
-          const typ = isInc ? "Incapacidad" : "Permiso";
+          let typ = "";
+          let avatarColor = "";
+          
+          // Determine type based on data.tipo
+          if (data.tipo === "enfermedad") {
+            typ = "Incapacidad";
+            avatarColor = "bg-red-100";
+          } else if (data.tipo === "vacaciones") {
+            typ = "Vacaciones";
+            avatarColor = "bg-blue-100";
+          } else {
+            typ = "Permiso";
+            avatarColor = "bg-orange-100";
+          }
+          
           return {
             id: d.id,
             title: `Solicitud de ${typ}`,
@@ -208,11 +238,12 @@ const dt = (d as Timestamp)?.toDate?.() || new Date(d as string | Date);
             status: data.estado,
             statusColor: statusColor(data.estado),
             type: typ,
-            avatarColor: isInc ? "bg-red-100" : "bg-orange-100",
+            avatarColor: avatarColor,
             avatarText: initials(data.nombre),
-            description: isInc ? data.description : data.description,
+            description: data.description,
             attachment: data.documentUrl,
             isPermiso: true,
+            rawData: data,
           };
         });
 
@@ -225,8 +256,8 @@ const dt = (d as Timestamp)?.toDate?.() || new Date(d as string | Date);
           if (a.status !== "pendiente" && b.status === "pendiente") return 1;
           
           // Then sort by date (oldest first)
-const da = (a.date as Timestamp)?.toDate?.().getTime() || new Date(a.date as string | Date).getTime();
-const db_ = (b.date as Timestamp)?.toDate?.().getTime() || new Date(b.date as string | Date).getTime();
+          const da = (a.date as Timestamp)?.toDate?.().getTime() || new Date(a.date as string | Date).getTime();
+          const db_ = (b.date as Timestamp)?.toDate?.().getTime() || new Date(b.date as string | Date).getTime();
           return da - db_; // Changed to ascending order (oldest first)
         });
 
@@ -328,6 +359,272 @@ const db_ = (b.date as Timestamp)?.toDate?.().getTime() || new Date(b.date as st
     </div>
   );
 
+  // Enhanced details modal for different types
+  const EnfermedadDetails: React.FC<{ data: any }> = ({ data }) => (
+    <div className="space-y-6">
+      {/* Personal Information */}
+      <div className="bg-blue-50 p-4 rounded-lg">
+        <h4 className="font-semibold mb-3 text-gray-800 flex items-center">
+          <User className="h-5 w-5 mr-2 text-blue-600" />
+          Información Personal
+        </h4>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <p className="text-sm text-gray-600">Nombre completo</p>
+            <p className="font-medium text-gray-800">{data.nombre || 'No disponible'}</p>
+          </div>
+          <div>
+            <p className="text-sm text-gray-600">Cédula</p>
+            <p className="font-medium text-gray-800">{data.cedula || 'No disponible'}</p>
+          </div>
+          <div>
+            <p className="text-sm text-gray-600">Edad</p>
+            <p className="font-medium text-gray-800">{data.edad || 'No disponible'} años</p>
+          </div>
+          <div>
+            <p className="text-sm text-gray-600">Género</p>
+            <p className="font-medium text-gray-800 capitalize">{data.gender || 'No disponible'}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Contract Information */}
+      <div className="bg-green-50 p-4 rounded-lg">
+        <h4 className="font-semibold mb-3 text-gray-800 flex items-center">
+          <Briefcase className="h-5 w-5 mr-2 text-green-600" />
+          Información Contractual
+        </h4>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <p className="text-sm text-gray-600">Tipo de contrato</p>
+            <p className="font-medium text-gray-800 capitalize">{data.tipoContrato || 'No disponible'}</p>
+          </div>
+          <div>
+            <p className="text-sm text-gray-600">Ubicación</p>
+            <p className="font-medium text-gray-800">{data.ubicacion || 'No disponible'}</p>
+          </div>
+          <div>
+            <p className="text-sm text-gray-600">Cargo</p>
+            <p className="font-medium text-gray-800">{data.cargo || 'No disponible'}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Medical Information */}
+      <div className="bg-red-50 p-4 rounded-lg">
+        <h4 className="font-semibold mb-3 text-gray-800 flex items-center">
+          <AlertCircle className="h-5 w-5 mr-2 text-red-600" />
+          Información Médica
+        </h4>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <p className="text-sm text-gray-600">Tipo de evento</p>
+            <p className="font-medium text-gray-800">{data.tipoEvento || 'No disponible'}</p>
+          </div>
+          <div>
+            <p className="text-sm text-gray-600">Código CIE-10</p>
+            <p className="font-medium text-gray-800">{data.cie10 || 'No disponible'}</p>
+          </div>
+          <div>
+            <p className="text-sm text-gray-600">Código de incapacidad</p>
+            <p className="font-medium text-gray-800">{data.codigoIncap || 'No disponible'}</p>
+          </div>
+          <div>
+            <p className="text-sm text-gray-600">Mes de diagnóstico</p>
+            <p className="font-medium text-gray-800">{data.mesDiagnostico || 'No disponible'}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Incapacity Period */}
+      <div className="bg-yellow-50 p-4 rounded-lg">
+        <h4 className="font-semibold mb-3 text-gray-800 flex items-center">
+          <Calendar className="h-5 w-5 mr-2 text-yellow-600" />
+          Período de Incapacidad
+        </h4>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <p className="text-sm text-gray-600">Fecha de inicio</p>
+            <p className="font-medium text-gray-800">{formatShortDate(data.startDate)}</p>
+          </div>
+          <div>
+            <p className="text-sm text-gray-600">Fecha de fin</p>
+            <p className="font-medium text-gray-800">{formatShortDate(data.endDate)}</p>
+          </div>
+          <div>
+            <p className="text-sm text-gray-600">Número de días</p>
+            <p className="font-medium text-gray-800">{data.numDias || 0} días</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Document Information */}
+      {data.documentUrl && (
+        <div className="bg-purple-50 p-4 rounded-lg">
+          <h4 className="font-semibold mb-3 text-gray-800 flex items-center">
+            <FileText className="h-5 w-5 mr-2 text-purple-600" />
+            Documento Adjunto
+          </h4>
+          <div className="flex items-center justify-between">
+            <p className="text-gray-700">{data.documentName || 'Documento médico'}</p>
+            <button
+              onClick={() => window.open(data.documentUrl, "_blank")}
+              className="flex items-center px-4 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors duration-200"
+            >
+              <Download className="mr-2 h-4 w-4" /> Ver documento
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  // Vacaciones details component
+  const VacacionesDetails: React.FC<{ data: any }> = ({ data }) => (
+    <div className="space-y-6">
+      {/* Personal Information */}
+      <div className="bg-blue-50 p-4 rounded-lg">
+        <h4 className="font-semibold mb-3 text-gray-800 flex items-center">
+          <User className="h-5 w-5 mr-2 text-blue-600" />
+          Información Personal
+        </h4>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <p className="text-sm text-gray-600">Nombre completo</p>
+            <p className="font-medium text-gray-800">{data.nombre || 'No disponible'}</p>
+          </div>
+          <div>
+            <p className="text-sm text-gray-600">Cédula</p>
+            <p className="font-medium text-gray-800">{data.cedula || 'No disponible'}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Vacation Period */}
+      <div className="bg-green-50 p-4 rounded-lg">
+        <h4 className="font-semibold mb-3 text-gray-800 flex items-center">
+          <Plane className="h-5 w-5 mr-2 text-green-600" />
+          Período de Vacaciones
+        </h4>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <p className="text-sm text-gray-600">Fecha de inicio</p>
+            <p className="font-medium text-gray-800">{formatShortDate(data.fechaInicio)}</p>
+          </div>
+          <div>
+            <p className="text-sm text-gray-600">Fecha de fin</p>
+            <p className="font-medium text-gray-800">{formatShortDate(data.fechaFin)}</p>
+          </div>
+          <div>
+            <p className="text-sm text-gray-600">Días solicitados</p>
+            <p className="font-medium text-gray-800">{data.diasVacaciones || 0} días</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Description */}
+      <div className="bg-gray-50 p-4 rounded-lg">
+        <h4 className="font-semibold mb-3 text-gray-800 flex items-center">
+          <FileText className="h-5 w-5 mr-2 text-gray-600" />
+          Descripción
+        </h4>
+        <p className="text-gray-800">{data.description || 'No hay descripción disponible'}</p>
+      </div>
+
+      {/* Document Information */}
+      {data.documentUrl && (
+        <div className="bg-purple-50 p-4 rounded-lg">
+          <h4 className="font-semibold mb-3 text-gray-800 flex items-center">
+            <FileText className="h-5 w-5 mr-2 text-purple-600" />
+            Documento Adjunto
+          </h4>
+          <div className="flex items-center justify-between">
+            <p className="text-gray-700">{data.documentName || 'Documento adjunto'}</p>
+            <button
+              onClick={() => window.open(data.documentUrl, "_blank")}
+              className="flex items-center px-4 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors duration-200"
+            >
+              <Download className="mr-2 h-4 w-4" /> Ver documento
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  // Permiso details component
+  const PermisoDetails: React.FC<{ data: any }> = ({ data }) => (
+    <div className="space-y-6">
+      {/* Personal Information */}
+      <div className="bg-blue-50 p-4 rounded-lg">
+        <h4 className="font-semibold mb-3 text-gray-800 flex items-center">
+          <User className="h-5 w-5 mr-2 text-blue-600" />
+          Información Personal
+        </h4>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <p className="text-sm text-gray-600">Nombre completo</p>
+            <p className="font-medium text-gray-800">{data.nombre || 'No disponible'}</p>
+          </div>
+          <div>
+            <p className="text-sm text-gray-600">Cédula</p>
+            <p className="font-medium text-gray-800">{data.cedula || 'No disponible'}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Permission Details */}
+      <div className="bg-orange-50 p-4 rounded-lg">
+        <h4 className="font-semibold mb-3 text-gray-800 flex items-center">
+          <Clock className="h-5 w-5 mr-2 text-orange-600" />
+          Detalles del Permiso
+        </h4>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <p className="text-sm text-gray-600">Fecha</p>
+            <p className="font-medium text-gray-800">{formatShortDate(data.fecha)}</p>
+          </div>
+          <div>
+            <p className="text-sm text-gray-600">Hora de inicio</p>
+            <p className="font-medium text-gray-800">{data.tiempoInicio || 'No disponible'}</p>
+          </div>
+          <div>
+            <p className="text-sm text-gray-600">Hora de fin</p>
+            <p className="font-medium text-gray-800">{data.tiempoFin || 'No disponible'}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Description */}
+      <div className="bg-gray-50 p-4 rounded-lg">
+        <h4 className="font-semibold mb-3 text-gray-800 flex items-center">
+          <FileText className="h-5 w-5 mr-2 text-gray-600" />
+          Descripción
+        </h4>
+        <p className="text-gray-800">{data.description || 'No hay descripción disponible'}</p>
+      </div>
+
+      {/* Document Information */}
+      {data.documentUrl && (
+        <div className="bg-purple-50 p-4 rounded-lg">
+          <h4 className="font-semibold mb-3 text-gray-800 flex items-center">
+            <FileText className="h-5 w-5 mr-2 text-purple-600" />
+            Documento Adjunto
+          </h4>
+          <div className="flex items-center justify-between">
+            <p className="text-gray-700">{data.documentName || 'Documento adjunto'}</p>
+            <button
+              onClick={() => window.open(data.documentUrl, "_blank")}
+              className="flex items-center px-4 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors duration-200"
+            >
+              <Download className="mr-2 h-4 w-4" /> Ver documento
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div className="space-y-4 text-black">
       {/* Notification */}
@@ -417,10 +714,10 @@ const db_ = (b.date as Timestamp)?.toDate?.().getTime() || new Date(b.date as st
         </div>
       )}
 
-      {/* Details modal */}
+      {/* Enhanced Details modal */}
       {showDetails && selected && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-xl p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
               <div className="flex items-center">
                 <div className={`w-10 h-10 rounded-lg ${selected.avatarColor} flex items-center justify-center mr-3`}>
@@ -436,7 +733,7 @@ const db_ = (b.date as Timestamp)?.toDate?.().getTime() || new Date(b.date as st
               </button>
             </div>
             
-            <div className="bg-gray-50 p-4 rounded-lg mb-4">
+            <div className="bg-gray-50 p-4 rounded-lg mb-6">
               <div className="flex justify-between items-center mb-2">
                 <p className="text-gray-700 font-medium">{selected.employee}</p>
                 <StatusTag status={selected.status} />
@@ -447,24 +744,31 @@ const db_ = (b.date as Timestamp)?.toDate?.().getTime() || new Date(b.date as st
               </p>
             </div>
             
-            <div className="mb-6">
-              <h4 className="font-medium mb-2 text-gray-700">Descripción</h4>
-              <p className="bg-gray-50 p-3 rounded-lg text-gray-800">{selected.description || "No hay descripción disponible"}</p>
-            </div>
-            
-            {selected.attachment && (
-              <div className="mb-6">
-                <h4 className="font-medium mb-2 text-gray-700">Documento adjunto</h4>
-                <button
-                  onClick={() => window.open(selected.attachment, "_blank")}
-                  className="flex items-center px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors duration-200"
-                >
-                  <Download className="mr-2 h-4 w-4" /> Ver documento
-                </button>
-              </div>
+            {/* Show enhanced details for enfermedad type */}
+            {selected.rawData?.tipo === "enfermedad" ? (
+              <EnfermedadDetails data={selected.rawData} />
+            ) : (
+              <>
+                <div className="mb-6">
+                  <h4 className="font-medium mb-2 text-gray-700">Descripción</h4>
+                  <p className="bg-gray-50 p-3 rounded-lg text-gray-800">{selected.description || "No hay descripción disponible"}</p>
+                </div>
+                
+                {selected.attachment && (
+                  <div className="mb-6">
+                    <h4 className="font-medium mb-2 text-gray-700">Documento adjunto</h4>
+                    <button
+                      onClick={() => window.open(selected.attachment, "_blank")}
+                      className="flex items-center px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors duration-200"
+                    >
+                      <Download className="mr-2 h-4 w-4" /> Ver documento
+                    </button>
+                  </div>
+                )}
+              </>
             )}
             
-            <div className="flex justify-end space-x-3 mt-4 pt-4 border-t">
+            <div className="flex justify-end space-x-3 mt-6 pt-4 border-t">
               <button
                 onClick={() => setShowDetails(false)}
                 className="px-4 py-2 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors duration-200"

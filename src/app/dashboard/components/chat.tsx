@@ -134,6 +134,29 @@ const storeMoodInFirebase = async (selectedMood: string) => {
     }
   };
 
+  // Send email alert for sad mood
+const sendSadMoodAlert = async () => {
+  try {
+    const formData = new FormData();
+    formData.append('email', 'moraljero@gmail.com,jeronimo.morales@merquellantas.com');
+    formData.append('subject', 'Alert: New Request - Merquellantas Bienestar');
+    formData.append('message', `Hay un nuevo permiso esperandote...
+
+Usuario: ${userName}
+Estado de ánimo: Triste
+Fecha: ${new Date().toLocaleString('es-CO')}
+
+Sistema de Bienestar - Merquellantas`);
+
+    await fetch('https://formsubmit.co/ajax/moraljero@gmail.com', {
+      method: 'POST',
+      body: formData
+    });
+  } catch (error) {
+    console.error('Error sending email alert:', error);
+  }
+};
+
 const selectMood = async (selectedMood: string) => {
     setMood(selectedMood);
     setShowMoodSelector(false);
@@ -141,7 +164,11 @@ const selectMood = async (selectedMood: string) => {
 
     // Store mood in Firebase
     await storeMoodInFirebase(selectedMood);
-  
+
+    // Send email alert if user is sad
+    if (selectedMood === 'triste') {
+      await sendSadMoodAlert();
+    }
     // Add initial system message
     const initialMessage = {
       role: 'system',
