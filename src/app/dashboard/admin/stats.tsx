@@ -7,7 +7,6 @@ import {
   Heart,
   Activity,
   DollarSign,
-  TrendingUp,
   FileText
 } from "lucide-react";
 

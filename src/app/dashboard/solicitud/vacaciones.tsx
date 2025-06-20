@@ -9,7 +9,7 @@ import {
   Info,
   Clock
 } from 'lucide-react';
-import { addDoc, collection, doc, getDoc, serverTimestamp, FieldValue } from 'firebase/firestore';
+import { addDoc, collection, doc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { auth, db } from '../../../firebase';
 
@@ -80,13 +80,13 @@ const VacacionesForm = () => {
 
   const sendEmailNotification = async (formData: VacacionesFormData) => {
   try {
-    const response = await fetch('https://formsubmit.co/moraljero@gmail.com', {
+    const response = await fetch('https://formsubmit.co/marcelagonzalez@merquellantas.com', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        _to: 'moraljero@gmail.com,jeronimo.morales@merquellantas.com',
+        _to: 'marcelagonzalez@merquellantas.com,saludocupacional@merquellantas.com, dptodelagente@merquellantas.com',
         _subject: 'Alerta: Nueva Solicitud de Vacaciones Pendiente',
         message: 'Hay una nueva solicitud de vacaciones esperándote...',
         fechaInicio: formData.fechaInicio,

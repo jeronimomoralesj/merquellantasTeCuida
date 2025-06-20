@@ -18,9 +18,7 @@ import {
   Search,
   List,
   User,
-  MapPin,
   FileText,
-  Hash,
 } from "lucide-react";
 import { 
   collection, 
@@ -54,6 +52,49 @@ interface NotificationState {
   message: string;
   type: 'success' | 'error';
 }
+
+interface IncapacidadData {
+  nombre: string;
+  cedula: string;
+  edad: string;
+  gender: string;
+  tipoContrato: string;
+  ubicacion: string;
+  cargo: string;
+  tipoEvento: string;
+  cie10: string;
+  codigoIncap: string;
+  mesDiagnostico: string;
+  startDate: string;
+  endDate: string;
+  numDias: number;
+  documentUrl?: string;
+  documentName?: string;
+  description?: string;
+}
+
+interface VacacionesData {
+  nombre: string;
+  cedula: string;
+  fechaInicio: string;
+  fechaFin: string;
+  diasVacaciones: number;
+  documentUrl?: string;
+  documentName?: string;
+  description?: string;
+}
+
+interface PermisoData {
+  nombre: string;
+  cedula: string;
+  fecha: string;
+  tiempoInicio: string;
+  tiempoFin: string;
+  documentUrl?: string;
+  documentName?: string;
+  description?: string;
+}
+
 
 export default function SolicitudesCard() {
   const [requests, setRequests] = useState<RequestData[]>([]);
@@ -360,7 +401,7 @@ export default function SolicitudesCard() {
   );
 
   // Enhanced details modal for different types
-  const EnfermedadDetails: React.FC<{ data: any }> = ({ data }) => (
+const EnfermedadDetails: React.FC<{ data: IncapacidadData }> = ({ data }) => (
     <div className="space-y-6">
       {/* Personal Information */}
       <div className="bg-blue-50 p-4 rounded-lg">
@@ -479,151 +520,6 @@ export default function SolicitudesCard() {
     </div>
   );
 
-  // Vacaciones details component
-  const VacacionesDetails: React.FC<{ data: any }> = ({ data }) => (
-    <div className="space-y-6">
-      {/* Personal Information */}
-      <div className="bg-blue-50 p-4 rounded-lg">
-        <h4 className="font-semibold mb-3 text-gray-800 flex items-center">
-          <User className="h-5 w-5 mr-2 text-blue-600" />
-          Información Personal
-        </h4>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <p className="text-sm text-gray-600">Nombre completo</p>
-            <p className="font-medium text-gray-800">{data.nombre || 'No disponible'}</p>
-          </div>
-          <div>
-            <p className="text-sm text-gray-600">Cédula</p>
-            <p className="font-medium text-gray-800">{data.cedula || 'No disponible'}</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Vacation Period */}
-      <div className="bg-green-50 p-4 rounded-lg">
-        <h4 className="font-semibold mb-3 text-gray-800 flex items-center">
-          <Plane className="h-5 w-5 mr-2 text-green-600" />
-          Período de Vacaciones
-        </h4>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <p className="text-sm text-gray-600">Fecha de inicio</p>
-            <p className="font-medium text-gray-800">{formatShortDate(data.fechaInicio)}</p>
-          </div>
-          <div>
-            <p className="text-sm text-gray-600">Fecha de fin</p>
-            <p className="font-medium text-gray-800">{formatShortDate(data.fechaFin)}</p>
-          </div>
-          <div>
-            <p className="text-sm text-gray-600">Días solicitados</p>
-            <p className="font-medium text-gray-800">{data.diasVacaciones || 0} días</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Description */}
-      <div className="bg-gray-50 p-4 rounded-lg">
-        <h4 className="font-semibold mb-3 text-gray-800 flex items-center">
-          <FileText className="h-5 w-5 mr-2 text-gray-600" />
-          Descripción
-        </h4>
-        <p className="text-gray-800">{data.description || 'No hay descripción disponible'}</p>
-      </div>
-
-      {/* Document Information */}
-      {data.documentUrl && (
-        <div className="bg-purple-50 p-4 rounded-lg">
-          <h4 className="font-semibold mb-3 text-gray-800 flex items-center">
-            <FileText className="h-5 w-5 mr-2 text-purple-600" />
-            Documento Adjunto
-          </h4>
-          <div className="flex items-center justify-between">
-            <p className="text-gray-700">{data.documentName || 'Documento adjunto'}</p>
-            <button
-              onClick={() => window.open(data.documentUrl, "_blank")}
-              className="flex items-center px-4 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors duration-200"
-            >
-              <Download className="mr-2 h-4 w-4" /> Ver documento
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-
-  // Permiso details component
-  const PermisoDetails: React.FC<{ data: any }> = ({ data }) => (
-    <div className="space-y-6">
-      {/* Personal Information */}
-      <div className="bg-blue-50 p-4 rounded-lg">
-        <h4 className="font-semibold mb-3 text-gray-800 flex items-center">
-          <User className="h-5 w-5 mr-2 text-blue-600" />
-          Información Personal
-        </h4>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <p className="text-sm text-gray-600">Nombre completo</p>
-            <p className="font-medium text-gray-800">{data.nombre || 'No disponible'}</p>
-          </div>
-          <div>
-            <p className="text-sm text-gray-600">Cédula</p>
-            <p className="font-medium text-gray-800">{data.cedula || 'No disponible'}</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Permission Details */}
-      <div className="bg-orange-50 p-4 rounded-lg">
-        <h4 className="font-semibold mb-3 text-gray-800 flex items-center">
-          <Clock className="h-5 w-5 mr-2 text-orange-600" />
-          Detalles del Permiso
-        </h4>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <p className="text-sm text-gray-600">Fecha</p>
-            <p className="font-medium text-gray-800">{formatShortDate(data.fecha)}</p>
-          </div>
-          <div>
-            <p className="text-sm text-gray-600">Hora de inicio</p>
-            <p className="font-medium text-gray-800">{data.tiempoInicio || 'No disponible'}</p>
-          </div>
-          <div>
-            <p className="text-sm text-gray-600">Hora de fin</p>
-            <p className="font-medium text-gray-800">{data.tiempoFin || 'No disponible'}</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Description */}
-      <div className="bg-gray-50 p-4 rounded-lg">
-        <h4 className="font-semibold mb-3 text-gray-800 flex items-center">
-          <FileText className="h-5 w-5 mr-2 text-gray-600" />
-          Descripción
-        </h4>
-        <p className="text-gray-800">{data.description || 'No hay descripción disponible'}</p>
-      </div>
-
-      {/* Document Information */}
-      {data.documentUrl && (
-        <div className="bg-purple-50 p-4 rounded-lg">
-          <h4 className="font-semibold mb-3 text-gray-800 flex items-center">
-            <FileText className="h-5 w-5 mr-2 text-purple-600" />
-            Documento Adjunto
-          </h4>
-          <div className="flex items-center justify-between">
-            <p className="text-gray-700">{data.documentName || 'Documento adjunto'}</p>
-            <button
-              onClick={() => window.open(data.documentUrl, "_blank")}
-              className="flex items-center px-4 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors duration-200"
-            >
-              <Download className="mr-2 h-4 w-4" /> Ver documento
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
 
   return (
     <div className="space-y-4 text-black">

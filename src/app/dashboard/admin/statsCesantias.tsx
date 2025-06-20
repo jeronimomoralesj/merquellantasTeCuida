@@ -1,12 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Home,
   X,
   Calendar,
-  FileText,
-  TrendingUp,
   CheckCircle,
   XCircle,
   Loader2,
@@ -21,7 +19,7 @@ import { db } from '../../../firebase'; // Adjust path as needed
 interface CesantiasData {
   id: string;
   cedula: string;
-  createdAt: any;
+  createdAt?: Timestamp;
   estado: string;
   fileName: string;
   fileUrl: string;
@@ -92,33 +90,32 @@ export default function StatsCesantias({ isOpen, onClose }: StatsCesantiasProps)
     return monthNames[date.getMonth()];
   };
 
-  const fetchCesantiasData = async () => {
-    try {
-      setLoading(true);
-      setError(null);
+const fetchCesantiasData = useCallback(async () => {
+  try {
+    setLoading(true);
+    setError(null);
 
-      // Query cesantias collection directly
-      const cesantiasCollection = collection(db, 'cesantias');
-      const querySnapshot = await getDocs(cesantiasCollection);
-      const data: CesantiasData[] = [];
+    const cesantiasCollection = collection(db, "cesantias");
+    const querySnapshot = await getDocs(cesantiasCollection);
+    const data: CesantiasData[] = [];
 
-      querySnapshot.forEach((doc) => {
-        const docData = doc.data();
-        data.push({
-          id: doc.id,
-          ...docData
-        } as CesantiasData);
-      });
+    querySnapshot.forEach((doc) => {
+      const docData = doc.data();
+      data.push({
+        id: doc.id,
+        ...docData,
+      } as CesantiasData);
+    });
 
-      setCesantiasData(data);
-      calculateStatistics(data);
-    } catch (err) {
-      console.error('Error fetching cesantias data:', err);
-      setError('Error al cargar los datos de cesantías');
-    } finally {
-      setLoading(false);
-    }
-  };
+    setCesantiasData(data);
+    calculateStatistics(data);
+  } catch (err) {
+    console.error("Error fetching cesantias data:", err);
+    setError("Error al cargar los datos de cesantías");
+  } finally {
+    setLoading(false);
+  }
+}, []);
 
   const calculateStatistics = (data: CesantiasData[]) => {
     // 1. Monthly stats

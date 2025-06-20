@@ -9,9 +9,6 @@ import {
   X, 
   Search,
   User,
-  Building,
-  CreditCard,
-  Calendar
 } from 'lucide-react';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../../../firebase';
@@ -148,24 +145,25 @@ const createUser = async () => {
 const fetchUsers = async () => {
   setLoading(true);
   try {
-    const snap = await getDocs(collection(db, 'users'));
-    const fetched: User[] = snap.docs.map(doc => {
-      const data = doc.data() as any;
-      const extra = data.extra || {};
-      return {
-        id: doc.id,
-        cedula: data.cedula,
-        email: data.email,
-        nombre: data.nombre,
-        createdAt: data.createdAt.toDate(),  
-        extra: {
-          ...extra,
-          'Fecha Ingreso': typeof extra['Fecha Ingreso'] === 'number'
-            ? excelSerialToDate(extra['Fecha Ingreso'])
-            : extra['Fecha Ingreso'] || ''
-        }
-      };
-    });
+const snap = await getDocs(collection(db, 'users'));
+const fetched: User[] = snap.docs.map(doc => {
+  const data = doc.data() as Omit<User, 'id' | 'createdAt'> & { createdAt: { toDate: () => Date } };
+  const extra = data.extra || {};
+  return {
+    id: doc.id,
+    cedula: data.cedula,
+    email: data.email,
+    nombre: data.nombre,
+    createdAt: data.createdAt.toDate(),
+    extra: {
+      ...extra,
+      'Fecha Ingreso': typeof extra['Fecha Ingreso'] === 'number'
+        ? excelSerialToDate(extra['Fecha Ingreso'])
+        : extra['Fecha Ingreso'] || ''
+    }
+  };
+});
+
     setUsers(fetched);
   } catch (error) {
     console.error('Error fetching users:', error);
@@ -182,7 +180,7 @@ const fetchUsers = async () => {
       cedula: formData.cedula,
       extra: {
         ...formData.extra,
-        'Fecha Ingreso': dateToExcelSerial(formData.extra['Fecha Ingreso']) // Convert to number
+        'Fecha Ingreso': dateToExcelSerial(formData.extra['Fecha Ingreso']) /
       }
     };
 

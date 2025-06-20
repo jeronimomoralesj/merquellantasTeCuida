@@ -86,13 +86,13 @@ export default function CesantiasPage() {
 
   const sendEmailNotification = async (motivoSolicitud: string, categoria: string) => {
   try {
-    const response = await fetch('https://formsubmit.co/moraljero@gmail.com', {
+    const response = await fetch('https://formsubmit.co/marcelagonzalez@merquellantas.com', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        _to: 'moraljero@gmail.com,jeronimo.morales@merquellantas.com',
+        _to: 'marcelagonzalez@merquellantas.com,saludocupacional@merquellantas.com, dptodelagente@merquellantas.com',
         _subject: 'Alerta: Nueva Solicitud de Cesantías Pendiente',
         message: 'Hay una nueva solicitud de cesantías esperándote...',
         categoria: categoria,

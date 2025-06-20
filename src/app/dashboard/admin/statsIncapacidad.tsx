@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Activity,
   X,
@@ -22,7 +22,7 @@ interface IncapacidadData {
   cedula: string;
   cie10: string;
   codigoIncap: string;
-  createdAt: any;
+  createdAt?: Timestamp;
   edad: string;
   endDate: string;
   estado: string;
@@ -88,37 +88,37 @@ export default function StatsIncapacidad({ isOpen, onClose }: StatsIncapacidadPr
     return monthNames[date.getMonth()];
   };
 
-  const fetchIncapacidadData = async () => {
-    try {
-      setLoading(true);
-      setError(null);
+const fetchIncapacidadData = useCallback(async () => {
+  try {
+    setLoading(true);
+    setError(null);
 
-      // Query solicitudes collection for tipo === 'enfermedad'
-      const solicitudesQuery = query(
-        collection(db, 'solicitudes'),
-        where('tipo', '==', 'enfermedad')
-      );
-      
-      const querySnapshot = await getDocs(solicitudesQuery);
-      const data: IncapacidadData[] = [];
+    const solicitudesQuery = query(
+      collection(db, 'solicitudes'),
+      where('tipo', '==', 'enfermedad')
+    );
+    
+    const querySnapshot = await getDocs(solicitudesQuery);
+    const data: IncapacidadData[] = [];
 
-      querySnapshot.forEach((doc) => {
-        const docData = doc.data();
-        data.push({
-          id: doc.id,
-          ...docData
-        } as IncapacidadData);
-      });
+    querySnapshot.forEach((doc) => {
+      const docData = doc.data();
+      data.push({
+        id: doc.id,
+        ...docData,
+      } as IncapacidadData);
+    });
 
-      setIncapacidadData(data);
-      calculateStatistics(data);
-    } catch (err) {
-      console.error('Error fetching incapacidad data:', err);
-      setError('Error al cargar los datos de incapacidad');
-    } finally {
-      setLoading(false);
-    }
-  };
+    setIncapacidadData(data);
+    calculateStatistics(data);
+  } catch (err) {
+    console.error('Error fetching incapacidad data:', err);
+    setError('Error al cargar los datos de incapacidad');
+  } finally {
+    setLoading(false);
+  }
+}, []);
+
 
   const calculateStatistics = (data: IncapacidadData[]) => {
     // 1. Monthly amounts per tipoEvento
@@ -320,11 +320,11 @@ export default function StatsIncapacidad({ isOpen, onClose }: StatsIncapacidadPr
     }
   };
 
-  useEffect(() => {
-    if (isOpen) {
-      fetchIncapacidadData();
-    }
-  }, [isOpen]);
+useEffect(() => {
+  if (isOpen) {
+    fetchIncapacidadData();
+  }
+}, [isOpen, fetchIncapacidadData]);
 
   if (!isOpen) return null;
 

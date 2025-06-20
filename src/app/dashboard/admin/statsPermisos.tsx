@@ -5,22 +5,20 @@ import {
   Clock,
   X,
   Calendar,
-  FileText,
   TrendingUp,
   CheckCircle,
   XCircle,
   Loader2,
   AlertCircle,
   Download,
-  User
 } from "lucide-react";
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { collection, getDocs, query, Timestamp, where } from 'firebase/firestore';
 import { db } from '../../../firebase'; // Adjust path as needed
 
 interface PermisosData {
   id: string;
   cedula: string;
-  createdAt: any;
+  createdAt?: Timestamp;
   description: string;
   documentName: string;
   documentUrl: string;

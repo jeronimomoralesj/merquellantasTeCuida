@@ -14,13 +14,13 @@ import {
   Download,
   Clock
 } from "lucide-react";
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { collection, getDocs, query, Timestamp, where } from 'firebase/firestore';
 import { db } from '../../../firebase'; // Adjust path as needed
 
 interface VacacionesData {
   id: string;
   cedula: string;
-  createdAt: any;
+  createdAt?: Timestamp; 
   description: string;
   diasVacaciones: number;
   documentName: string;

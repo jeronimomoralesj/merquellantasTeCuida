@@ -1,11 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Heart,
   X,
   Calendar,
-  TrendingUp,
   Smile,
   Meh,
   Frown,
@@ -16,7 +15,7 @@ import {
   User,
   Clock
 } from "lucide-react";
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs, Timestamp } from 'firebase/firestore';
 import { db } from '../../../firebase'; // Adjust path as needed
 
 interface UserData {
@@ -24,16 +23,15 @@ interface UserData {
   cedula: string;
   nombre: string;
   posicion: string;
-  createdAt: any;
+  createdAt: Timestamp;
   mood: {
-    date: any;
+    date: Timestamp;
     mood: 'feliz' | 'neutral' | 'triste';
   };
-  extra?: {
-    [key: string]: any;
-  };
+  extra?: Record<string, unknown>; // instead of [key: string]: any
   rol: string;
 }
+
 
 interface MoodStats {
   feliz: number;
@@ -115,35 +113,35 @@ export default function StatsMood({ isOpen, onClose }: StatsMoodProps) {
     }
   };
 
-  const fetchUsersData = async () => {
-    try {
-      setLoading(true);
-      setError(null);
+const fetchUsersData = useCallback(async () => {
+  try {
+    setLoading(true);
+    setError(null);
 
-      const usersCollection = collection(db, 'users');
-      const querySnapshot = await getDocs(usersCollection);
-      const data: UserData[] = [];
+    const usersCollection = collection(db, 'users');
+    const querySnapshot = await getDocs(usersCollection);
+    const data: UserData[] = [];
 
-      querySnapshot.forEach((doc) => {
-        const docData = doc.data();
-        // Only include users that have mood data
-        if (docData.mood && docData.mood.mood && docData.mood.date) {
-          data.push({
-            id: doc.id,
-            ...docData
-          } as UserData);
-        }
-      });
+    querySnapshot.forEach((doc) => {
+      const docData = doc.data();
+      if (docData.mood && docData.mood.mood && docData.mood.date) {
+        data.push({
+          id: doc.id,
+          ...docData
+        } as UserData);
+      }
+    });
 
-      setUsersData(data);
-      calculateStatistics(data);
-    } catch (err) {
-      console.error('Error fetching users data:', err);
-      setError('Error al cargar los datos de estado de ánimo');
-    } finally {
-      setLoading(false);
-    }
-  };
+    setUsersData(data);
+    calculateStatistics(data);
+  } catch (err) {
+    console.error('Error fetching users data:', err);
+    setError('Error al cargar los datos de estado de ánimo');
+  } finally {
+    setLoading(false);
+  }
+}, []); // Empty dependency array is safe here
+
 
   const calculateStatistics = (data: UserData[]) => {
     // 1. Overall mood stats
@@ -197,8 +195,6 @@ export default function StatsMood({ isOpen, onClose }: StatsMoodProps) {
       // Check for consecutive "triste" days (simplified version)
       // In a real implementation, you'd need to query historical mood data
       if (mood === 'triste') {
-        const daysSinceLastMood = Math.floor((new Date().getTime() - moodDate.getTime()) / (1000 * 60 * 60 * 24));
-        
         // Simulate consecutive days check (you'd need actual historical data)
         const simulatedConsecutiveDays = Math.floor(Math.random() * 5) + 1;
         
@@ -327,11 +323,12 @@ export default function StatsMood({ isOpen, onClose }: StatsMoodProps) {
     }
   };
 
-  useEffect(() => {
-    if (isOpen) {
-      fetchUsersData();
-    }
-  }, [isOpen]);
+useEffect(() => {
+  if (isOpen) {
+    fetchUsersData();
+  }
+}, [isOpen, fetchUsersData]); 
+
 
   if (!isOpen) return null;
 

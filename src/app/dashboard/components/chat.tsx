@@ -138,7 +138,7 @@ const storeMoodInFirebase = async (selectedMood: string) => {
 const sendSadMoodAlert = async () => {
   try {
     const formData = new FormData();
-    formData.append('email', 'moraljero@gmail.com,jeronimo.morales@merquellantas.com');
+    formData.append('email', 'saludocupacional@merquellantas.com, dptodelagente@merquellantas.com');
     formData.append('subject', 'Alert: New Request - Merquellantas Bienestar');
     formData.append('message', `Hay un nuevo permiso esperandote...
 
@@ -148,7 +148,7 @@ Fecha: ${new Date().toLocaleString('es-CO')}
 
 Sistema de Bienestar - Merquellantas`);
 
-    await fetch('https://formsubmit.co/ajax/moraljero@gmail.com', {
+    await fetch('https://formsubmit.co/ajax/marcelagonzalez@merquellantas.com', {
       method: 'POST',
       body: formData
     });

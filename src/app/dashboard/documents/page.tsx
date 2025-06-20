@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { 
   collection, 
@@ -8,7 +8,8 @@ import {
   addDoc, 
   deleteDoc, 
   doc, 
-  getDoc
+  getDoc,
+  Timestamp
 } from 'firebase/firestore';
 import { 
   ref, 
@@ -37,8 +38,8 @@ interface Document {
   id: string;
   name: string;
   category: string;
-  dateUploaded: any; // Firestore timestamp
-  document: string; // Firebase storage URL
+  dateUploaded: Timestamp | Date; 
+  document: string;
   size?: string;
   type?: 'pdf' | 'excel' | 'word' | 'other';
 }
@@ -48,9 +49,7 @@ interface UserData {
   rol: string;
   posicion: string;
   antiguedad?: number | string;
-  extra?: {
-    [key: string]: any;
-  };
+  extra?: Record<string, unknown>;
 }
 
 interface UserProfile {
@@ -71,7 +70,7 @@ export default function DocumentsPage() {
   const [loading, setLoading] = useState(false);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [userRole, setUserRole] = useState<string>('user');
-  const [profile, setProfile] = useState<UserProfile | null>(null);
+ // const [profile, setProfile] = useState<UserProfile | null>(null);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadName, setUploadName] = useState('');
@@ -151,11 +150,12 @@ export default function DocumentsPage() {
   }, []);
 
   // Fetch documents from Firestore
-  useEffect(() => {
-    fetchDocuments();
-  }, []);
+useEffect(() => {
+  fetchDocuments();
+}, []);
 
-  const fetchDocuments = async () => {
+
+  const fetchDocuments = useCallback(async () => {
     setLoading(true);
     try {
       const querySnapshot = await getDocs(collection(db, 'documentos'));
@@ -180,7 +180,7 @@ export default function DocumentsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   // Get file type from URL
   const getFileTypeFromUrl = (url: string): 'pdf' | 'excel' | 'word' | 'other' => {
@@ -229,25 +229,28 @@ export default function DocumentsPage() {
   };
 
   // Format date
-  const formatDate = (timestamp: any) => {
-    if (!timestamp) return 'N/A';
-    
-    let date: Date;
-    if (timestamp.toDate) {
-      // Firestore timestamp
-      date = timestamp.toDate();
-    } else if (timestamp instanceof Date) {
-      date = timestamp;
-    } else {
-      date = new Date(timestamp);
-    }
-    
-    return date.toLocaleDateString('es-ES', { 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
-    });
-  };
+const formatDate = (
+  timestamp: Timestamp | Date | string | null | undefined
+): string => {
+  if (!timestamp) return 'N/A';
+
+  let date: Date;
+  if (typeof timestamp === 'string') {
+    date = new Date(timestamp);
+  } else if (timestamp instanceof Date) {
+    date = timestamp;
+  } else if ('toDate' in timestamp) {
+    date = timestamp.toDate();
+  } else {
+    return 'N/A';
+  }
+
+  return date.toLocaleDateString('es-ES', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+};
 
   // Handle file upload
   const handleUpload = async () => {
