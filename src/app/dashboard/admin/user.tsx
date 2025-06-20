@@ -239,11 +239,16 @@ const updateUser = async () => {
   };
 
   // Start edit
-  const startEdit = (user: User) => {
-    setEditingUser(user);
-    setFormData({ cedula: user.cedula, extra: user.extra });
-    setShowCreateForm(true);
-  };
+const startEdit = (user: User) => {
+  setEditingUser(user);
+  setFormData({ 
+    cedula: user.cedula,
+    nombre: user.nombre, // ✅ Add this line
+    extra: user.extra 
+  });
+  setShowCreateForm(true);
+};
+
 
   // Cancel
   const cancelEdit = () => {
