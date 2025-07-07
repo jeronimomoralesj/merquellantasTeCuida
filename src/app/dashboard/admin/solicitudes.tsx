@@ -409,9 +409,9 @@ if (data.tipo === "incapacidad") {
   );
 
   // Type guard to check if data is IncapacidadData
-  const isIncapacidadData = (data: RequestData['rawData']): data is IncapacidadData => {
-    return data !== undefined && 'tipo' in data && data.tipo === 'enfermedad';
-  };
+const isIncapacidadData = (data: RequestData['rawData']): data is IncapacidadData => {
+  return data !== undefined && 'tipo' in data && data.tipo === 'incapacidad';
+};
 
   // Enhanced details modal for different types
   const EnfermedadDetails: React.FC<{ data: IncapacidadData }> = ({ data }) => (
