@@ -66,7 +66,7 @@ interface NotificationState {
 }
 
 interface IncapacidadData extends BaseDocumentData {
-  tipo: 'enfermedad';
+  tipo: 'incapacidad';
   edad: string;
   gender: string;
   tipoContrato: string;
