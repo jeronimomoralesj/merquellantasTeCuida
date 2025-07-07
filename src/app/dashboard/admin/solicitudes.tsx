@@ -413,21 +413,6 @@ if (data.tipo === "incapacidad") {
     return data !== undefined && 'tipo' in data && data.tipo === 'enfermedad';
   };
 
-  // Type guard to check if data is VacacionesData
-  const isVacacionesData = (data: RequestData['rawData']): data is VacacionesData => {
-    return data !== undefined && 'tipo' in data && data.tipo === 'vacaciones';
-  };
-
-  // Type guard to check if data is PermisoData
-  const isPermisoData = (data: RequestData['rawData']): data is PermisoData => {
-    return data !== undefined && 'tipo' in data && data.tipo === 'permiso';
-  };
-
-  // Type guard to check if data is CesantiasData
-  const isCesantiasData = (data: RequestData['rawData']): data is CesantiasData => {
-    return data !== undefined && 'motivoSolicitud' in data;
-  };
-
   // Enhanced details modal for different types
   const EnfermedadDetails: React.FC<{ data: IncapacidadData }> = ({ data }) => (
     <div className="space-y-6">

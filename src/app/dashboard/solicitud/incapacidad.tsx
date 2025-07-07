@@ -109,28 +109,6 @@ const IncapacidadForm = () => {
   }
 }, [formData.startDate, formData.endDate]);
 
-const calculateDays = () => {
-  if (formData.startDate && formData.endDate) {
-    const start = new Date(formData.startDate);
-    const end = new Date(formData.endDate);
-
-    // Ensure valid range
-    if (end < start) {
-      setNumDias(0);
-      return;
-    }
-
-    // Calculate difference in days (inclusive of both start and end)
-    const diffTime = end.getTime() - start.getTime();
-    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
-
-    setNumDias(diffDays);
-  } else {
-    setNumDias(0);
-  }
-};
-
-
   const validateForm = () => {
     if (!formData.edad) {
       setFormError('La edad es requerida');
