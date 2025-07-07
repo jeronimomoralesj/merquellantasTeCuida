@@ -288,6 +288,7 @@ setSubmitted(true);
               <Upload className="w-5 h-5 mr-2 text-[#ff9900]" />
               Documentación
             </h3>
+            <strong><h2 className="mt-2 text-gray-600">Adjuntar formato de autorizacion con firma del jefe inmediato.</h2></strong>
             <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
               <input
                 type="file"

@@ -206,7 +206,7 @@ export default function SolicitudesCard() {
           : req
       ));
       
-      // Close modal if open
+      // Update selected item if it's currently being viewed
       if (showDetails && selected?.id === requestId) {
         setSelected({...selected, status: newStatus, statusColor: statusColor(newStatus)});
       }
@@ -259,38 +259,39 @@ export default function SolicitudesCard() {
         });
 
         const sol: RequestData[] = solSnap.docs.map((d) => {
-          const data = d.data() as IncapacidadData | VacacionesData | PermisoData;
-          let typ = "";
-          let avatarColor = "";
-          
-          // Determine type based on data.tipo
-          if (data.tipo === "enfermedad") {
-            typ = "Incapacidad";
-            avatarColor = "bg-red-100";
-          } else if (data.tipo === "vacaciones") {
-            typ = "Vacaciones";
-            avatarColor = "bg-blue-100";
-          } else {
-            typ = "Permiso";
-            avatarColor = "bg-orange-100";
-          }
-          
-          return {
-            id: d.id,
-            title: `Solicitud de ${typ}`,
-            employee: data.nombre,
-            date: data.createdAt,
-            status: data.estado,
-            statusColor: statusColor(data.estado),
-            type: typ,
-            avatarColor: avatarColor,
-            avatarText: initials(data.nombre),
-            description: data.description,
-            attachment: data.documentUrl,
-            isPermiso: true,
-            rawData: data,
-          };
-        });
+  const data = d.data() as IncapacidadData | VacacionesData | PermisoData;
+  let typ = "Desconocido";
+  let avatarColor = "bg-gray-100";
+
+if (data.tipo === "incapacidad") {
+  typ = "Incapacidad";
+  avatarColor = "bg-red-100";
+} else if (data.tipo === "vacaciones") {
+  typ = "Vacaciones";
+  avatarColor = "bg-blue-100";
+} else {
+  typ = "Permiso";
+  avatarColor = "bg-orange-100";
+}
+
+
+  return {
+    id: d.id,
+    title: `Solicitud de ${typ}`,
+    employee: data.nombre,
+    date: data.createdAt,
+    status: data.estado,
+    statusColor: statusColor(data.estado),
+    type: typ,
+    avatarColor: avatarColor,
+    avatarText: initials(data.nombre),
+    description: data.description,
+    attachment: data.documentUrl,
+    isPermiso: typ === "Permiso", // Only mark as permiso if it's really a permiso
+    rawData: data,
+  };
+});
+
 
         // merge & sort:
         // 1. Pending requests first
@@ -360,53 +361,71 @@ export default function SolicitudesCard() {
         <StatusTag status={s.status} />
       </div>
       
-      {/* Only show action buttons if status is pending */}
-      {s.status === "pendiente" && (
-        <div className="mt-4 flex space-x-2 justify-end">
-          <button
-            onClick={() => {
-              setSelected(s);
-              setShowDetails(true);
-              if (isInModal) setShowAll(false);
-            }}
-            className="text-sm px-3 py-1.5 bg-gray-100 rounded-lg hover:bg-gray-200 flex items-center transition-colors duration-200"
-          >
-            <Eye className="mr-1.5 h-4 w-4" /> Ver detalles
-          </button>
-          
-          <button 
-            onClick={() => handleStatusUpdate(s.id, "aprobado", s.isPermiso)}
-            disabled={processingId === s.id}
-            className="text-sm px-3 py-1.5 bg-green-500 text-white rounded-lg flex items-center hover:bg-green-600 transition-colors duration-200"
-          >
-            {processingId === s.id ? (
-              <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-            ) : (
-              <CheckCircle className="mr-1.5 h-4 w-4" />
-            )}
-            Aprobar
-          </button>
-          
-          <button 
-            onClick={() => handleStatusUpdate(s.id, "rechazado", s.isPermiso)}
-            disabled={processingId === s.id}
-            className="text-sm px-3 py-1.5 bg-red-500 text-white rounded-lg flex items-center hover:bg-red-600 transition-colors duration-200"
-          >
-            {processingId === s.id ? (
-              <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-            ) : (
-              <XCircle className="mr-1.5 h-4 w-4" />
-            )}
-            Rechazar
-          </button>
-        </div>
-      )}
+      {/* Always show Ver detalles button, and approve/reject buttons only for pending requests */}
+      <div className="mt-4 flex space-x-2 justify-end">
+        <button
+          onClick={() => {
+            setSelected(s);
+            setShowDetails(true);
+            if (isInModal) setShowAll(false);
+          }}
+          className="text-sm px-3 py-1.5 bg-gray-100 rounded-lg hover:bg-gray-200 flex items-center transition-colors duration-200"
+        >
+          <Eye className="mr-1.5 h-4 w-4" /> Ver detalles
+        </button>
+        
+        {/* Only show action buttons if status is pending */}
+        {s.status === "pendiente" && (
+          <>
+            <button 
+              onClick={() => handleStatusUpdate(s.id, "aprobado", s.isPermiso)}
+              disabled={processingId === s.id}
+              className="text-sm px-3 py-1.5 bg-green-500 text-white rounded-lg flex items-center hover:bg-green-600 transition-colors duration-200"
+            >
+              {processingId === s.id ? (
+                <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+              ) : (
+                <CheckCircle className="mr-1.5 h-4 w-4" />
+              )}
+              Aprobar
+            </button>
+            
+            <button 
+              onClick={() => handleStatusUpdate(s.id, "rechazado", s.isPermiso)}
+              disabled={processingId === s.id}
+              className="text-sm px-3 py-1.5 bg-red-500 text-white rounded-lg flex items-center hover:bg-red-600 transition-colors duration-200"
+            >
+              {processingId === s.id ? (
+                <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+              ) : (
+                <XCircle className="mr-1.5 h-4 w-4" />
+              )}
+              Rechazar
+            </button>
+          </>
+        )}
+      </div>
     </div>
   );
 
   // Type guard to check if data is IncapacidadData
   const isIncapacidadData = (data: RequestData['rawData']): data is IncapacidadData => {
     return data !== undefined && 'tipo' in data && data.tipo === 'enfermedad';
+  };
+
+  // Type guard to check if data is VacacionesData
+  const isVacacionesData = (data: RequestData['rawData']): data is VacacionesData => {
+    return data !== undefined && 'tipo' in data && data.tipo === 'vacaciones';
+  };
+
+  // Type guard to check if data is PermisoData
+  const isPermisoData = (data: RequestData['rawData']): data is PermisoData => {
+    return data !== undefined && 'tipo' in data && data.tipo === 'permiso';
+  };
+
+  // Type guard to check if data is CesantiasData
+  const isCesantiasData = (data: RequestData['rawData']): data is CesantiasData => {
+    return data !== undefined && 'motivoSolicitud' in data;
   };
 
   // Enhanced details modal for different types
@@ -517,6 +536,134 @@ export default function SolicitudesCard() {
           </h4>
           <div className="flex items-center justify-between">
             <p className="text-gray-700">{data.documentName || 'Documento médico'}</p>
+            <button
+              onClick={() => window.open(data.documentUrl, "_blank")}
+              className="flex items-center px-4 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors duration-200"
+            >
+              <Download className="mr-2 h-4 w-4" /> Ver documento
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  // Vacaciones Details Component
+  const VacacionesDetails: React.FC<{ data: VacacionesData }> = ({ data }) => (
+    <div className="space-y-6">
+      {/* Personal Information */}
+      <div className="bg-blue-50 p-4 rounded-lg">
+        <h4 className="font-semibold mb-3 text-gray-800 flex items-center">
+          <User className="h-5 w-5 mr-2 text-blue-600" />
+          Información Personal
+        </h4>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <p className="text-sm text-gray-600">Nombre completo</p>
+            <p className="font-medium text-gray-800">{data.nombre || 'No disponible'}</p>
+          </div>
+          <div>
+            <p className="text-sm text-gray-600">Cédula</p>
+            <p className="font-medium text-gray-800">{data.cedula || 'No disponible'}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Vacation Period */}
+      <div className="bg-blue-50 p-4 rounded-lg">
+        <h4 className="font-semibold mb-3 text-gray-800 flex items-center">
+          <Plane className="h-5 w-5 mr-2 text-blue-600" />
+          Período de Vacaciones
+        </h4>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <p className="text-sm text-gray-600">Fecha de inicio</p>
+            <p className="font-medium text-gray-800">{formatShortDate(data.fechaInicio)}</p>
+          </div>
+          <div>
+            <p className="text-sm text-gray-600">Fecha de fin</p>
+            <p className="font-medium text-gray-800">{formatShortDate(data.fechaFin)}</p>
+          </div>
+          <div>
+            <p className="text-sm text-gray-600">Días de vacaciones</p>
+            <p className="font-medium text-gray-800">{data.diasVacaciones || 0} días</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Document Information */}
+      {data.documentUrl && (
+        <div className="bg-purple-50 p-4 rounded-lg">
+          <h4 className="font-semibold mb-3 text-gray-800 flex items-center">
+            <FileText className="h-5 w-5 mr-2 text-purple-600" />
+            Documento Adjunto
+          </h4>
+          <div className="flex items-center justify-between">
+            <p className="text-gray-700">{data.documentName || 'Documento de vacaciones'}</p>
+            <button
+              onClick={() => window.open(data.documentUrl, "_blank")}
+              className="flex items-center px-4 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors duration-200"
+            >
+              <Download className="mr-2 h-4 w-4" /> Ver documento
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  // Permiso Details Component
+  const PermisoDetails: React.FC<{ data: PermisoData }> = ({ data }) => (
+    <div className="space-y-6">
+      {/* Personal Information */}
+      <div className="bg-blue-50 p-4 rounded-lg">
+        <h4 className="font-semibold mb-3 text-gray-800 flex items-center">
+          <User className="h-5 w-5 mr-2 text-blue-600" />
+          Información Personal
+        </h4>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <p className="text-sm text-gray-600">Nombre completo</p>
+            <p className="font-medium text-gray-800">{data.nombre || 'No disponible'}</p>
+          </div>
+          <div>
+            <p className="text-sm text-gray-600">Cédula</p>
+            <p className="font-medium text-gray-800">{data.cedula || 'No disponible'}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Permission Details */}
+      <div className="bg-orange-50 p-4 rounded-lg">
+        <h4 className="font-semibold mb-3 text-gray-800 flex items-center">
+          <Clock className="h-5 w-5 mr-2 text-orange-600" />
+          Detalles del Permiso
+        </h4>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <p className="text-sm text-gray-600">Fecha</p>
+            <p className="font-medium text-gray-800">{formatShortDate(data.fecha)}</p>
+          </div>
+          <div>
+            <p className="text-sm text-gray-600">Hora de inicio</p>
+            <p className="font-medium text-gray-800">{data.tiempoInicio || 'No disponible'}</p>
+          </div>
+          <div>
+            <p className="text-sm text-gray-600">Hora de fin</p>
+            <p className="font-medium text-gray-800">{data.tiempoFin || 'No disponible'}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Document Information */}
+      {data.documentUrl && (
+        <div className="bg-purple-50 p-4 rounded-lg">
+          <h4 className="font-semibold mb-3 text-gray-800 flex items-center">
+            <FileText className="h-5 w-5 mr-2 text-purple-600" />
+            Documento Adjunto
+          </h4>
+          <div className="flex items-center justify-between">
+            <p className="text-gray-700">{data.documentName || 'Documento de permiso'}</p>
             <button
               onClick={() => window.open(data.documentUrl, "_blank")}
               className="flex items-center px-4 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors duration-200"

@@ -95,7 +95,7 @@ const fetchIncapacidadData = useCallback(async () => {
 
     const solicitudesQuery = query(
       collection(db, 'solicitudes'),
-      where('tipo', '==', 'enfermedad')
+      where('tipo', '==', 'incapacidad')
     );
     
     const querySnapshot = await getDocs(solicitudesQuery);

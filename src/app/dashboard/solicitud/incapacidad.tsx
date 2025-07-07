@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   Upload, 
   Calendar, 
@@ -92,22 +92,44 @@ const IncapacidadForm = () => {
     }
   };
 
+  useEffect(() => {
+  if (formData.startDate && formData.endDate) {
+    const start = new Date(formData.startDate);
+    const end = new Date(formData.endDate);
+
+    if (end >= start) {
+      const diffTime = end.getTime() - start.getTime();
+      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
+      setNumDias(diffDays);
+    } else {
+      setNumDias(0); // Invalid range
+    }
+  } else {
+    setNumDias(0); // Missing one of the dates
+  }
+}, [formData.startDate, formData.endDate]);
+
 const calculateDays = () => {
   if (formData.startDate && formData.endDate) {
     const start = new Date(formData.startDate);
     const end = new Date(formData.endDate);
-    
-    // Calculate the difference in milliseconds
-    const diffTime = Math.abs(end.getTime() - start.getTime());
-    
-    // Convert to days and add 1 to make it inclusive (both start and end dates count)
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 2;
-    
+
+    // Ensure valid range
+    if (end < start) {
+      setNumDias(0);
+      return;
+    }
+
+    // Calculate difference in days (inclusive of both start and end)
+    const diffTime = end.getTime() - start.getTime();
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
+
     setNumDias(diffDays);
   } else {
     setNumDias(0);
   }
 };
+
 
   const validateForm = () => {
     if (!formData.edad) {
@@ -186,10 +208,15 @@ const calculateDays = () => {
       }
       
       // Type assertion to tell TypeScript that fileToUpload is definitely a File
-      const file = fileToUpload as File;
-      const path = `solicitudes/${user.uid}/${Date.now()}_${file.name}`;
+      if (!(fileToUpload instanceof File)) {
+  setFormError('Archivo inválido');
+  setIsSubmitting(false);
+  return;
+}
+      const path = `solicitudes/${user.uid}/${Date.now()}_${fileToUpload.name}`;
       const fileRef = storageRef(storage, path);
-      const snap = await uploadBytes(fileRef, file);
+      const snap = await uploadBytes(fileRef, fileToUpload);
+
       const url = await getDownloadURL(snap.ref);
 
       // 3) fetch user profile info from users collection
@@ -198,7 +225,12 @@ const calculateDays = () => {
       const { nombre, cedula } = userData;
 
       // 4) calculate number of days
-      calculateDays();
+      // Inside handleSubmit:
+const start = new Date(formData.startDate);
+const end = new Date(formData.endDate);
+const diffTime = end.getTime() - start.getTime();
+const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
+
 
       // 5) write the solicitud to Firestore with all required fields
       interface SolicitudData {
@@ -233,8 +265,8 @@ const calculateDays = () => {
         estado: 'pendiente',
         startDate: formData.startDate,
         endDate: formData.endDate,
-        numDias: numDias,
-        documentName: file.name,
+        documentName: fileToUpload.name,
+
         documentUrl: url,
         createdAt: serverTimestamp(),
         edad: formData.edad,
@@ -245,7 +277,8 @@ const calculateDays = () => {
         tipoEvento: formData.tipoEvento,
         codigoIncap: formData.codigoIncap,
         cie10: formData.cie10,
-        mesDiagnostico: formData.mesDiagnostico
+        mesDiagnostico: formData.mesDiagnostico,
+        numDias: diffDays,
       };
 
       await addDoc(collection(db, 'solicitudes'), solicitudData);
@@ -293,7 +326,6 @@ const calculateDays = () => {
     
     // Calculate days whenever start or end date changes
     if (name === 'startDate' || name === 'endDate') {
-      setTimeout(calculateDays, 0);
     }
   };
   
@@ -682,23 +714,6 @@ const calculateDays = () => {
           </div>
         </div>
       </form>
-      
-      {/* Help section */}
-      <div className="bg-gray-50 p-6 border-t border-gray-100">
-        <div className="flex items-start">
-          <div className="flex-shrink-0">
-            <div className="w-10 h-10 bg-[#ff9900]/10 rounded-full flex items-center justify-center">
-              <Info className="h-5 w-5 text-[#ff9900]" />
-            </div>
-          </div>
-          <div className="ml-4">
-            <h4 className="text-sm font-medium text-gray-900">¿Necesita ayuda?</h4>
-            <p className="mt-1 text-sm text-gray-600">
-              Si tiene dudas sobre cómo llenar este formulario, contacte al departamento de Recursos Humanos al correo <a href="mailto:marcela@merquellantas.com" className="text-[#ff9900] hover:underline">marcela@merquellantas.com</a> o al teléfono <a href="tel:+571234567890" className="text-[#ff9900] hover:underline">+57 123 456 7890</a>.
-            </p>
-          </div>
-        </div>
-      </div>
     </div>
   );
 };

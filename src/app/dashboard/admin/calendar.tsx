@@ -9,12 +9,13 @@ import {
   X,
   Image as ImageIcon,
   Cake,
+  Trash2,
 } from "lucide-react";
 
 // Firebase imports
 import { auth, db, storage } from '../../../firebase';
-import { collection, addDoc, serverTimestamp, getDocs, query, where, orderBy } from 'firebase/firestore';
-import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { collection, addDoc, serverTimestamp, getDocs, query, where, orderBy, deleteDoc, doc } from 'firebase/firestore';
+import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 
 // Type definitions
 interface CalendarEvent {
@@ -74,6 +75,7 @@ export default function CalendarCard() {
   const [imageFileName, setImageFileName] = useState("");
   const [imageError, setImageError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [deletingEventId, setDeletingEventId] = useState<string | null>(null);
 
   // Fetch events on component mount and when currentDate changes
   useEffect(() => {
@@ -115,6 +117,39 @@ export default function CalendarCard() {
       console.error("Error fetching events:", error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Delete event function
+  const deleteEvent = async (eventId: string, imageUrl: string) => {
+    if (!window.confirm("¿Estás seguro de que quieres eliminar este evento?")) {
+      return;
+    }
+
+    try {
+      setDeletingEventId(eventId);
+      
+      // Delete from Firestore
+      await deleteDoc(doc(db, 'calendar', eventId));
+      
+      // Delete image from storage if it exists and is not the default birthday image
+      if (imageUrl && !imageUrl.includes('istockphoto.com')) {
+        try {
+          const imageRef = storageRef(storage, imageUrl);
+          await deleteObject(imageRef);
+        } catch (error) {
+          console.log("Error deleting image (may not exist):", error);
+        }
+      }
+      
+      // Refresh events
+      fetchEvents();
+      
+    } catch (error) {
+      console.error("Error deleting event:", error);
+      alert("Error al eliminar el evento. Por favor intente nuevamente.");
+    } finally {
+      setDeletingEventId(null);
     }
   };
 
@@ -321,18 +356,32 @@ export default function CalendarCard() {
     });
   };
 
-  // Get upcoming events (limited to 3) - dates are already adjusted for display
+  // Get events for current month view (showing all events, not just upcoming)
+  const getCurrentMonthEvents = (): CalendarEvent[] => {
+    return events.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  };
+
+  // Get upcoming events (limited to 3) for current month only
   const getUpcomingEvents = (): CalendarEvent[] => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     
-    return events
-      .filter(event => new Date(event.date) >= today)
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-      .slice(0, 3);
+    const currentMonth = new Date().getMonth();
+    const currentYear = new Date().getFullYear();
+    
+    // Only show upcoming events if we're viewing the current month
+    if (currentDate.getMonth() === currentMonth && currentDate.getFullYear() === currentYear) {
+      return events
+        .filter(event => new Date(event.date) >= today)
+        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+        .slice(0, 3);
+    }
+    
+    return [];
   };
 
   const upcomingEvents = getUpcomingEvents();
+  const currentMonthEvents = getCurrentMonthEvents();
 
   return (
     <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100 hover:shadow-md transition-shadow duration-300 relative overflow-hidden text-black">
@@ -393,38 +442,72 @@ export default function CalendarCard() {
         </div>
       </div>
 
-      {/* Upcoming Events Preview */}
+      {/* Events for Current Month */}
       <div className="space-y-2 mt-4">
-        <h3 className="text-sm font-medium text-gray-700 mb-2">Próximos eventos</h3>
+        <h3 className="text-sm font-medium text-gray-700 mb-2">
+          {currentDate.getMonth() === new Date().getMonth() && currentDate.getFullYear() === new Date().getFullYear() 
+            ? "Próximos eventos" 
+            : `Eventos de ${formatMonthYear(currentDate)}`}
+        </h3>
         {loading ? (
           <div className="p-3 rounded-lg border border-gray-100 bg-gray-50 flex items-center justify-center">
             <div className="animate-spin h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full mr-2"></div>
             <p className="text-xs text-gray-500">Cargando eventos...</p>
           </div>
-        ) : upcomingEvents.length > 0 ? (
-          <div className="space-y-2">
-            {upcomingEvents.map((event) => (
-              <div key={event.id} className="p-3 rounded-lg border border-gray-100 bg-gray-50 flex items-start">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center mr-3 flex-shrink-0 ${
-                  event.type === "birthday" ? "bg-pink-100 text-pink-600" : "bg-blue-100 text-blue-600"
-                }`}>
-                  {event.type === "birthday" ? (
-                    <Cake className="h-4 w-4" />
-                  ) : (
-                    <CalendarIcon className="h-4 w-4" />
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h4 className="text-sm font-medium text-gray-800 truncate">{event.title}</h4>
-                  <p className="text-xs text-gray-500 mt-1">{formatEventDate(event.date)}</p>
-                </div>
-              </div>
-            ))}
-          </div>
         ) : (
-          <div className="p-3 rounded-lg border border-gray-100 bg-gray-50">
-            <p className="text-xs text-gray-500 text-center">No hay eventos próximos</p>
-          </div>
+          <>
+            {/* Show upcoming events for current month, or all events for other months */}
+            {(currentDate.getMonth() === new Date().getMonth() && currentDate.getFullYear() === new Date().getFullYear() 
+              ? upcomingEvents 
+              : currentMonthEvents
+            ).length > 0 ? (
+              <div className="space-y-2">
+                {(currentDate.getMonth() === new Date().getMonth() && currentDate.getFullYear() === new Date().getFullYear() 
+                  ? upcomingEvents 
+                  : currentMonthEvents
+                ).map((event) => (
+                  <div key={event.id} className="p-3 rounded-lg border border-gray-100 bg-gray-50 flex items-start">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center mr-3 flex-shrink-0 ${
+                      event.type === "birthday" ? "bg-pink-100 text-pink-600" : "bg-blue-100 text-blue-600"
+                    }`}>
+                      {event.type === "birthday" ? (
+                        <Cake className="h-4 w-4" />
+                      ) : (
+                        <CalendarIcon className="h-4 w-4" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h4 className="text-sm font-medium text-gray-800 truncate">{event.title}</h4>
+                      <p className="text-xs text-gray-500 mt-1">{formatEventDate(event.date)}</p>
+                      {event.description && (
+                        <p className="text-xs text-gray-600 mt-1 truncate">{event.description}</p>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => deleteEvent(event.id, event.image)}
+                      disabled={deletingEventId === event.id}
+                      className="ml-2 p-1.5 text-red-500 hover:bg-red-50 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+                      title="Eliminar evento"
+                    >
+                      {deletingEventId === event.id ? (
+                        <div className="animate-spin h-4 w-4 border-2 border-red-500 border-t-transparent rounded-full"></div>
+                      ) : (
+                        <Trash2 className="h-4 w-4" />
+                      )}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="p-3 rounded-lg border border-gray-100 bg-gray-50">
+                <p className="text-xs text-gray-500 text-center">
+                  {currentDate.getMonth() === new Date().getMonth() && currentDate.getFullYear() === new Date().getFullYear() 
+                    ? "No hay eventos próximos" 
+                    : `No hay eventos en ${formatMonthYear(currentDate)}`}
+                </p>
+              </div>
+            )}
+          </>
         )}
       </div>
 

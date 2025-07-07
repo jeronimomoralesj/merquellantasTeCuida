@@ -9,7 +9,8 @@ import {
   X, 
   FileText,
   ChevronRight,
-  ChevronDown
+  ChevronDown,
+  Info
 } from 'lucide-react';
 
 // Firebase imports
@@ -23,6 +24,29 @@ interface UserProfile {
   nombre?: string;
   [key: string]: unknown;
 }
+
+// Document requirements for each category
+const documentRequirements = {
+  "Arreglos de Vivienda": [
+    "Mejora de vivienda Clic (listado documentos)",
+    "Certificado tradición y libertad no mayor a 90 días",
+    "Carta de solicitud y facturas"
+  ],
+  "Educación": [
+    "Educación Clic (listado documentos)",
+    "Comprobante de pago de la Universidad o Colegio",
+    "Carta de solicitud"
+  ],
+  "Compra de Vivienda": [
+    "Compra de Vivienda Clic (listado documentos)",
+    "Compra y venta del inmueble",
+    "Carta de solicitud"
+  ],
+  "Otro": [
+    "Documento de soporte que justifique la solicitud",
+    "Carta de solicitud detallada"
+  ]
+};
 
 export default function CesantiasPage() {
   // form state
@@ -85,32 +109,32 @@ export default function CesantiasPage() {
   };
 
   const sendEmailNotification = async (motivoSolicitud: string, categoria: string) => {
-  try {
-    const response = await fetch('https://formsubmit.co/marcelagonzalez@merquellantas.com', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        _to: 'marcelagonzalez@merquellantas.com,saludocupacional@merquellantas.com, dptodelagente@merquellantas.com',
-        _subject: 'Alerta: Nueva Solicitud de Cesantías Pendiente',
-        message: 'Hay una nueva solicitud de cesantías esperándote...',
-        categoria: categoria,
-        motivo: motivoSolicitud,
-        nombre: userNombre,
-        cedula: userCedula,
-        _captcha: 'false'
-      })
-    });
-    
-    if (!response.ok) {
-      console.warn('Email notification failed, but form submission succeeded');
+    try {
+      const response = await fetch('https://formsubmit.co/marcelagonzalez@merquellantas.com', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          _to: 'marcelagonzalez@merquellantas.com,saludocupacional@merquellantas.com, dptodelagente@merquellantas.com',
+          _subject: 'Alerta: Nueva Solicitud de Cesantías Pendiente',
+          message: 'Hay una nueva solicitud de cesantías esperándote...',
+          categoria: categoria,
+          motivo: motivoSolicitud,
+          nombre: userNombre,
+          cedula: userCedula,
+          _captcha: 'false'
+        })
+      });
+      
+      if (!response.ok) {
+        console.warn('Email notification failed, but form submission succeeded');
+      }
+    } catch (error) {
+      console.warn('Email notification error:', error);
+      // Don't throw error - we don't want to fail the form submission if email fails
     }
-  } catch (error) {
-    console.warn('Email notification error:', error);
-    // Don't throw error - we don't want to fail the form submission if email fails
-  }
-};
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -139,26 +163,22 @@ export default function CesantiasPage() {
       const url = await getDownloadURL(ref);
 
       // 2) write Firestore doc
-      // 2) write Firestore doc
-await addDoc(collection(db, 'cesantias'), {
-  motivoSolicitud: motivoSolicitud.trim(),
-  categoria,
-  fileName,
-  fileUrl: url,
-  userId: user.uid,
-  nombre: userNombre,
-  cedula: userCedula,
-  createdAt: serverTimestamp(),
-  estado: "pendiente"
-});
+      await addDoc(collection(db, 'cesantias'), {
+        motivoSolicitud: motivoSolicitud.trim(),
+        categoria,
+        fileName,
+        fileUrl: url,
+        userId: user.uid,
+        nombre: userNombre,
+        cedula: userCedula,
+        createdAt: serverTimestamp(),
+        estado: "pendiente"
+      });
 
-// 3) Send email notification
-await sendEmailNotification(motivoSolicitud, categoria);
+      // 3) Send email notification
+      await sendEmailNotification(motivoSolicitud, categoria);
 
-// 4) done
-setSubmitted(true);
-
-      // 3) done
+      // 4) done
       setSubmitted(true);
     } catch (err: unknown) {
       console.error("Error submitting cesantias:", err);
@@ -192,6 +212,7 @@ setSubmitted(true);
           </div>
           <h1 className="text-3xl font-bold text-gray-900">Solicitud de Cesantías</h1>
           <p className="mt-2 text-gray-600">Complete el formulario para solicitar sus cesantías</p>
+          <strong><h2 className="mt-2 text-gray-600">Recuerda gestionar tu retiro al fondo al cual te encuentras afiliado.</h2></strong>
         </div>
 
         {submitted ? (
@@ -268,10 +289,37 @@ setSubmitted(true);
                 </p>
               </div>
 
+              {/* Document Requirements Info */}
+              {categoria && (
+                <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <div className="flex items-start">
+                    <Info className="h-5 w-5 text-blue-500 mr-3 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <h3 className="text-sm font-medium text-blue-800 mb-2">
+                        Documentos requeridos para {categoria}:
+                      </h3>
+                      <ul className="text-sm text-blue-700 space-y-1">
+                        {documentRequirements[categoria as keyof typeof documentRequirements]?.map((doc, index) => (
+                          <li key={index} className="flex items-start">
+                            <span className="inline-block w-1.5 h-1.5 bg-blue-500 rounded-full mr-2 mt-2 flex-shrink-0"></span>
+                            {doc}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* File upload */}
               <div className="mb-8">
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Documento de soporte <span className="text-red-500">*</span>
+                  {categoria && (
+                    <span className="text-gray-500 font-normal ml-1">
+                      (Listado documentos)
+                    </span>
+                  )}
                 </label>
 
                 <div className={`

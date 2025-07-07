@@ -442,14 +442,18 @@ useEffect(() => {
 
   // Capitalize first letter of the formatted date
   const capitalizedDate = formattedDate.charAt(0).toUpperCase() + formattedDate.slice(1);
-
-  if (userRole !== "admin") {
     return (
       <div className="min-h-screen bg-gray-50">
         <DashboardNavbar />
         <GeminiChat />
+        {/* Admin content appears first if the user is admin */}
+    {userRole === "admin" && (
+      <div className="border-b border-gray-200">
+        <AdminPage />
+      </div>
+    )}
         {/* Main content */}
-        <main className="pt-20 pb-16 px-4 sm:px-6 lg:px-8">
+        <main className="pb-16 px-4 sm:px-6 lg:px-8">
           <div className="max-w-7xl mx-auto">
             {/* Header with welcome message */}
             <div className="mb-8 mt-4">
@@ -626,7 +630,7 @@ useEffect(() => {
                       Próximas actividades
                     </h2>
                     <a href="/dashboard/calendar" className="text-[#ff9900] text-sm font-medium flex items-center hover:underline">
-                      Ver todas
+                      Ver calendario
                       <ChevronRight className="ml-1 h-4 w-4" />
                     </a>
                   </div>
@@ -689,7 +693,7 @@ useEffect(() => {
                   <div className="border-t border-gray-100 pt-4 mt-2">
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <p className="text-sm text-gray-500">Posición</p>
+                        <p className="text-sm text-gray-500">Area</p>
                         <p className="font-medium text-gray-900">{profile?.posicion ?? '—'}</p>
                       </div>
                       <div>
@@ -787,12 +791,6 @@ useEffect(() => {
       </main>
     </div>
   );
-}
-else{
-  return(
-    <AdminPage />
-  )
-}
 };
 
 export default Dashboard;
