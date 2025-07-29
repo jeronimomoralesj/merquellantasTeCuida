@@ -158,9 +158,14 @@ const Users: React.FC = () => {
     setFormData(initialFormData);
     setShowCreateForm(false);
     alert('Usuario creado exitosamente');
-  } catch (error: any) {
-  console.error('Error al crear usuario:', error?.message || error);
-  alert(`Error al crear usuario: ${error?.message || 'Desconocido'}`);
+  } catch (error) {
+  if (error instanceof Error) {
+    console.error('Error al crear usuario:', error.message);
+    alert(`Error al crear usuario: ${error.message}`);
+  } else {
+    console.error('Error desconocido:', error);
+    alert('Error desconocido al crear usuario');
+  }
 }
 };
 
