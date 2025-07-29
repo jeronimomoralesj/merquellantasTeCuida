@@ -17,9 +17,12 @@ import {
   updateDoc, 
   deleteDoc, 
   doc,
-  serverTimestamp 
+  serverTimestamp, 
+  setDoc
 } from 'firebase/firestore';
 import { db } from '../../../firebase';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { secondaryAuth } from '../../../firebase';
 
 interface UserExtra {
   'Dpto Donde Labora': string;
@@ -108,62 +111,59 @@ const Users: React.FC = () => {
 
   // Create user directly with Firebase
   const createUser = async () => {
-    if (!formData.cedula || !formData.nombre) {
-      alert('Por favor, complete los campos obligatorios (Cédula y Nombre)');
-      return;
-    }
+  if (!formData.cedula || !formData.nombre) {
+    alert('Por favor, complete los campos obligatorios (Cédula y Nombre)');
+    return;
+  }
 
-    const { email, password } = generateCredentials(formData.cedula);
+  const { email, password } = generateCredentials(formData.cedula);
 
-    // Build the full payload
-    const newUserPayload = {
+  try {
+    // 1. Create the user in Firebase Authentication
+    const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email, password);
+
+    // 2. Save the user profile in Firestore under the UID
+    const userDocRef = doc(db, 'users', userCredential.user.uid);
+    const createdAt = serverTimestamp();
+
+    const payload = {
+      cedula: formData.cedula,
+      email,
+      password, // ⚠️ Consider removing this field from Firestore for security reasons
+      nombre: formData.nombre,
+      createdAt,
+      extra: {
+        ...formData.extra,
+        'Fecha Ingreso': dateToExcelSerial(formData.extra['Fecha Ingreso'])
+      }
+    };
+
+    await setDoc(userDocRef, payload);
+
+    // 3. Update local state with the new user (showing readable date)
+    const newUser: User = {
+      id: userDocRef.id,
       cedula: formData.cedula,
       email,
       password,
       nombre: formData.nombre,
-      createdAt: serverTimestamp(),
+      createdAt: new Date(), // Local fallback, not from serverTimestamp
       extra: {
-        'Dpto Donde Labora': formData.extra['Dpto Donde Labora'],
-        'ARL': formData.extra['ARL'],
-        'Banco': formData.extra['Banco'],
-        'CAJA DE COMPENSACION': formData.extra['CAJA DE COMPENSACION'],
-        'EPS': formData.extra['EPS'],
-        'FONDO DE PENSIONES': formData.extra['FONDO DE PENSIONES'],
-        'Fecha Ingreso': dateToExcelSerial(formData.extra['Fecha Ingreso']), // Convert to number
-        'Fondo Cesantías': formData.extra['Fondo Cesantías'],
-        'Nombre Área Funcional': formData.extra['Nombre Área Funcional'],
-        'Número Cuenta': formData.extra['Número Cuenta'],
-        'Tipo Cuenta': formData.extra['Tipo Cuenta'],
-        'Tipo de Documento': formData.extra['Tipo de Documento'],
-        'nombre': formData.extra['nombre'],
-        'posicion': formData.extra['posicion'],
-        'rol': formData.extra['rol'],
+        ...formData.extra,
+        'Fecha Ingreso': formData.extra['Fecha Ingreso'] // Keep string for display
       }
     };
 
-    try {
-      const docRef = await addDoc(collection(db, 'users'), newUserPayload);
-      
-      // Add the new user to the local state
-      const newUser: User = {
-        id: docRef.id,
-        ...newUserPayload,
-        createdAt: new Date(),
-        extra: {
-          ...newUserPayload.extra,
-          'Fecha Ingreso': formData.extra['Fecha Ingreso'] // Keep as string for display
-        }
-      };
-      
-      setUsers(prev => [...prev, newUser]);
-      setFormData(initialFormData);
-      setShowCreateForm(false);
-      alert('Usuario creado exitosamente');
-    } catch (error) {
-      console.error('Error creating user:', error);
-      alert('Error al crear usuario');
-    }
-  };
+    setUsers(prev => [...prev, newUser]);
+    setFormData(initialFormData);
+    setShowCreateForm(false);
+    alert('Usuario creado exitosamente');
+  } catch (error: any) {
+  console.error('Error al crear usuario:', error?.message || error);
+  alert(`Error al crear usuario: ${error?.message || 'Desconocido'}`);
+}
+};
+
 
   // Fetch users directly from Firestore
   const fetchUsers = async () => {
