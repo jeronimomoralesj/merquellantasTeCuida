@@ -17,7 +17,8 @@ import {
   deleteDoc, 
   doc,
   serverTimestamp, 
-  setDoc
+  setDoc,
+  Timestamp
 } from 'firebase/firestore';
 import { db } from '../../../firebase';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, deleteUser as firebaseDeleteUser} from 'firebase/auth';
@@ -49,7 +50,20 @@ interface User {
   nombre: string;   
   rol: 'user' | 'admin';    
   extra: UserExtra;
+}
 
+// Type for Firestore document data
+interface FirestoreUserData {
+  cedula?: string;
+  email?: string;
+  password?: string;
+  nombre?: string;
+  rol?: string;
+  createdAt?: Timestamp | Date;
+  extra?: Partial<UserExtra> & {
+    rol?: string; // Legacy rol field in extra
+    'Fecha Ingreso'?: string | number;
+  };
 }
 
 const Users: React.FC = () => {
@@ -63,6 +77,7 @@ const Users: React.FC = () => {
   const initialFormData: Omit<User, 'id' | 'email' | 'password' | 'createdAt'> = {
     cedula: '',
     nombre: '',
+    rol: 'user',
     extra: {
       'Dpto Donde Labora': '',
       'ARL': '',
@@ -170,47 +185,60 @@ const Users: React.FC = () => {
 }
 };
 
-
   // Fetch users directly from Firestore
   const fetchUsers = async () => {
     setLoading(true);
     try {
       const snap = await getDocs(collection(db, 'users'));
-const fetched: User[] = snap.docs.map(docSnap => {
-  const data: any = docSnap.data() || {};
-  const rawExtra: any = data.extra || {};
-  const { rol: extraRol, ...extraWithoutRol } = rawExtra;  // strip legacy extra.rol
+      const fetched: User[] = snap.docs.map(docSnap => {
+        const data: FirestoreUserData = docSnap.data() || {};
+        const rawExtra: Partial<UserExtra> & { rol?: string; 'Fecha Ingreso'?: string | number } = data.extra || {};
+        const { rol: extraRol, ...extraWithoutRol } = rawExtra;  // strip legacy extra.rol
 
-  // createdAt handling
-  let createdAt: Date;
-  if (data.createdAt && typeof data.createdAt === 'object' && 'toDate' in data.createdAt) {
-    createdAt = data.createdAt.toDate();
-  } else if (data.createdAt instanceof Date) {
-    createdAt = data.createdAt;
-  } else {
-    createdAt = new Date();
-  }
+        // createdAt handling
+        let createdAt: Date;
+        if (data.createdAt && typeof data.createdAt === 'object' && 'toDate' in data.createdAt) {
+          createdAt = data.createdAt.toDate();
+        } else if (data.createdAt instanceof Date) {
+          createdAt = data.createdAt;
+        } else {
+          createdAt = new Date();
+        }
 
-  // compute rol: prefer root, fallback to legacy extra.rol, default 'user'
-  const rol = (data.rol as string) ?? (extraRol as string) ?? 'user';
+        // compute rol: prefer root, fallback to legacy extra.rol, default 'user'
+        const rol = (data.rol as 'user' | 'admin') ?? (extraRol as 'user' | 'admin') ?? 'user';
 
-  return {
-    id: docSnap.id,
-    cedula: data.cedula || '',
-    email: data.email || '',
-    password: data.password || '',
-    nombre: data.nombre || '',
-    rol,                                           // ✅ root
-    createdAt,
-    extra: {
-      ...extraWithoutRol,
-      'Fecha Ingreso':
-        typeof rawExtra['Fecha Ingreso'] === 'number'
-          ? excelSerialToDate(rawExtra['Fecha Ingreso'])
-          : rawExtra['Fecha Ingreso'] || '',
-    },
-  };
-});
+        // Create a complete UserExtra object with all required fields
+        const completeExtra: UserExtra = {
+          'Dpto Donde Labora': extraWithoutRol['Dpto Donde Labora'] || '',
+          'ARL': extraWithoutRol['ARL'] || '',
+          'Banco': extraWithoutRol['Banco'] || '',
+          'CAJA DE COMPENSACION': extraWithoutRol['CAJA DE COMPENSACION'] || '',
+          'EPS': extraWithoutRol['EPS'] || '',
+          'FONDO DE PENSIONES': extraWithoutRol['FONDO DE PENSIONES'] || '',
+          'Fecha Ingreso': typeof rawExtra['Fecha Ingreso'] === 'number'
+            ? excelSerialToDate(rawExtra['Fecha Ingreso'])
+            : rawExtra['Fecha Ingreso'] || '',
+          'Fondo Cesantías': extraWithoutRol['Fondo Cesantías'] || '',
+          'Nombre Área Funcional': extraWithoutRol['Nombre Área Funcional'] || '',
+          'Número Cuenta': extraWithoutRol['Número Cuenta'] || '',
+          'Tipo Cuenta': extraWithoutRol['Tipo Cuenta'] || '',
+          'Tipo de Documento': extraWithoutRol['Tipo de Documento'] || '',
+          'nombre': extraWithoutRol['nombre'] || '',
+          'posicion': extraWithoutRol['posicion'] || '',
+        };
+
+        return {
+          id: docSnap.id,
+          cedula: data.cedula || '',
+          email: data.email || '',
+          password: data.password || '',
+          nombre: data.nombre || '',
+          rol,
+          createdAt,
+          extra: completeExtra,
+        };
+      });
       setUsers(fetched);
     } catch (error) {
       console.error('Error fetching users:', error);
@@ -449,13 +477,13 @@ const fetched: User[] = snap.docs.map(docSnap => {
                   className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
                 <select
-  value={formData.rol}                                   // ✅
-  onChange={e => handleInputChange('rol', e.target.value)} // ✅ not isExtra
-  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
->
-  <option value="user">Usuario</option>
-  <option value="admin">Administrador</option>
-</select>
+                  value={formData.rol}
+                  onChange={e => handleInputChange('rol', e.target.value)}
+                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="user">Usuario</option>
+                  <option value="admin">Administrador</option>
+                </select>
               </div>
 
               {/* Financial & Benefits Info */}
