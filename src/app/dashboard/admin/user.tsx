@@ -20,7 +20,7 @@ import {
   setDoc
 } from 'firebase/firestore';
 import { db } from '../../../firebase';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, deleteUser as firebaseDeleteUser} from 'firebase/auth';
 import { secondaryAuth } from '../../../firebase';
 
 interface UserExtra {
@@ -38,7 +38,6 @@ interface UserExtra {
   'Tipo de Documento': string;
   'nombre': string;
   'posicion': string;
-  'rol': string;
 }
 
 interface User {
@@ -47,8 +46,10 @@ interface User {
   email: string;
   password: string;
   createdAt: Date;
-  nombre: string;       
+  nombre: string;   
+  rol: 'user' | 'admin';    
   extra: UserExtra;
+
 }
 
 const Users: React.FC = () => {
@@ -77,7 +78,6 @@ const Users: React.FC = () => {
       'Tipo de Documento': '',
       'nombre': '',
       'posicion': '',
-      'rol': 'user'
     }
   };
 
@@ -130,6 +130,7 @@ const Users: React.FC = () => {
       email,
       password, // ⚠️ Consider removing this field from Firestore for security reasons
       nombre: formData.nombre,
+      rol: formData.rol,
       createdAt,
       extra: {
         ...formData.extra,
@@ -145,6 +146,7 @@ const Users: React.FC = () => {
       cedula: formData.cedula,
       email,
       password,
+      rol: formData.rol,
       nombre: formData.nombre,
       createdAt: new Date(), // Local fallback, not from serverTimestamp
       extra: {
@@ -174,38 +176,41 @@ const Users: React.FC = () => {
     setLoading(true);
     try {
       const snap = await getDocs(collection(db, 'users'));
-      const fetched: User[] = snap.docs.map(doc => {
-        const data = doc.data() as Omit<User, 'id' | 'createdAt'> & { 
-          createdAt: { toDate: () => Date } | Date 
-        };
-        const extra = data.extra || {};
-        
-        // Handle createdAt properly
-        let createdAt: Date;
-        if (data.createdAt && typeof data.createdAt === 'object' && 'toDate' in data.createdAt) {
-          createdAt = data.createdAt.toDate();
-        } else if (data.createdAt instanceof Date) {
-          createdAt = data.createdAt;
-        } else {
-          createdAt = new Date();
-        }
-        
-        return {
-          id: doc.id,
-          cedula: data.cedula || '',
-          email: data.email || '',
-          password: data.password || '',
-          nombre: data.nombre || '',
-          createdAt,
-          extra: {
-            ...extra,
-            'Fecha Ingreso': typeof extra['Fecha Ingreso'] === 'number'
-              ? excelSerialToDate(extra['Fecha Ingreso'])
-              : extra['Fecha Ingreso'] || ''
-          }
-        };
-      });
+const fetched: User[] = snap.docs.map(docSnap => {
+  const data: any = docSnap.data() || {};
+  const rawExtra: any = data.extra || {};
+  const { rol: extraRol, ...extraWithoutRol } = rawExtra;  // strip legacy extra.rol
 
+  // createdAt handling
+  let createdAt: Date;
+  if (data.createdAt && typeof data.createdAt === 'object' && 'toDate' in data.createdAt) {
+    createdAt = data.createdAt.toDate();
+  } else if (data.createdAt instanceof Date) {
+    createdAt = data.createdAt;
+  } else {
+    createdAt = new Date();
+  }
+
+  // compute rol: prefer root, fallback to legacy extra.rol, default 'user'
+  const rol = (data.rol as string) ?? (extraRol as string) ?? 'user';
+
+  return {
+    id: docSnap.id,
+    cedula: data.cedula || '',
+    email: data.email || '',
+    password: data.password || '',
+    nombre: data.nombre || '',
+    rol,                                           // ✅ root
+    createdAt,
+    extra: {
+      ...extraWithoutRol,
+      'Fecha Ingreso':
+        typeof rawExtra['Fecha Ingreso'] === 'number'
+          ? excelSerialToDate(rawExtra['Fecha Ingreso'])
+          : rawExtra['Fecha Ingreso'] || '',
+    },
+  };
+});
       setUsers(fetched);
     } catch (error) {
       console.error('Error fetching users:', error);
@@ -222,6 +227,7 @@ const Users: React.FC = () => {
     const updatedPayload = {
       cedula: formData.cedula,
       nombre: formData.nombre,
+      rol: formData.rol,
       extra: {
         ...formData.extra,
         'Fecha Ingreso': dateToExcelSerial(formData.extra['Fecha Ingreso'])
@@ -257,20 +263,33 @@ const Users: React.FC = () => {
   };
 
   // Delete user directly with Firebase
-  const deleteUser = async (userId: string) => {
-    if (!confirm('¿Eliminar este usuario?')) return;
-    
-    try {
-      const userDocRef = doc(db, 'users', userId);
-      await deleteDoc(userDocRef);
-      
-      setUsers(prevUsers => prevUsers.filter(user => user.id !== userId));
-      alert('Usuario eliminado exitosamente');
-    } catch (error) {
-      console.error('Error deleting user:', error);
-      alert('Error al eliminar usuario');
+  const deleteUser = async (userId: string, email: string, password: string) => {
+  if (!confirm('¿Eliminar este usuario?')) return;
+
+  try {
+    // ✅ 1. Sign in as the target user using secondaryAuth
+    await signInWithEmailAndPassword(secondaryAuth, email, password);
+
+    // ✅ 2. Delete from Firebase Authentication
+    if (secondaryAuth.currentUser) {
+      await firebaseDeleteUser(secondaryAuth.currentUser);
+      console.log(`Auth account deleted for UID: ${userId}`);
     }
-  };
+
+    // ✅ 3. Delete from Firestore
+    const userDocRef = doc(db, 'users', userId);
+    await deleteDoc(userDocRef);
+    console.log(`Firestore document deleted for UID: ${userId}`);
+
+    // ✅ 4. Update local state
+    setUsers(prevUsers => prevUsers.filter(user => user.id !== userId));
+
+    alert('Usuario eliminado exitosamente');
+  } catch (error) {
+    console.error('Error deleting user:', error);
+    alert('Error al eliminar usuario');
+  }
+};
 
   // Handle input
   const handleInputChange = (field: string, value: string | number | boolean, isExtra = false): void => {
@@ -290,7 +309,8 @@ const Users: React.FC = () => {
     setFormData({ 
       cedula: user.cedula,
       nombre: user.nombre,  
-      extra: user.extra 
+      extra: user.extra,
+      rol: user.rol ?? 'user',
     });
     setShowCreateForm(true);
   };
@@ -429,13 +449,13 @@ const Users: React.FC = () => {
                   className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
                 <select
-                  value={formData.extra.rol}
-                  onChange={e => handleInputChange('rol', e.target.value, true)}
-                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="user">Usuario</option>
-                  <option value="admin">Administrador</option>
-                </select>
+  value={formData.rol}                                   // ✅
+  onChange={e => handleInputChange('rol', e.target.value)} // ✅ not isExtra
+  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+>
+  <option value="user">Usuario</option>
+  <option value="admin">Administrador</option>
+</select>
               </div>
 
               {/* Financial & Benefits Info */}
@@ -584,7 +604,7 @@ const Users: React.FC = () => {
                           <Edit className="h-4 w-4" />
                         </button>
                         <button 
-                          onClick={() => deleteUser(user.id)} 
+                          onClick={() => deleteUser(user.id, user.email, user.password)} 
                           className="text-red-600 hover:text-red-800 transition-colors"
                         >
                           <Trash2 className="h-4 w-4" />
