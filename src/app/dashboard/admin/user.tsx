@@ -73,7 +73,7 @@ interface FirestoreUserData {
 interface CalendarEvent {
   id: string;
   title: string;
-  date: any;
+  date: Timestamp | Date | { toDate: () => Date };
   description: string;
   type: 'general' | 'birthday';
   userId: string;

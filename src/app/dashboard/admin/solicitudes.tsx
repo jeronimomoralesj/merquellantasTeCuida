@@ -141,7 +141,7 @@ export default function SolicitudesCard() {
         year: "numeric",
       });
     } catch (error) {
-      return 'No disponible';
+      return "error:" + error;
     }
   };
 
@@ -303,7 +303,7 @@ export default function SolicitudesCard() {
           const data = d.data() as IncapacidadData | VacacionesData | PermisoData;
           let typ = "Desconocido";
           let avatarColor = "bg-gray-100";
-          let collectionName = "solicitudes";
+          const collectionName = "solicitudes";
 
           if (data.tipo === "incapacidad") {
             typ = "Incapacidad";
