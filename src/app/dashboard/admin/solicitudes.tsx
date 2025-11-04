@@ -19,6 +19,8 @@ import {
   List,
   User,
   FileText,
+  Filter,
+  RefreshCw,
 } from "lucide-react";
 import { 
   collection, 
@@ -29,9 +31,9 @@ import {
   updateDoc,
   Timestamp 
 } from "firebase/firestore";
-import { db } from "../../../firebase"; // adjust to your path
+import { db } from "../../../firebase"; // Make sure this path is correct
 
-// Base interface for common document fields
+// Type definitions
 interface BaseDocumentData {
   nombre: string;
   cedula: string;
@@ -43,7 +45,6 @@ interface BaseDocumentData {
   documentName?: string;
 }
 
-// Type definitions
 interface RequestData {
   id: string;
   title: string;
@@ -57,12 +58,13 @@ interface RequestData {
   description?: string;
   attachment?: string;
   isPermiso: boolean;
+  collectionName: string; // Added to track which collection this belongs to
   rawData?: BaseDocumentData | IncapacidadData | VacacionesData | PermisoData | CesantiasData;
 }
 
 interface NotificationState {
   message: string;
-  type: 'success' | 'error';
+  type: 'success' | 'error' | 'info';
 }
 
 interface IncapacidadData extends BaseDocumentData {
@@ -109,41 +111,54 @@ export default function SolicitudesCard() {
   const [selected, setSelected] = useState<RequestData | null>(null);
   const [notification, setNotification] = useState<NotificationState | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [filterType, setFilterType] = useState<string>("all");
 
-  // helper: format Firestore Timestamp or ISO string
+  // Helper: format date
   const formatDate = (d: Timestamp | Date | string | undefined): string => {
     if (!d) return 'Fecha no disponible';
-    const dt = (d as Timestamp)?.toDate?.() || new Date(d as string | Date);
-    return dt.toLocaleDateString("es-ES", {
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-    });
+    try {
+      const dt = (d as Timestamp)?.toDate?.() || new Date(d as string | Date);
+      return dt.toLocaleDateString("es-ES", {
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      });
+    } catch (error) {
+      console.error("Error formatting date:", error);
+      return 'Fecha no disponible';
+    }
   };
 
-  // helper: format date for display (shorter format)
+  // Helper: format short date
   const formatShortDate = (dateStr: string): string => {
     if (!dateStr) return 'No disponible';
-    const date = new Date(dateStr);
-    return date.toLocaleDateString("es-ES", {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-    });
+    try {
+      const date = new Date(dateStr);
+      return date.toLocaleDateString("es-ES", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      });
+    } catch (error) {
+      return 'No disponible';
+    }
   };
 
-  // helper: initials from full name
-  const initials = (name: string): string =>
-    name
+  // Helper: get initials
+  const initials = (name: string): string => {
+    if (!name) return "??";
+    return name
       .split(" ")
       .map((w) => w[0])
       .join("")
       .slice(0, 2)
       .toUpperCase();
+  };
 
-  // map status → badge color
+  // Map status to badge color
   const statusColor = (st: string): string => {
-    switch(st) {
+    switch(st?.toLowerCase()) {
       case "pendiente":
         return "bg-yellow-100 text-yellow-800 border border-yellow-200";
       case "aprobado":
@@ -155,7 +170,7 @@ export default function SolicitudesCard() {
     }
   };
 
-  // pick icon by request type
+  // Pick icon by request type
   const typeIcon = (t: string) => {
     switch (t) {
       case "Vacaciones":
@@ -176,69 +191,93 @@ export default function SolicitudesCard() {
     }
   };
 
-  // Function to show notification
-  const showNotification = (message: string, type: 'success' | 'error' = "success") => {
+  // Show notification
+  const showNotification = (message: string, type: 'success' | 'error' | 'info' = "success") => {
     setNotification({ message, type });
-    setTimeout(() => setNotification(null), 3000);
+    setTimeout(() => setNotification(null), 4000);
   };
 
-  // Handle approval/rejection
-  const handleStatusUpdate = async (requestId: string, newStatus: string, isPermiso: boolean) => {
-    if (!requestId) return;
+  // Handle approval/rejection - FIXED VERSION
+  const handleStatusUpdate = async (requestId: string, newStatus: string, collectionName: string) => {
+    if (!requestId) {
+      showNotification("ID de solicitud no válido", "error");
+      return;
+    }
+
+    if (!collectionName) {
+      showNotification("Colección no identificada", "error");
+      return;
+    }
     
     try {
       setProcessingId(requestId);
       
-      // Determine which collection to update based on request type
-      const collectionName = isPermiso ? "solicitudes" : "cesantias";
+      console.log(`Updating document ${requestId} in collection ${collectionName} to status ${newStatus}`);
+      
+      // Create reference to the document
       const requestRef = doc(db, collectionName, requestId);
       
-      // Update the document with new status and timestamp
+      // Update the document in Firebase
       await updateDoc(requestRef, {
         estado: newStatus,
         updatedAt: Timestamp.now()
       });
+
+      console.log("Document updated successfully in Firebase");
       
       // Update local state
-      setRequests(requests.map(req => 
-        req.id === requestId 
-          ? {...req, status: newStatus, statusColor: statusColor(newStatus)} 
-          : req
-      ));
+      setRequests(prevRequests => 
+        prevRequests.map(req => 
+          req.id === requestId 
+            ? {...req, status: newStatus, statusColor: statusColor(newStatus)} 
+            : req
+        )
+      );
       
-      // Update selected item if it's currently being viewed
+      // Update selected item if viewing details
       if (showDetails && selected?.id === requestId) {
-        setSelected({...selected, status: newStatus, statusColor: statusColor(newStatus)});
+        setSelected(prev => prev ? {...prev, status: newStatus, statusColor: statusColor(newStatus)} : null);
       }
       
-      showNotification(`Solicitud ${newStatus === "aprobado" ? "aprobada" : "rechazada"} correctamente`);
+      const actionText = newStatus === "aprobado" ? "aprobada" : "rechazada";
+      showNotification(`✓ Solicitud ${actionText} exitosamente`, "success");
+      
     } catch (error) {
       console.error("Error updating request:", error);
-      showNotification(`Error al ${newStatus === "aprobado" ? "aprobar" : "rechazar"} la solicitud`, "error");
+      const actionText = newStatus === "aprobado" ? "aprobar" : "rechazar";
+      showNotification(`Error al ${actionText} la solicitud: ${error.message}`, "error");
     } finally {
       setProcessingId(null);
     }
   };
 
+  // Load all requests from Firebase
   useEffect(() => {
     async function loadAll() {
       setLoading(true);
       try {
-        // 1) fetch cesantias
+        console.log("Loading requests from Firebase...");
+        
+        // Fetch cesantias
         const qCes = query(
           collection(db, "cesantias"),
           orderBy("createdAt", "desc")
         );
-        // 2) fetch solicitudes
+        
+        // Fetch solicitudes
         const qSol = query(
           collection(db, "solicitudes"),
           orderBy("createdAt", "desc")
         );
+        
         const [cesSnap, solSnap] = await Promise.all([
           getDocs(qCes),
           getDocs(qSol),
         ]);
 
+        console.log(`Loaded ${cesSnap.docs.length} cesantías and ${solSnap.docs.length} solicitudes`);
+
+        // Process cesantias
         const ces: RequestData[] = cesSnap.docs.map((d) => {
           const data = d.data() as CesantiasData;
           return {
@@ -254,63 +293,62 @@ export default function SolicitudesCard() {
             description: data.motivoSolicitud,
             attachment: data.fileUrl,
             isPermiso: false,
+            collectionName: "cesantias", // Store the collection name
             rawData: data,
           };
         });
 
+        // Process solicitudes
         const sol: RequestData[] = solSnap.docs.map((d) => {
-  const data = d.data() as IncapacidadData | VacacionesData | PermisoData;
-  let typ = "Desconocido";
-  let avatarColor = "bg-gray-100";
+          const data = d.data() as IncapacidadData | VacacionesData | PermisoData;
+          let typ = "Desconocido";
+          let avatarColor = "bg-gray-100";
+          let collectionName = "solicitudes";
 
-if (data.tipo === "incapacidad") {
-  typ = "Incapacidad";
-  avatarColor = "bg-red-100";
-} else if (data.tipo === "vacaciones") {
-  typ = "Vacaciones";
-  avatarColor = "bg-blue-100";
-} else {
-  typ = "Permiso";
-  avatarColor = "bg-orange-100";
-}
+          if (data.tipo === "incapacidad") {
+            typ = "Incapacidad";
+            avatarColor = "bg-red-100";
+          } else if (data.tipo === "vacaciones") {
+            typ = "Vacaciones";
+            avatarColor = "bg-blue-100";
+          } else if (data.tipo === "permiso") {
+            typ = "Permiso";
+            avatarColor = "bg-orange-100";
+          }
 
+          return {
+            id: d.id,
+            title: `Solicitud de ${typ}`,
+            employee: data.nombre,
+            date: data.createdAt,
+            status: data.estado,
+            statusColor: statusColor(data.estado),
+            type: typ,
+            avatarColor: avatarColor,
+            avatarText: initials(data.nombre),
+            description: data.description,
+            attachment: data.documentUrl,
+            isPermiso: typ === "Permiso",
+            collectionName: collectionName, // Store the collection name
+            rawData: data,
+          };
+        });
 
-  return {
-    id: d.id,
-    title: `Solicitud de ${typ}`,
-    employee: data.nombre,
-    date: data.createdAt,
-    status: data.estado,
-    statusColor: statusColor(data.estado),
-    type: typ,
-    avatarColor: avatarColor,
-    avatarText: initials(data.nombre),
-    description: data.description,
-    attachment: data.documentUrl,
-    isPermiso: typ === "Permiso", // Only mark as permiso if it's really a permiso
-    rawData: data,
-  };
-});
-
-
-        // merge & sort:
-        // 1. Pending requests first
-        // 2. Then by date (oldest first)
+        // Merge and sort: pending first, then by date (oldest first)
         const merged = [...ces, ...sol].sort((a, b) => {
-          // First prioritize pending status
           if (a.status === "pendiente" && b.status !== "pendiente") return -1;
           if (a.status !== "pendiente" && b.status === "pendiente") return 1;
           
-          // Then sort by date (oldest first)
           const da = (a.date as Timestamp)?.toDate?.().getTime() || new Date(a.date as string | Date).getTime();
           const db_ = (b.date as Timestamp)?.toDate?.().getTime() || new Date(b.date as string | Date).getTime();
-          return da - db_; // Changed to ascending order (oldest first)
+          return da - db_;
         });
 
         setRequests(merged);
+        console.log("Requests loaded successfully:", merged.length);
       } catch (error) {
         console.error("Error loading requests:", error);
-        showNotification("Error al cargar las solicitudes", "error");
+        showNotification(`Error al cargar las solicitudes: ${error.message}`, "error");
       } finally {
         setLoading(false);
       }
@@ -318,13 +356,17 @@ if (data.tipo === "incapacidad") {
     loadAll();
   }, []);
 
-  // Filter requests by search term
-  const filteredRequests = requests.filter(req => 
-    req.employee.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-  
-  const shown = requests.slice(0, 3);
-  
+  // Filter requests
+  const filteredRequests = requests.filter(req => {
+    const matchesSearch = req.employee.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = filterStatus === "all" || req.status === filterStatus;
+    const matchesType = filterType === "all" || req.type === filterType;
+    return matchesSearch && matchesStatus && matchesType;
+  });
+
+  // Get unique request types
+  const requestTypes = Array.from(new Set(requests.map(r => r.type)));
+
   // Status tag component
   const StatusTag: React.FC<{ status: string }> = ({ status }) => {
     const text = status.charAt(0).toUpperCase() + status.slice(1);
@@ -335,11 +377,11 @@ if (data.tipo === "incapacidad") {
     );
   };
 
-  // Individual request card component
+  // Request card component
   const RequestCard: React.FC<{ s: RequestData; isInModal?: boolean }> = ({ s, isInModal = false }) => (
     <div
       className={`border border-gray-200 rounded-xl p-5 hover:shadow-md transition-all duration-200 bg-white ${
-        processingId === s.id ? "opacity-70" : ""
+        processingId === s.id ? "opacity-70 pointer-events-none" : ""
       }`}
     >
       <div className="flex justify-between items-start">
@@ -361,7 +403,6 @@ if (data.tipo === "incapacidad") {
         <StatusTag status={s.status} />
       </div>
       
-      {/* Always show Ver detalles button, and approve/reject buttons only for pending requests */}
       <div className="mt-4 flex space-x-2 justify-end">
         <button
           onClick={() => {
@@ -374,13 +415,12 @@ if (data.tipo === "incapacidad") {
           <Eye className="mr-1.5 h-4 w-4" /> Ver detalles
         </button>
         
-        {/* Only show action buttons if status is pending */}
         {s.status === "pendiente" && (
           <>
             <button 
-              onClick={() => handleStatusUpdate(s.id, "aprobado", s.isPermiso)}
+              onClick={() => handleStatusUpdate(s.id, "aprobado", s.collectionName)}
               disabled={processingId === s.id}
-              className="text-sm px-3 py-1.5 bg-green-500 text-white rounded-lg flex items-center hover:bg-green-600 transition-colors duration-200"
+              className="text-sm px-3 py-1.5 bg-green-500 text-white rounded-lg flex items-center hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
             >
               {processingId === s.id ? (
                 <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
@@ -391,9 +431,9 @@ if (data.tipo === "incapacidad") {
             </button>
             
             <button 
-              onClick={() => handleStatusUpdate(s.id, "rechazado", s.isPermiso)}
+              onClick={() => handleStatusUpdate(s.id, "rechazado", s.collectionName)}
               disabled={processingId === s.id}
-              className="text-sm px-3 py-1.5 bg-red-500 text-white rounded-lg flex items-center hover:bg-red-600 transition-colors duration-200"
+              className="text-sm px-3 py-1.5 bg-red-500 text-white rounded-lg flex items-center hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
             >
               {processingId === s.id ? (
                 <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
@@ -408,15 +448,14 @@ if (data.tipo === "incapacidad") {
     </div>
   );
 
-  // Type guard to check if data is IncapacidadData
-const isIncapacidadData = (data: RequestData['rawData']): data is IncapacidadData => {
-  return data !== undefined && 'tipo' in data && data.tipo === 'incapacidad';
-};
+  // Type guard
+  const isIncapacidadData = (data: RequestData['rawData']): data is IncapacidadData => {
+    return data !== undefined && 'tipo' in data && data.tipo === 'incapacidad';
+  };
 
-  // Enhanced details modal for different types
+  // Enhanced details for Incapacidad
   const EnfermedadDetails: React.FC<{ data: IncapacidadData }> = ({ data }) => (
     <div className="space-y-6">
-      {/* Personal Information */}
       <div className="bg-blue-50 p-4 rounded-lg">
         <h4 className="font-semibold mb-3 text-gray-800 flex items-center">
           <User className="h-5 w-5 mr-2 text-blue-600" />
@@ -442,7 +481,6 @@ const isIncapacidadData = (data: RequestData['rawData']): data is IncapacidadDat
         </div>
       </div>
 
-      {/* Contract Information */}
       <div className="bg-green-50 p-4 rounded-lg">
         <h4 className="font-semibold mb-3 text-gray-800 flex items-center">
           <Briefcase className="h-5 w-5 mr-2 text-green-600" />
@@ -464,7 +502,6 @@ const isIncapacidadData = (data: RequestData['rawData']): data is IncapacidadDat
         </div>
       </div>
 
-      {/* Medical Information */}
       <div className="bg-red-50 p-4 rounded-lg">
         <h4 className="font-semibold mb-3 text-gray-800 flex items-center">
           <AlertCircle className="h-5 w-5 mr-2 text-red-600" />
@@ -490,7 +527,6 @@ const isIncapacidadData = (data: RequestData['rawData']): data is IncapacidadDat
         </div>
       </div>
 
-      {/* Incapacity Period */}
       <div className="bg-yellow-50 p-4 rounded-lg">
         <h4 className="font-semibold mb-3 text-gray-800 flex items-center">
           <Calendar className="h-5 w-5 mr-2 text-yellow-600" />
@@ -512,7 +548,6 @@ const isIncapacidadData = (data: RequestData['rawData']): data is IncapacidadDat
         </div>
       </div>
 
-      {/* Document Information */}
       {data.documentUrl && (
         <div className="bg-purple-50 p-4 rounded-lg">
           <h4 className="font-semibold mb-3 text-gray-800 flex items-center">
@@ -533,28 +568,57 @@ const isIncapacidadData = (data: RequestData['rawData']): data is IncapacidadDat
     </div>
   );
 
+  const shown = filteredRequests.slice(0, 3);
+  const pendingCount = requests.filter(r => r.status === "pendiente").length;
+
   return (
     <div className="space-y-4 text-black">
       {/* Notification */}
       {notification && (
-        <div className={`fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg flex items-center space-x-2 
-        ${notification.type === 'error' ? 'bg-red-50 text-red-800 border border-red-200' : 'bg-green-50 text-green-800 border border-green-200'}`}>
-          {notification.type === 'error' ? 
-            <XCircle className="h-5 w-5" /> : 
-            <CheckCircle className="h-5 w-5" />
-          }
-          <p>{notification.message}</p>
+        <div className={`fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg flex items-center space-x-2 animate-in slide-in-from-top-2
+        ${notification.type === 'error' ? 'bg-red-50 text-red-800 border border-red-200' : 
+          notification.type === 'info' ? 'bg-blue-50 text-blue-800 border border-blue-200' :
+          'bg-green-50 text-green-800 border border-green-200'}`}>
+          {notification.type === 'error' ? <XCircle className="h-5 w-5" /> : 
+           notification.type === 'info' ? <AlertCircle className="h-5 w-5" /> :
+           <CheckCircle className="h-5 w-5" />}
+          <p className="font-medium">{notification.message}</p>
         </div>
       )}
 
-      
+      {/* Header with stats */}
+      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-xl border border-blue-100">
+        <div className="flex justify-between items-center">
+          <div>
+            <h2 className="text-xl font-bold text-gray-800">Solicitudes de RRHH</h2>
+            <p className="text-sm text-gray-600 mt-1">
+              {pendingCount > 0 ? (
+                <span className="text-orange-600 font-medium">
+                  {pendingCount} solicitud{pendingCount !== 1 ? 'es' : ''} pendiente{pendingCount !== 1 ? 's' : ''}
+                </span>
+              ) : (
+                <span className="text-green-600 font-medium">Sin solicitudes pendientes</span>
+              )}
+            </p>
+          </div>
+          <button
+            onClick={() => window.location.reload()}
+            className="p-2 bg-white rounded-lg hover:bg-gray-50 transition-colors border border-gray-200"
+            title="Recargar solicitudes"
+          >
+            <RefreshCw className="h-5 w-5 text-gray-600" />
+          </button>
+        </div>
+      </div>
+
       {loading ? (
-        <div className="w-full flex justify-center items-center py-12">
+        <div className="w-full flex justify-center items-center py-12 border rounded-xl bg-gray-50">
           <Loader2 className="h-8 w-8 text-blue-500 animate-spin" />
           <span className="ml-2 text-gray-600">Cargando solicitudes...</span>
         </div>
       ) : requests.length === 0 ? (
         <div className="text-center py-10 border rounded-xl bg-gray-50">
+          <AlertCircle className="h-12 w-12 text-gray-400 mx-auto mb-2" />
           <p className="text-gray-500">No hay solicitudes disponibles</p>
         </div>
       ) : (
@@ -565,51 +629,100 @@ const isIncapacidadData = (data: RequestData['rawData']): data is IncapacidadDat
         </div>
       )}
 
-      {!loading && (
+      {!loading && requests.length > 3 && (
         <div className="text-center mt-4">
-          {requests.length > 3 && (
-            <button
-              onClick={() => setShowAll(true)}
-              className="px-4 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors duration-200 font-medium flex items-center justify-center mx-auto"
-            >
-              <List className="mr-2 h-4 w-4" />
-              Ver todas las solicitudes ({requests.length})
-            </button>
-          )}
+          <button
+            onClick={() => setShowAll(true)}
+            className="px-4 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors duration-200 font-medium flex items-center justify-center mx-auto"
+          >
+            <List className="mr-2 h-4 w-4" />
+            Ver todas las solicitudes ({requests.length})
+          </button>
         </div>
       )}
 
       {/* All Requests Modal */}
       {showAll && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-xl p-6 w-full max-w-5xl max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-bold text-gray-800">Todas las solicitudes</h2>
+              <h2 className="text-2xl font-bold text-gray-800">
+                Todas las solicitudes ({filteredRequests.length})
+              </h2>
               <button 
                 onClick={() => setShowAll(false)}
-                className="p-1 hover:bg-gray-100 rounded-full transition-colors"
+                className="p-2 hover:bg-gray-100 rounded-full transition-colors"
               >
                 <X className="h-6 w-6" />
               </button>
             </div>
             
-            {/* Search */}
-            <div className="mb-6 relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Search className="h-5 w-5 text-gray-400" />
+            {/* Filters */}
+            <div className="mb-6 space-y-4">
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Search className="h-5 w-5 text-gray-400" />
+                </div>
+                <input
+                  type="text"
+                  placeholder="Buscar por nombre del empleado..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10 w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                />
               </div>
-              <input
-                type="text"
-                placeholder="Buscar por nombre..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-              />
+              
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <Filter className="inline h-4 w-4 mr-1" />
+                    Estado
+                  </label>
+                  <select
+                    value={filterStatus}
+                    onChange={(e) => setFilterStatus(e.target.value)}
+                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                  >
+                    <option value="all">Todos</option>
+                    <option value="pendiente">Pendiente</option>
+                    <option value="aprobado">Aprobado</option>
+                    <option value="rechazado">Rechazado</option>
+                  </select>
+                </div>
+                
+                <div className="flex-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <Filter className="inline h-4 w-4 mr-1" />
+                    Tipo
+                  </label>
+                  <select
+                    value={filterType}
+                    onChange={(e) => setFilterType(e.target.value)}
+                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                  >
+                    <option value="all">Todos</option>
+                    {requestTypes.map(type => (
+                      <option key={type} value={type}>{type}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
             </div>
             
             {filteredRequests.length === 0 ? (
               <div className="text-center py-10 border rounded-xl bg-gray-50">
-                <p className="text-gray-500">No se encontraron solicitudes</p>
+                <Search className="h-12 w-12 text-gray-400 mx-auto mb-2" />
+                <p className="text-gray-500">No se encontraron solicitudes con los filtros aplicados</p>
+                <button
+                  onClick={() => {
+                    setSearchTerm("");
+                    setFilterStatus("all");
+                    setFilterType("all");
+                  }}
+                  className="mt-3 text-blue-600 hover:text-blue-700 font-medium"
+                >
+                  Limpiar filtros
+                </button>
               </div>
             ) : (
               <div className="grid gap-4">
@@ -622,7 +735,7 @@ const isIncapacidadData = (data: RequestData['rawData']): data is IncapacidadDat
         </div>
       )}
 
-      {/* Enhanced Details modal */}
+      {/* Details Modal */}
       {showDetails && selected && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-xl p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
@@ -631,11 +744,14 @@ const isIncapacidadData = (data: RequestData['rawData']): data is IncapacidadDat
                 <div className={`w-10 h-10 rounded-lg ${selected.avatarColor} flex items-center justify-center mr-3`}>
                   {typeIcon(selected.type)}
                 </div>
-                <h2 className="text-xl font-bold text-gray-800">{selected.title}</h2>
+                <div>
+                  <h2 className="text-xl font-bold text-gray-800">{selected.title}</h2>
+                  <p className="text-sm text-gray-500">{selected.type}</p>
+                </div>
               </div>
               <button 
                 onClick={() => setShowDetails(false)}
-                className="p-1 hover:bg-gray-100 rounded-full transition-colors"
+                className="p-2 hover:bg-gray-100 rounded-full transition-colors"
               >
                 <X className="h-6 w-6" />
               </button>
@@ -643,7 +759,7 @@ const isIncapacidadData = (data: RequestData['rawData']): data is IncapacidadDat
             
             <div className="bg-gray-50 p-4 rounded-lg mb-6">
               <div className="flex justify-between items-center mb-2">
-                <p className="text-gray-700 font-medium">{selected.employee}</p>
+                <p className="text-gray-700 font-medium text-lg">{selected.employee}</p>
                 <StatusTag status={selected.status} />
               </div>
               <p className="text-sm text-gray-600 flex items-center">
@@ -652,24 +768,31 @@ const isIncapacidadData = (data: RequestData['rawData']): data is IncapacidadDat
               </p>
             </div>
             
-            {/* Show enhanced details for enfermedad type */}
             {isIncapacidadData(selected.rawData) ? (
               <EnfermedadDetails data={selected.rawData} />
             ) : (
               <>
                 <div className="mb-6">
-                  <h4 className="font-medium mb-2 text-gray-700">Descripción</h4>
-                  <p className="bg-gray-50 p-3 rounded-lg text-gray-800">{selected.description || "No hay descripción disponible"}</p>
+                  <h4 className="font-semibold mb-2 text-gray-700 flex items-center">
+                    <FileText className="h-5 w-5 mr-2" />
+                    Descripción
+                  </h4>
+                  <p className="bg-gray-50 p-4 rounded-lg text-gray-800 border border-gray-200">
+                    {selected.description || "No hay descripción disponible"}
+                  </p>
                 </div>
                 
                 {selected.attachment && (
                   <div className="mb-6">
-                    <h4 className="font-medium mb-2 text-gray-700">Documento adjunto</h4>
+                    <h4 className="font-semibold mb-2 text-gray-700 flex items-center">
+                      <Download className="h-5 w-5 mr-2" />
+                      Documento adjunto
+                    </h4>
                     <button
                       onClick={() => window.open(selected.attachment, "_blank")}
-                      className="flex items-center px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors duration-200"
+                      className="flex items-center px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors duration-200 border border-blue-200"
                     >
-                      <Download className="mr-2 h-4 w-4" /> Ver documento
+                      <Download className="mr-2 h-4 w-4" /> Ver y descargar documento
                     </button>
                   </div>
                 )}
@@ -679,7 +802,7 @@ const isIncapacidadData = (data: RequestData['rawData']): data is IncapacidadDat
             <div className="flex justify-end space-x-3 mt-6 pt-4 border-t">
               <button
                 onClick={() => setShowDetails(false)}
-                className="px-4 py-2 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors duration-200"
+                className="px-5 py-2 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors duration-200 font-medium"
               >
                 Cerrar
               </button>
@@ -688,34 +811,34 @@ const isIncapacidadData = (data: RequestData['rawData']): data is IncapacidadDat
                 <>
                   <button 
                     onClick={() => {
-                      handleStatusUpdate(selected.id, "aprobado", selected.isPermiso);
+                      handleStatusUpdate(selected.id, "aprobado", selected.collectionName);
                       setShowDetails(false);
                     }}
                     disabled={processingId === selected.id}
-                    className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 flex items-center transition-colors duration-200"
+                    className="px-5 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 flex items-center transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
                   >
                     {processingId === selected.id ? (
-                      <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     ) : (
-                      <CheckCircle className="mr-1.5" />
+                      <CheckCircle className="mr-2 h-4 w-4" />
                     )}
-                    Aprobar
+                    Aprobar solicitud
                   </button>
                   
                   <button 
                     onClick={() => {
-                      handleStatusUpdate(selected.id, "rechazado", selected.isPermiso);
+                      handleStatusUpdate(selected.id, "rechazado", selected.collectionName);
                       setShowDetails(false);
                     }}
                     disabled={processingId === selected.id}
-                    className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 flex items-center transition-colors duration-200"
+                    className="px-5 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 flex items-center transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
                   >
                     {processingId === selected.id ? (
-                      <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     ) : (
-                      <XCircle className="mr-1.5" />
+                      <XCircle className="mr-2 h-4 w-4" />
                     )}
-                    Rechazar
+                    Rechazar solicitud
                   </button>
                 </>
               )}

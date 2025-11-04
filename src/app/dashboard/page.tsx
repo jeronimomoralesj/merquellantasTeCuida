@@ -429,6 +429,14 @@ useEffect(() => {
       color: "bg-red-100 text-red-600",
       bgHover: "hover:bg-gradient-to-br from-red-50 to-red-100",
       href: "https://genteutil.net/"
+    },
+    { 
+      id: 6, 
+      title: "Nuevo Link", 
+      icon: <PersonStanding className="h-5 w-5" />, 
+      color: "bg-gray-100 text-gray-600",
+      bgHover: "hover:bg-gradient-to-br from-gray-50 to-gray-100",
+      href: "https://genteutil.net/"
     }
   ];
 

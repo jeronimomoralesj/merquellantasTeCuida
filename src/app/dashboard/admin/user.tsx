@@ -9,6 +9,7 @@ import {
   X, 
   Search,
   User,
+  Cake,
 } from 'lucide-react';
 import { 
   collection, 
@@ -18,7 +19,9 @@ import {
   doc,
   serverTimestamp, 
   setDoc,
-  Timestamp
+  Timestamp,
+  query,
+  where
 } from 'firebase/firestore';
 import { db } from '../../../firebase';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, deleteUser as firebaseDeleteUser} from 'firebase/auth';
@@ -31,7 +34,7 @@ interface UserExtra {
   'CAJA DE COMPENSACION': string;
   'EPS': string;
   'FONDO DE PENSIONES': string;
-  'Fecha Ingreso': string; // Changed to string for date input
+  'Fecha Ingreso': string;
   'Fondo Cesantías': string;
   'Nombre Área Funcional': string;
   'Número Cuenta': string;
@@ -39,6 +42,7 @@ interface UserExtra {
   'Tipo de Documento': string;
   'nombre': string;
   'posicion': string;
+  'fechaNacimiento': string;
 }
 
 interface User {
@@ -52,7 +56,6 @@ interface User {
   extra: UserExtra;
 }
 
-// Type for Firestore document data
 interface FirestoreUserData {
   cedula?: string;
   email?: string;
@@ -61,9 +64,19 @@ interface FirestoreUserData {
   rol?: string;
   createdAt?: Timestamp | Date;
   extra?: Partial<UserExtra> & {
-    rol?: string; // Legacy rol field in extra
+    rol?: string;
     'Fecha Ingreso'?: string | number;
+    'fechaNacimiento'?: string;
   };
+}
+
+interface CalendarEvent {
+  id: string;
+  title: string;
+  date: any;
+  description: string;
+  type: 'general' | 'birthday';
+  userId: string;
 }
 
 const Users: React.FC = () => {
@@ -72,8 +85,8 @@ const Users: React.FC = () => {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
 
-  // Initial form data - Fixed default values
   const initialFormData: Omit<User, 'id' | 'email' | 'password' | 'createdAt'> = {
     cedula: '',
     nombre: '',
@@ -93,6 +106,7 @@ const Users: React.FC = () => {
       'Tipo de Documento': '',
       'nombre': '',
       'posicion': '',
+      'fechaNacimiento': '',
     }
   };
 
@@ -105,97 +119,127 @@ const Users: React.FC = () => {
     };
   };
 
-  // Convert date to Excel serial number (days since 1900-01-01)
   const dateToExcelSerial = (dateString: string): number => {
     if (!dateString) return 0;
     const date = new Date(dateString);
     const epoch = new Date(1900, 0, 1);
     const diffTime = date.getTime() - epoch.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // +1 for Excel's leap year bug
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
     return diffDays;
   };
 
-  // Convert Excel serial number back to date
   const excelSerialToDate = (serial: number): string => {
     if (!serial || serial === 0) return '';
     const epoch = new Date(1900, 0, 1);
     const date = new Date(epoch.getTime() + (serial - 1) * 24 * 60 * 60 * 1000);
-    return date.toISOString().split('T')[0]; // Return YYYY-MM-DD format
+    return date.toISOString().split('T')[0];
   };
 
-  // Create user directly with Firebase
+  // Fetch calendar events to match birthdays
+  const fetchCalendarEvents = async () => {
+    try {
+      const eventsRef = collection(db, 'calendar');
+      const q = query(eventsRef, where('type', '==', 'birthday'));
+      const querySnapshot = await getDocs(q);
+      const events: CalendarEvent[] = [];
+      querySnapshot.forEach((doc) => {
+        events.push({
+          id: doc.id,
+          ...doc.data()
+        } as CalendarEvent);
+      });
+      setCalendarEvents(events);
+    } catch (error) {
+      console.error('Error fetching calendar events:', error);
+    }
+  };
+
+  // Extract birthday from calendar events for a user
+  const getBirthdayFromCalendar = (userName: string): string => {
+    const birthdayEvent = calendarEvents.find(event => 
+      event.title.toLowerCase().includes(userName.toLowerCase()) ||
+      event.title.toLowerCase().includes('cumpleaños') && event.title.toLowerCase().includes(userName.toLowerCase().split(' ')[0])
+    );
+    
+    if (birthdayEvent && birthdayEvent.date) {
+      const date = birthdayEvent.date.toDate ? birthdayEvent.date.toDate() : new Date(birthdayEvent.date);
+      // Add one day to match the calendar display logic
+      date.setDate(date.getDate() + 1);
+      return date.toISOString().split('T')[0];
+    }
+    return '';
+  };
+
   const createUser = async () => {
-  if (!formData.cedula || !formData.nombre) {
-    alert('Por favor, complete los campos obligatorios (Cédula y Nombre)');
-    return;
-  }
+    if (!formData.cedula || !formData.nombre) {
+      alert('Por favor, complete los campos obligatorios (Cédula y Nombre)');
+      return;
+    }
 
-  const { email, password } = generateCredentials(formData.cedula);
+    const { email, password } = generateCredentials(formData.cedula);
 
-  try {
-    // 1. Create the user in Firebase Authentication
-    const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email, password);
+    try {
+      const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email, password);
+      const userDocRef = doc(db, 'users', userCredential.user.uid);
+      const createdAt = serverTimestamp();
 
-    // 2. Save the user profile in Firestore under the UID
-    const userDocRef = doc(db, 'users', userCredential.user.uid);
-    const createdAt = serverTimestamp();
+      const payload = {
+        cedula: formData.cedula,
+        email,
+        password,
+        nombre: formData.nombre,
+        rol: formData.rol,
+        createdAt,
+        extra: {
+          ...formData.extra,
+          'Fecha Ingreso': dateToExcelSerial(formData.extra['Fecha Ingreso']),
+          'fechaNacimiento': formData.extra['fechaNacimiento']
+        }
+      };
 
-    const payload = {
-      cedula: formData.cedula,
-      email,
-      password, // ⚠️ Consider removing this field from Firestore for security reasons
-      nombre: formData.nombre,
-      rol: formData.rol,
-      createdAt,
-      extra: {
-        ...formData.extra,
-        'Fecha Ingreso': dateToExcelSerial(formData.extra['Fecha Ingreso'])
+      await setDoc(userDocRef, payload);
+
+      const newUser: User = {
+        id: userDocRef.id,
+        cedula: formData.cedula,
+        email,
+        password,
+        rol: formData.rol,
+        nombre: formData.nombre,
+        createdAt: new Date(),
+        extra: {
+          ...formData.extra,
+          'Fecha Ingreso': formData.extra['Fecha Ingreso']
+        }
+      };
+
+      setUsers(prev => [...prev, newUser]);
+      setFormData(initialFormData);
+      setShowCreateForm(false);
+      alert('Usuario creado exitosamente');
+    } catch (error) {
+      if (error instanceof Error) {
+        console.error('Error al crear usuario:', error.message);
+        alert(`Error al crear usuario: ${error.message}`);
+      } else {
+        console.error('Error desconocido:', error);
+        alert('Error desconocido al crear usuario');
       }
-    };
+    }
+  };
 
-    await setDoc(userDocRef, payload);
-
-    // 3. Update local state with the new user (showing readable date)
-    const newUser: User = {
-      id: userDocRef.id,
-      cedula: formData.cedula,
-      email,
-      password,
-      rol: formData.rol,
-      nombre: formData.nombre,
-      createdAt: new Date(), // Local fallback, not from serverTimestamp
-      extra: {
-        ...formData.extra,
-        'Fecha Ingreso': formData.extra['Fecha Ingreso'] // Keep string for display
-      }
-    };
-
-    setUsers(prev => [...prev, newUser]);
-    setFormData(initialFormData);
-    setShowCreateForm(false);
-    alert('Usuario creado exitosamente');
-  } catch (error) {
-  if (error instanceof Error) {
-    console.error('Error al crear usuario:', error.message);
-    alert(`Error al crear usuario: ${error.message}`);
-  } else {
-    console.error('Error desconocido:', error);
-    alert('Error desconocido al crear usuario');
-  }
-}
-};
-
-  // Fetch users directly from Firestore
   const fetchUsers = async () => {
     setLoading(true);
     try {
+      // Fetch calendar events first
+      await fetchCalendarEvents();
+      
       const snap = await getDocs(collection(db, 'users'));
       const fetched: User[] = snap.docs.map(docSnap => {
         const data: FirestoreUserData = docSnap.data() || {};
-        const rawExtra: Partial<UserExtra> & { rol?: string; 'Fecha Ingreso'?: string | number } = data.extra || {};
-        const { rol: extraRol, ...extraWithoutRol } = rawExtra;  // strip legacy extra.rol
+        const rawExtra: Partial<UserExtra> & { rol?: string; 'Fecha Ingreso'?: string | number; 'fechaNacimiento'?: string } = data.extra || {};
+        const { rol: extraRol, ...extraWithoutRol } = rawExtra;
 
-        // createdAt handling
         let createdAt: Date;
         if (data.createdAt && typeof data.createdAt === 'object' && 'toDate' in data.createdAt) {
           createdAt = data.createdAt.toDate();
@@ -205,10 +249,14 @@ const Users: React.FC = () => {
           createdAt = new Date();
         }
 
-        // compute rol: prefer root, fallback to legacy extra.rol, default 'user'
         const rol = (data.rol as 'user' | 'admin') ?? (extraRol as 'user' | 'admin') ?? 'user';
 
-        // Create a complete UserExtra object with all required fields
+        // Get birthday from stored data or from calendar
+        let birthday = extraWithoutRol['fechaNacimiento'] || '';
+        if (!birthday && data.nombre) {
+          birthday = getBirthdayFromCalendar(data.nombre);
+        }
+
         const completeExtra: UserExtra = {
           'Dpto Donde Labora': extraWithoutRol['Dpto Donde Labora'] || '',
           'ARL': extraWithoutRol['ARL'] || '',
@@ -226,6 +274,7 @@ const Users: React.FC = () => {
           'Tipo de Documento': extraWithoutRol['Tipo de Documento'] || '',
           'nombre': extraWithoutRol['nombre'] || '',
           'posicion': extraWithoutRol['posicion'] || '',
+          'fechaNacimiento': birthday,
         };
 
         return {
@@ -248,7 +297,6 @@ const Users: React.FC = () => {
     }
   };
 
-  // Update user directly with Firebase
   const updateUser = async () => {
     if (!editingUser) return;
     
@@ -258,7 +306,8 @@ const Users: React.FC = () => {
       rol: formData.rol,
       extra: {
         ...formData.extra,
-        'Fecha Ingreso': dateToExcelSerial(formData.extra['Fecha Ingreso'])
+        'Fecha Ingreso': dateToExcelSerial(formData.extra['Fecha Ingreso']),
+        'fechaNacimiento': formData.extra['fechaNacimiento']
       }
     };
 
@@ -266,7 +315,6 @@ const Users: React.FC = () => {
       const userDocRef = doc(db, 'users', editingUser.id);
       await updateDoc(userDocRef, updatedPayload);
       
-      // Update local state
       setUsers(prevUsers => 
         prevUsers.map(user => 
           user.id === editingUser.id 
@@ -275,7 +323,7 @@ const Users: React.FC = () => {
                 ...updatedPayload,
                 extra: {
                   ...updatedPayload.extra,
-                  'Fecha Ingreso': formData.extra['Fecha Ingreso'] // Keep as string for display
+                  'Fecha Ingreso': formData.extra['Fecha Ingreso']
                 }
               }
             : user
@@ -290,36 +338,30 @@ const Users: React.FC = () => {
     }
   };
 
-  // Delete user directly with Firebase
   const deleteUser = async (userId: string, email: string, password: string) => {
-  if (!confirm('¿Eliminar este usuario?')) return;
+    if (!confirm('¿Eliminar este usuario?')) return;
 
-  try {
-    // ✅ 1. Sign in as the target user using secondaryAuth
-    await signInWithEmailAndPassword(secondaryAuth, email, password);
+    try {
+      await signInWithEmailAndPassword(secondaryAuth, email, password);
 
-    // ✅ 2. Delete from Firebase Authentication
-    if (secondaryAuth.currentUser) {
-      await firebaseDeleteUser(secondaryAuth.currentUser);
-      console.log(`Auth account deleted for UID: ${userId}`);
+      if (secondaryAuth.currentUser) {
+        await firebaseDeleteUser(secondaryAuth.currentUser);
+        console.log(`Auth account deleted for UID: ${userId}`);
+      }
+
+      const userDocRef = doc(db, 'users', userId);
+      await deleteDoc(userDocRef);
+      console.log(`Firestore document deleted for UID: ${userId}`);
+
+      setUsers(prevUsers => prevUsers.filter(user => user.id !== userId));
+
+      alert('Usuario eliminado exitosamente');
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      alert('Error al eliminar usuario');
     }
+  };
 
-    // ✅ 3. Delete from Firestore
-    const userDocRef = doc(db, 'users', userId);
-    await deleteDoc(userDocRef);
-    console.log(`Firestore document deleted for UID: ${userId}`);
-
-    // ✅ 4. Update local state
-    setUsers(prevUsers => prevUsers.filter(user => user.id !== userId));
-
-    alert('Usuario eliminado exitosamente');
-  } catch (error) {
-    console.error('Error deleting user:', error);
-    alert('Error al eliminar usuario');
-  }
-};
-
-  // Handle input
   const handleInputChange = (field: string, value: string | number | boolean, isExtra = false): void => {
     if (isExtra) {
       setFormData(prev => ({
@@ -331,7 +373,6 @@ const Users: React.FC = () => {
     }
   };
 
-  // Start edit
   const startEdit = (user: User) => {
     setEditingUser(user);
     setFormData({ 
@@ -343,14 +384,12 @@ const Users: React.FC = () => {
     setShowCreateForm(true);
   };
 
-  // Cancel
   const cancelEdit = () => {
     setEditingUser(null);
     setFormData(initialFormData);
     setShowCreateForm(false);
   };
 
-  // Fixed filtered users with proper null checks
   const filteredUsers = users.filter(u => {
     const searchLower = searchTerm.toLowerCase();
     return (
@@ -359,6 +398,18 @@ const Users: React.FC = () => {
       u.email?.toLowerCase().includes(searchLower)
     );
   });
+
+  const calculateAge = (birthday: string): number | null => {
+    if (!birthday) return null;
+    const birthDate = new Date(birthday);
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    return age;
+  };
 
   useEffect(() => {
     fetchUsers();
@@ -409,152 +460,206 @@ const Users: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {/* Personal Info */}
               <div className="space-y-4">
+                <h3 className="text-sm font-semibold text-gray-700 mb-2 pb-2 border-b">Información Personal</h3>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Información Personal</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Cédula *</label>
                   <input
                     type="text"
-                    placeholder="Cédula *"
+                    placeholder="Ingrese el número de cédula"
                     value={formData.cedula}
                     onChange={e => handleInputChange('cedula', e.target.value)}
                     className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     required
                   />
                 </div>
-                <input
-                  type="text"
-                  placeholder="Nombre Completo *"
-                  value={formData.nombre}
-                  onChange={e => handleInputChange('nombre', e.target.value)}
-                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                />
-                <select
-                  value={formData.extra['Tipo de Documento']}
-                  onChange={e => handleInputChange('Tipo de Documento', e.target.value, true)}
-                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Tipo de Documento</option>
-                  <option value="Cédula Ciudadanía">Cédula Ciudadanía</option>
-                  <option value="Cédula Extranjería">Cédula Extranjería</option>
-                  <option value="Pasaporte">Pasaporte</option>
-                </select>
-                <select
-                  value={formData.extra.posicion}
-                  onChange={e => handleInputChange('posicion', e.target.value, true)}
-                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Area</option>
-                  <option value="CONDUCTOR">COMERCIAL</option>
-                  <option value="AUXILIAR">OPERATIVO</option>
-                  <option value="ADMINISTRATIVO">ADMINISTRATIVO</option>
-                </select>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Nombre Completo *</label>
+                  <input
+                    type="text"
+                    placeholder="Nombre y apellidos"
+                    value={formData.nombre}
+                    onChange={e => handleInputChange('nombre', e.target.value)}
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
+                    <Cake className="h-4 w-4 text-pink-500" />
+                    Fecha de Nacimiento
+                  </label>
+                  <input
+                    type="date"
+                    placeholder="Fecha de Nacimiento"
+                    value={formData.extra['fechaNacimiento']}
+                    onChange={e => handleInputChange('fechaNacimiento', e.target.value, true)}
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de Documento</label>
+                  <select
+                    value={formData.extra['Tipo de Documento']}
+                    onChange={e => handleInputChange('Tipo de Documento', e.target.value, true)}
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Seleccione un tipo</option>
+                    <option value="Cédula Ciudadanía">Cédula Ciudadanía</option>
+                    <option value="Cédula Extranjería">Cédula Extranjería</option>
+                    <option value="Pasaporte">Pasaporte</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Área</label>
+                  <select
+                    value={formData.extra.posicion}
+                    onChange={e => handleInputChange('posicion', e.target.value, true)}
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Seleccione un área</option>
+                    <option value="CONDUCTOR">COMERCIAL</option>
+                    <option value="AUXILIAR">OPERATIVO</option>
+                    <option value="ADMINISTRATIVO">ADMINISTRATIVO</option>
+                  </select>
+                </div>
               </div>
 
               {/* Work Info */}
               <div className="space-y-4">
+                <h3 className="text-sm font-semibold text-gray-700 mb-2 pb-2 border-b">Información Laboral</h3>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Información Laboral</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Departamento donde labora</label>
                   <input
                     type="text"
-                    placeholder="Departamento donde labora"
+                    placeholder="Ej: Recursos Humanos"
                     value={formData.extra['Dpto Donde Labora']}
                     onChange={e => handleInputChange('Dpto Donde Labora', e.target.value, true)}
                     className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
-                <input
-                  type="text"
-                  placeholder="Área Funcional"
-                  value={formData.extra['Nombre Área Funcional']}
-                  onChange={e => handleInputChange('Nombre Área Funcional', e.target.value, true)}
-                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <input
-                  type="date"
-                  placeholder="Fecha de Ingreso"
-                  value={formData.extra['Fecha Ingreso']}
-                  onChange={e => handleInputChange('Fecha Ingreso', e.target.value, true)}
-                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <select
-                  value={formData.rol}
-                  onChange={e => handleInputChange('rol', e.target.value)}
-                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="user">Usuario</option>
-                  <option value="admin">Administrador</option>
-                </select>
-              </div>
-
-              {/* Financial & Benefits Info */}
-              <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Información Financiera</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Área Funcional</label>
                   <input
                     type="text"
-                    placeholder="Banco"
+                    placeholder="Ej: Administración"
+                    value={formData.extra['Nombre Área Funcional']}
+                    onChange={e => handleInputChange('Nombre Área Funcional', e.target.value, true)}
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Fecha de Ingreso</label>
+                  <input
+                    type="date"
+                    value={formData.extra['Fecha Ingreso']}
+                    onChange={e => handleInputChange('Fecha Ingreso', e.target.value, true)}
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Rol del Sistema</label>
+                  <select
+                    value={formData.rol}
+                    onChange={e => handleInputChange('rol', e.target.value)}
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="user">Usuario</option>
+                    <option value="admin">Administrador</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Financial Info */}
+              <div className="space-y-4">
+                <h3 className="text-sm font-semibold text-gray-700 mb-2 pb-2 border-b">Información Financiera</h3>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Banco</label>
+                  <input
+                    type="text"
+                    placeholder="Ej: Bancolombia"
                     value={formData.extra.Banco}
                     onChange={e => handleInputChange('Banco', e.target.value, true)}
                     className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
-                <input
-                  type="text"
-                  placeholder="Número de Cuenta"
-                  value={formData.extra['Número Cuenta']}
-                  onChange={e => handleInputChange('Número Cuenta', e.target.value, true)}
-                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <select
-                  value={formData.extra['Tipo Cuenta']}
-                  onChange={e => handleInputChange('Tipo Cuenta', e.target.value, true)}
-                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Tipo de Cuenta</option>
-                  <option value="AHORRO">AHORRO</option>
-                  <option value="CORRIENTE">CORRIENTE</option>
-                </select>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Número de Cuenta</label>
+                  <input
+                    type="text"
+                    placeholder="Ingrese el número de cuenta"
+                    value={formData.extra['Número Cuenta']}
+                    onChange={e => handleInputChange('Número Cuenta', e.target.value, true)}
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de Cuenta</label>
+                  <select
+                    value={formData.extra['Tipo Cuenta']}
+                    onChange={e => handleInputChange('Tipo Cuenta', e.target.value, true)}
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Seleccione un tipo</option>
+                    <option value="AHORRO">AHORRO</option>
+                    <option value="CORRIENTE">CORRIENTE</option>
+                  </select>
+                </div>
               </div>
 
               {/* Benefits Info - Full Width */}
               <div className="md:col-span-2 lg:col-span-3 space-y-4">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Información de Beneficios</label>
+                <h3 className="text-sm font-semibold text-gray-700 mb-2 pb-2 border-b">Información de Beneficios</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  <input
-                    type="text"
-                    placeholder="ARL"
-                    value={formData.extra.ARL}
-                    onChange={e => handleInputChange('ARL', e.target.value, true)}
-                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                  <input
-                    type="text"
-                    placeholder="EPS"
-                    value={formData.extra.EPS}
-                    onChange={e => handleInputChange('EPS', e.target.value, true)}
-                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                  <input
-                    type="text"
-                    placeholder="Caja de Compensación"
-                    value={formData.extra['CAJA DE COMPENSACION']}
-                    onChange={e => handleInputChange('CAJA DE COMPENSACION', e.target.value, true)}
-                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                  <input
-                    type="text"
-                    placeholder="Fondo de Pensiones"
-                    value={formData.extra['FONDO DE PENSIONES']}
-                    onChange={e => handleInputChange('FONDO DE PENSIONES', e.target.value, true)}
-                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                  <input
-                    type="text"
-                    placeholder="Fondo de Cesantías"
-                    value={formData.extra['Fondo Cesantías']}
-                    onChange={e => handleInputChange('Fondo Cesantías', e.target.value, true)}
-                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">ARL</label>
+                    <input
+                      type="text"
+                      placeholder="Ej: Sura"
+                      value={formData.extra.ARL}
+                      onChange={e => handleInputChange('ARL', e.target.value, true)}
+                      className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">EPS</label>
+                    <input
+                      type="text"
+                      placeholder="Ej: Sanitas"
+                      value={formData.extra.EPS}
+                      onChange={e => handleInputChange('EPS', e.target.value, true)}
+                      className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Caja de Compensación</label>
+                    <input
+                      type="text"
+                      placeholder="Ej: Compensar"
+                      value={formData.extra['CAJA DE COMPENSACION']}
+                      onChange={e => handleInputChange('CAJA DE COMPENSACION', e.target.value, true)}
+                      className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Fondo de Pensiones</label>
+                    <input
+                      type="text"
+                      placeholder="Ej: Porvenir"
+                      value={formData.extra['FONDO DE PENSIONES']}
+                      onChange={e => handleInputChange('FONDO DE PENSIONES', e.target.value, true)}
+                      className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Fondo de Cesantías</label>
+                    <input
+                      type="text"
+                      placeholder="Ej: Protección"
+                      value={formData.extra['Fondo Cesantías']}
+                      onChange={e => handleInputChange('Fondo Cesantías', e.target.value, true)}
+                      className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
                 </div>
               </div>
             </div>
@@ -586,6 +691,7 @@ const Users: React.FC = () => {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Usuario</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Laboral</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Financiero</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cumpleaños</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha Ingreso</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Creado</th>
                   <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
@@ -593,53 +699,71 @@ const Users: React.FC = () => {
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {loading ? (
-                  <tr><td colSpan={6} className="px-6 py-4 text-center">Cargando...</td></tr>
+                  <tr><td colSpan={7} className="px-6 py-4 text-center">Cargando...</td></tr>
                 ) : filteredUsers.length === 0 ? (
-                  <tr><td colSpan={6} className="px-6 py-4 text-center text-gray-500">No hay usuarios</td></tr>
+                  <tr><td colSpan={7} className="px-6 py-4 text-center text-gray-500">No hay usuarios</td></tr>
                 ) : (
-                  filteredUsers.map(user => (
-                    <tr key={user.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900">{user.nombre || 'Sin nombre'}</div>
-                        <div className="text-sm text-gray-500">Cédula: {user.cedula}</div>
-                        <div className="text-sm text-gray-500">{user.email}</div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="text-sm text-gray-900">{user.extra?.posicion || 'Sin posición'}</div>
-                        <div className="text-sm text-gray-500">{user.extra?.['Nombre Área Funcional'] || ''}</div>
-                        <div className="text-sm text-gray-500">{user.extra?.['Dpto Donde Labora'] || ''}</div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="text-sm text-gray-900">{user.extra?.Banco || 'Sin banco'}</div>
-                        <div className="text-sm text-gray-500">
-                          {user.extra?.['Tipo Cuenta'] || ''} {user.extra?.['Número Cuenta'] ? `· ${user.extra['Número Cuenta']}` : ''}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-500">
-                        {user.extra?.['Fecha Ingreso'] 
-                          ? new Date(user.extra['Fecha Ingreso']).toLocaleDateString('es-CO')
-                          : 'Sin fecha'
-                        }
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-500">
-                        {user.createdAt.toLocaleDateString('es-CO')}
-                      </td>
-                      <td className="px-6 py-4 text-right text-sm">
-                        <button 
-                          onClick={() => startEdit(user)} 
-                          className="text-blue-600 hover:text-blue-800 mr-3 transition-colors"
-                        >
-                          <Edit className="h-4 w-4" />
-                        </button>
-                        <button 
-                          onClick={() => deleteUser(user.id, user.email, user.password)} 
-                          className="text-red-600 hover:text-red-800 transition-colors"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))
+                  filteredUsers.map(user => {
+                    const age = calculateAge(user.extra?.['fechaNacimiento']);
+                    return (
+                      <tr key={user.id} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm font-medium text-gray-900">{user.nombre || 'Sin nombre'}</div>
+                          <div className="text-sm text-gray-500">Cédula: {user.cedula}</div>
+                          <div className="text-sm text-gray-500">{user.email}</div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="text-sm text-gray-900">{user.extra?.posicion || 'Sin posición'}</div>
+                          <div className="text-sm text-gray-500">{user.extra?.['Nombre Área Funcional'] || ''}</div>
+                          <div className="text-sm text-gray-500">{user.extra?.['Dpto Donde Labora'] || ''}</div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="text-sm text-gray-900">{user.extra?.Banco || 'Sin banco'}</div>
+                          <div className="text-sm text-gray-500">
+                            {user.extra?.['Tipo Cuenta'] || ''} {user.extra?.['Número Cuenta'] ? `· ${user.extra['Número Cuenta']}` : ''}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          {user.extra?.['fechaNacimiento'] ? (
+                            <div>
+                              <div className="text-sm text-gray-900 flex items-center gap-1">
+                                <Cake className="h-3 w-3 text-pink-500" />
+                                {new Date(user.extra['fechaNacimiento']).toLocaleDateString('es-CO')}
+                              </div>
+                              {age !== null && (
+                                <div className="text-xs text-gray-500">{age} años</div>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-sm text-gray-500">Sin fecha</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-500">
+                          {user.extra?.['Fecha Ingreso'] 
+                            ? new Date(user.extra['Fecha Ingreso']).toLocaleDateString('es-CO')
+                            : 'Sin fecha'
+                          }
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-500">
+                          {user.createdAt.toLocaleDateString('es-CO')}
+                        </td>
+                        <td className="px-6 py-4 text-right text-sm">
+                          <button 
+                            onClick={() => startEdit(user)} 
+                            className="text-blue-600 hover:text-blue-800 mr-3 transition-colors"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </button>
+                          <button 
+                            onClick={() => deleteUser(user.id, user.email, user.password)} 
+                            className="text-red-600 hover:text-red-800 transition-colors"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
