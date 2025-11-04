@@ -348,9 +348,11 @@ export default function SolicitudesCard() {
         setRequests(merged);
         console.log("Requests loaded successfully:", merged.length);
       } catch (error) {
-        console.error("Error loading requests:", error);
-        showNotification(`Error al cargar las solicitudes: ${error.message}`, "error");
-      } finally {
+      console.error("Error updating request:", error);
+      const actionText = newStatus === "aprobado" ? "aprobar" : "rechazar";
+      const errorMessage = error instanceof Error ? error.message : "Error desconocido";
+      showNotification(`Error al ${actionText} la solicitud: ${errorMessage}`, "error");
+    } finally {
         setLoading(false);
       }
     }
