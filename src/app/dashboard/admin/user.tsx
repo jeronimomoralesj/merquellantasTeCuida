@@ -155,7 +155,7 @@ const Users: React.FC = () => {
   };
 
   // Extract birthday from calendar events for a user
-  const getBirthdayFromCalendar = (userName: string): string => {
+ const getBirthdayFromCalendar = (userName: string): string => {
   const birthdayEvent = calendarEvents.find(event =>
     event.title.toLowerCase().includes(userName.toLowerCase()) ||
     (event.title.toLowerCase().includes('cumpleaños') &&
@@ -166,8 +166,8 @@ const Users: React.FC = () => {
     let date: Date;
 
     // ✅ Safely handle Firestore Timestamp or plain Date/string
-    if (typeof (birthdayEvent.date as any).toDate === 'function') {
-      date = (birthdayEvent.date as any).toDate();
+    if (typeof birthdayEvent.date === 'object' && birthdayEvent.date !== null && 'toDate' in birthdayEvent.date) {
+      date = birthdayEvent.date.toDate();
     } else if (birthdayEvent.date instanceof Date) {
       date = birthdayEvent.date;
     } else {
