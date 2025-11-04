@@ -245,7 +245,8 @@ export default function SolicitudesCard() {
     } catch (error) {
       console.error("Error updating request:", error);
       const actionText = newStatus === "aprobado" ? "aprobar" : "rechazar";
-      showNotification(`Error al ${actionText} la solicitud: ${error.message}`, "error");
+      const errorMessage = error instanceof Error ? error.message : "Error desconocido";
+      showNotification(`Error al ${actionText} la solicitud: ${errorMessage}`, "error");
     } finally {
       setProcessingId(null);
     }
