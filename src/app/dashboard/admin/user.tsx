@@ -156,19 +156,31 @@ const Users: React.FC = () => {
 
   // Extract birthday from calendar events for a user
   const getBirthdayFromCalendar = (userName: string): string => {
-    const birthdayEvent = calendarEvents.find(event => 
-      event.title.toLowerCase().includes(userName.toLowerCase()) ||
-      event.title.toLowerCase().includes('cumpleaños') && event.title.toLowerCase().includes(userName.toLowerCase().split(' ')[0])
-    );
-    
-    if (birthdayEvent && birthdayEvent.date) {
-      const date = birthdayEvent.date.toDate ? birthdayEvent.date.toDate() : new Date(birthdayEvent.date);
-      // Add one day to match the calendar display logic
-      date.setDate(date.getDate() + 1);
-      return date.toISOString().split('T')[0];
+  const birthdayEvent = calendarEvents.find(event =>
+    event.title.toLowerCase().includes(userName.toLowerCase()) ||
+    (event.title.toLowerCase().includes('cumpleaños') &&
+     event.title.toLowerCase().includes(userName.toLowerCase().split(' ')[0]))
+  );
+
+  if (birthdayEvent && birthdayEvent.date) {
+    let date: Date;
+
+    // ✅ Safely handle Firestore Timestamp or plain Date/string
+    if (typeof (birthdayEvent.date as any).toDate === 'function') {
+      date = (birthdayEvent.date as any).toDate();
+    } else if (birthdayEvent.date instanceof Date) {
+      date = birthdayEvent.date;
+    } else {
+      date = new Date(birthdayEvent.date);
     }
-    return '';
-  };
+
+    // Add one day to match the calendar display logic
+    date.setDate(date.getDate() + 1);
+    return date.toISOString().split('T')[0];
+  }
+
+  return '';
+};
 
   const createUser = async () => {
     if (!formData.cedula || !formData.nombre) {
