@@ -79,32 +79,37 @@ const VacacionesForm = () => {
   };
 
   const sendEmailNotification = async (formData: VacacionesFormData) => {
+  const emails = [
+    "marcelagonzalez@merquellantas.com",
+    "saludocupacional@merquellantas.com",
+    "dptodelagente@merquellantas.com"
+  ];
+
   try {
-    const response = await fetch('https://formsubmit.co/marcelagonzalez@merquellantas.com', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        _to: 'marcelagonzalez@merquellantas.com,saludocupacional@merquellantas.com, dptodelagente@merquellantas.com',
-        _subject: 'Alerta: Nueva Solicitud de Vacaciones Pendiente',
-        message: 'Hay una nueva solicitud de vacaciones esperándote...',
-        fechaInicio: formData.fechaInicio,
-        fechaFin: formData.fechaFin,
-        diasVacaciones: diasVacaciones,
-        descripcion: formData.description,
-        _captcha: 'false'
-      })
-    });
-    
-    if (!response.ok) {
-      console.warn('Email notification failed, but form submission succeeded');
-    }
+    await Promise.all(
+      emails.map(email =>
+        fetch(`https://formsubmit.co/ajax/${email}`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            _subject: "Alerta: Nueva Solicitud de Vacaciones Pendiente",
+            message: "Hay una nueva solicitud de vacaciones esperándote...",
+            fechaInicio: formData.fechaInicio,
+            fechaFin: formData.fechaFin,
+            diasVacaciones: formData.diasVacaciones,
+            descripcion: formData.description,
+            _captcha: "false",
+          }),
+        })
+      )
+    );
   } catch (error) {
-    console.warn('Email notification error:', error);
-    // Don't throw error - we don't want to fail the form submission if email fails
+    console.warn("Email notification error:", error);
   }
 };
+
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();

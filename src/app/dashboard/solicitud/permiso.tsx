@@ -59,30 +59,35 @@ const PermisoForm = () => {
   };
 
   const sendEmailNotification = async (formData: PermisoFormData) => {
+  const emails = [
+    "marcelagonzalez@merquellantas.com",
+    "saludocupacional@merquellantas.com",
+    "dptodelagente@merquellantas.com"
+  ];
+
   try {
-    const response = await fetch('https://formsubmit.co/moraljero@gmail.com', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        _to: 'marcelagonzalez@merquellantas.com,saludocupacional@merquellantas.com,dptodelagente@merquellantas.com',
-        _subject: 'Alerta: Nuevo Permiso Pendiente',
-        message: 'Hay un nuevo permiso esperándote...',
-        fecha: formData.fecha,
-        descripcion: formData.description,
-        _captcha: 'false'
-      })
-    });
-    
-    if (!response.ok) {
-      console.warn('Email notification failed, but form submission succeeded');
-    }
+    await Promise.all(
+      emails.map(email =>
+        fetch(`https://formsubmit.co/ajax/${email}`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            _subject: "Alerta: Nuevo Permiso Pendiente",
+            message: "Hay un nuevo permiso esperándote...",
+            fecha: formData.fecha,
+            descripcion: formData.description,
+            _captcha: "false",
+          }),
+        })
+      )
+    );
   } catch (error) {
-    console.warn('Email notification error:', error);
-    // Don't throw error - we don't want to fail the form submission if email fails
+    console.warn("Email notification error:", error);
   }
 };
+
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();

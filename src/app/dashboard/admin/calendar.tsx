@@ -14,7 +14,7 @@ import {
 
 // Firebase imports
 import { auth, db, storage } from '../../../firebase';
-import { collection, addDoc, serverTimestamp, getDocs, query, where, orderBy, deleteDoc, doc } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, getDocs, query, orderBy, deleteDoc, doc } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 
 // Type definitions
@@ -26,7 +26,7 @@ interface CalendarEvent {
   type: 'general' | 'birthday';
   image: string;
   userId: string;
-  createdAt: import('firebase/firestore').Timestamp;
+  createdAt: any;
 }
 
 interface NewEventForm {
@@ -61,7 +61,7 @@ const formatDateForInput = (date: Date): string => {
 export default function CalendarCard() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [allEvents, setAllEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [newEvent, setNewEvent] = useState<NewEventForm>({
     title: "",
@@ -77,47 +77,66 @@ export default function CalendarCard() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [deletingEventId, setDeletingEventId] = useState<string | null>(null);
 
-  // Fetch events on component mount and when currentDate changes
+  // Fetch ALL events once on component mount
   useEffect(() => {
     fetchEvents();
-  }, [currentDate]);
+  }, []);
 
   const fetchEvents = async () => {
     try {
       setLoading(true);
-      const year = currentDate.getFullYear();
-      const month = currentDate.getMonth();
-      
-      // Get start and end dates for the current month
-      const startDate = new Date(year, month, 1);
-      const endDate = new Date(year, month + 1, 0);
       
       const eventsRef = collection(db, 'calendar');
-      const q = query(
-        eventsRef, 
-        where('date', '>=', startDate), 
-        where('date', '<=', endDate),
-        orderBy('date')
-      );
+      const q = query(eventsRef, orderBy('date', 'asc'));
       
       const querySnapshot = await getDocs(q);
       const fetchedEvents: CalendarEvent[] = [];
+      
       querySnapshot.forEach((doc) => {
         const eventData = doc.data();
+        const storedDate = eventData.date.toDate();
+        
         fetchedEvents.push({
           id: doc.id,
-          ...eventData,
-          // Add one day to the stored date for display
-          date: addOneDayForDisplay(eventData.date.toDate())
-        } as CalendarEvent);
+          title: eventData.title || '',
+          description: eventData.description || '',
+          date: addOneDayForDisplay(storedDate),
+          type: eventData.type || 'general',
+          image: eventData.image || '',
+          userId: eventData.userId || '',
+          createdAt: eventData.createdAt
+        });
       });
       
-      setEvents(fetchedEvents);
+      setAllEvents(fetchedEvents);
     } catch (error) {
       console.error("Error fetching events:", error);
     } finally {
       setLoading(false);
     }
+  };
+
+  // Get events for a specific date (including recurring birthdays)
+  const getEventsForDate = (date: Date): CalendarEvent[] => {
+    if (!allEvents.length) return [];
+    
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const day = date.getDate();
+    
+    return allEvents.filter(event => {
+      const eventDate = new Date(event.date);
+      
+      // For birthdays, match just day and month (recurring yearly)
+      if (event.type === 'birthday') {
+        return eventDate.getDate() === day && eventDate.getMonth() === month;
+      }
+      
+      // For regular events, match the full date
+      return eventDate.getDate() === day && 
+             eventDate.getMonth() === month && 
+             eventDate.getFullYear() === year;
+    });
   };
 
   // Delete event function
@@ -129,10 +148,8 @@ export default function CalendarCard() {
     try {
       setDeletingEventId(eventId);
       
-      // Delete from Firestore
       await deleteDoc(doc(db, 'calendar', eventId));
       
-      // Delete image from storage if it exists and is not the default birthday image
       if (imageUrl && !imageUrl.includes('istockphoto.com')) {
         try {
           const imageRef = storageRef(storage, imageUrl);
@@ -142,7 +159,6 @@ export default function CalendarCard() {
         }
       }
       
-      // Refresh events
       fetchEvents();
       
     } catch (error) {
@@ -171,12 +187,10 @@ export default function CalendarCard() {
     
     const days: (number | null)[] = [];
     
-    // Add empty cells for days before the first day of the month
     for (let i = 0; i < firstDayOfMonth; i++) {
       days.push(null);
     }
     
-    // Add days of the month
     for (let i = 1; i <= daysInMonth; i++) {
       days.push(i);
     }
@@ -191,7 +205,7 @@ export default function CalendarCard() {
     });
   };
 
-  // Check if a day has events
+  // Check if a day has events (including recurring birthdays)
   const hasEvents = (day: number | null): boolean => {
     if (!day) return false;
     
@@ -201,14 +215,7 @@ export default function CalendarCard() {
       day
     );
     
-    return events.some(event => {
-      const eventDate = new Date(event.date);
-      return (
-        eventDate.getDate() === checkDate.getDate() &&
-        eventDate.getMonth() === checkDate.getMonth() &&
-        eventDate.getFullYear() === checkDate.getFullYear()
-      );
-    });
+    return getEventsForDate(checkDate).length > 0;
   };
 
   // Navigation functions
@@ -222,7 +229,6 @@ export default function CalendarCard() {
 
   // Modal functions
   const openModal = () => {
-    // Format today's date + 1 day to YYYY-MM-DD for the date input (since we display one day ahead)
     const today = new Date();
     const displayDate = addOneDayForDisplay(today);
     const formattedDate = formatDateForInput(displayDate);
@@ -288,31 +294,25 @@ export default function CalendarCard() {
       
       let imageUrl = "";
       
-      // Upload image if provided
       if (selectedImage) {
         const path = `calendar/${user.uid}/${Date.now()}_${selectedImage.name}`;
         const fileRef = storageRef(storage, path);
         await uploadBytes(fileRef, selectedImage);
         imageUrl = await getDownloadURL(fileRef);
       } else if (newEvent.type === "birthday") {
-        // Use default birthday image if no image is uploaded for birthdays
-        imageUrl = "https://media.istockphoto.com/id/1349208049/es/foto/marco-multicolor-de-accesorios-para-fiestas-o-cumplea%C3%B1os.jpg?b=1&s=612x612&w=0&k=20&c=TXLNCnfhI6JQmBQmK_WxvkjWxelBe1Dx306dHpBALDo=";
+        imageUrl = "https://img.freepik.com/vector-gratis/concepto-letras-feliz-cumpleanos_23-2148499329.jpg?semt=ais_hybrid&w=740&q=80";
       }
       
-      // Create event object - subtract one day from user input before storing
       const inputDate = new Date(newEvent.date);
       const eventDate = subtractOneDayForStorage(inputDate);
       
-      // For birthdays, set time to midnight
       if (newEvent.type === "birthday") {
         eventDate.setHours(0, 0, 0, 0);
       } else if (newEvent.time) {
-        // For other events, use the specified time
         const [hours, minutes] = newEvent.time.split(':').map(Number);
         eventDate.setHours(hours, minutes, 0, 0);
       }
       
-      // Add to Firestore (storing the date minus one day)
       await addDoc(collection(db, 'calendar'), {
         title: newEvent.title,
         date: eventDate,
@@ -323,7 +323,6 @@ export default function CalendarCard() {
         createdAt: serverTimestamp()
       });
       
-      // Close modal and reset form
       setIsModalOpen(false);
       setNewEvent({
         title: "",
@@ -336,7 +335,6 @@ export default function CalendarCard() {
       setSelectedImage(null);
       setImageFileName("");
       
-      // Refresh events
       fetchEvents();
       
     } catch (error) {
@@ -347,7 +345,6 @@ export default function CalendarCard() {
     }
   };
 
-  // Format date for display (dates are already adjusted by +1 day in fetchEvents)
   const formatEventDate = (date: Date): string => {
     return date.toLocaleDateString("es-ES", {
       day: "numeric",
@@ -356,9 +353,26 @@ export default function CalendarCard() {
     });
   };
 
-  // Get events for current month view (showing all events, not just upcoming)
+  // Get events for current month view (including recurring birthdays)
   const getCurrentMonthEvents = (): CalendarEvent[] => {
-    return events.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    
+    const filtered = allEvents.filter(event => {
+      const eventDate = new Date(event.date);
+      
+      if (event.type === 'birthday') {
+        return eventDate.getMonth() === month;
+      }
+      
+      return eventDate.getMonth() === month && eventDate.getFullYear() === year;
+    });
+    
+    return filtered.sort((a, b) => {
+      const dateA = new Date(a.date);
+      const dateB = new Date(b.date);
+      return dateA.getDate() - dateB.getDate();
+    });
   };
 
   // Get upcoming events (limited to 3) for current month only
@@ -369,15 +383,31 @@ export default function CalendarCard() {
     const currentMonth = new Date().getMonth();
     const currentYear = new Date().getFullYear();
     
-    // Only show upcoming events if we're viewing the current month
-    if (currentDate.getMonth() === currentMonth && currentDate.getFullYear() === currentYear) {
-      return events
-        .filter(event => new Date(event.date) >= today)
-        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-        .slice(0, 3);
+    if (currentDate.getMonth() !== currentMonth || currentDate.getFullYear() !== currentYear) {
+      return [];
     }
     
-    return [];
+    const upcoming = allEvents.filter(event => {
+      const eventDate = new Date(event.date);
+      
+      if (event.type === 'birthday') {
+        const birthdayThisYear = new Date(currentYear, eventDate.getMonth(), eventDate.getDate());
+        birthdayThisYear.setHours(0, 0, 0, 0);
+        return birthdayThisYear >= today && eventDate.getMonth() === currentMonth;
+      }
+      
+      return eventDate >= today && 
+             eventDate.getMonth() === currentMonth && 
+             eventDate.getFullYear() === currentYear;
+    });
+    
+    return upcoming
+      .sort((a, b) => {
+        const dateA = new Date(currentYear, new Date(a.date).getMonth(), new Date(a.date).getDate());
+        const dateB = new Date(currentYear, new Date(b.date).getMonth(), new Date(b.date).getDate());
+        return dateA.getTime() - dateB.getTime();
+      })
+      .slice(0, 3);
   };
 
   const upcomingEvents = getUpcomingEvents();
@@ -456,7 +486,6 @@ export default function CalendarCard() {
           </div>
         ) : (
           <>
-            {/* Show upcoming events for current month, or all events for other months */}
             {(currentDate.getMonth() === new Date().getMonth() && currentDate.getFullYear() === new Date().getFullYear() 
               ? upcomingEvents 
               : currentMonthEvents
@@ -511,11 +540,10 @@ export default function CalendarCard() {
         )}
       </div>
 
-      {/* Add Event Modal - Now Responsive */}
+      {/* Add Event Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-lg w-full max-w-lg mx-auto max-h-[90vh] overflow-y-auto">
-            {/* Header */}
             <div className="flex justify-between items-center p-4 sm:p-6 border-b border-gray-100 sticky top-0 bg-white rounded-t-xl">
               <h3 className="text-lg sm:text-xl font-semibold text-gray-900">Agregar nuevo evento</h3>
               <button 
@@ -526,10 +554,8 @@ export default function CalendarCard() {
               </button>
             </div>
 
-            {/* Form */}
             <form onSubmit={handleSubmit} className="p-4 sm:p-6">
               <div className="space-y-4 sm:space-y-5">
-                {/* Event type selector */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Tipo de evento
@@ -572,7 +598,6 @@ export default function CalendarCard() {
                   </div>
                 </div>
 
-                {/* Title */}
                 <div>
                   <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-2">
                     Título
@@ -589,7 +614,6 @@ export default function CalendarCard() {
                   />
                 </div>
 
-                {/* Date and Time */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label htmlFor="date" className="block text-sm font-medium text-gray-700 mb-2">
@@ -606,7 +630,6 @@ export default function CalendarCard() {
                     />
                   </div>
 
-                  {/* Time input (only shown for non-birthday events) */}
                   {newEvent.type !== "birthday" && (
                     <div>
                       <label htmlFor="time" className="block text-sm font-medium text-gray-700 mb-2">
@@ -625,7 +648,6 @@ export default function CalendarCard() {
                   )}
                 </div>
 
-                {/* Description */}
                 <div>
                   <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-2">
                     Descripción
@@ -641,7 +663,6 @@ export default function CalendarCard() {
                   />
                 </div>
 
-                {/* Image upload - Now available for all event types */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Imagen {newEvent.type === "birthday" ? "(opcional - se usará imagen por defecto si no se selecciona)" : "(opcional)"}
@@ -696,7 +717,6 @@ export default function CalendarCard() {
                 </div>
               </div>
 
-              {/* Footer */}
               <div className="mt-6 sm:mt-8 flex flex-col sm:flex-row justify-end gap-3 sm:gap-2">
                 <button
                   type="button"
@@ -709,7 +729,7 @@ export default function CalendarCard() {
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="w-full sm:w-auto px-4 py-2 text-sm font-medium text-white bg-blue-500 rounded-md hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center transition-colors"
+                  className="w-full sm:w--auto px-4 py-2 text-sm font-medium text-white bg-blue-500 rounded-md hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center transition-colors"
                 >
                   {isSubmitting ? (
                     <>
@@ -717,7 +737,7 @@ export default function CalendarCard() {
                       Guardando...
                     </>
                   ) : (
-                    'Guardar evento'
+                    'Guardar evento' 
                   )}
                 </button>
               </div>

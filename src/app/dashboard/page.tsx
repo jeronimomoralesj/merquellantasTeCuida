@@ -432,11 +432,11 @@ useEffect(() => {
     },
     { 
       id: 6, 
-      title: "Nuevo Link", 
+      title: "Temporales 1A", 
       icon: <PersonStanding className="h-5 w-5" />, 
       color: "bg-gray-100 text-gray-600",
       bgHover: "hover:bg-gradient-to-br from-gray-50 to-gray-100",
-      href: "https://genteutil.net/"
+      href: "https://temporalesunoa.com.co/"
     }
   ];
 
@@ -482,126 +482,245 @@ useEffect(() => {
               <div className="lg:col-span-2 space-y-6">
                 {/* Welcome banner with gradient */}
                 <div className="bg-white rounded-2xl shadow-sm overflow-hidden border border-gray-100 hover:shadow-md transition-shadow duration-300">
-  <div className="relative p-6 md:p-8 flex flex-col md:flex-row items-center">
-    <div className="absolute top-0 right-0 w-full h-1 bg-gradient-to-r from-[#ff9900] via-[#ffb347] to-white"></div>
-
-    <div className="md:flex-1 mb-6 md:mb-0 md:pr-6">
-      {loadingEvent ? (
-        <p className="text-gray-500">Cargando evento…</p>
-      ) : nextEvent ? (
-        <>
-          <div className="flex items-center gap-2 mb-3">
-            <div className="inline-block px-3 py-1 rounded-full bg-[#ff9900]/10 text-[#ff9900] text-xs font-medium">
-              Evento destacado
-            </div>
-            {(() => {
-              const eventStatus = getEventStatus(nextEvent.date.toDate());
-              return (
-                <div className={`inline-block px-2 py-1 rounded-full ${eventStatus.color} text-white text-xs font-medium`}>
-                  {eventStatus.label}
-                </div>
-              );
-            })()}
+  {(() => {
+    const isBirthday = nextEvent && (nextEvent.type === 'cumpleaños' || nextEvent.title.toLowerCase().includes('cumpleaños'));
+    
+    // Birthday messages array
+    const birthdayMessages = [
+      "Eres un integrante muy importante de todo el equipo y esperamos que tengas un hermoso día junto a tu familia, compañeros y demás. ¡Que este nuevo año de vida esté lleno de éxitos y alegrías!",
+      "Hoy celebramos tu día especial y queremos que sepas lo importante que eres para nuestro equipo. Que este cumpleaños sea el inicio de un año lleno de bendiciones, logros y momentos inolvidables.",
+      "Tu dedicación y compromiso hacen de este equipo un lugar mejor cada día. Esperamos que celebres este día rodeado de las personas que más quieres y que recibas todo el amor que mereces. ¡Feliz cumpleaños!",
+      "En este día tan especial, queremos reconocer todo lo que aportas a nuestro equipo. Tu presencia marca la diferencia y tu energía nos inspira. Que tu cumpleaños esté lleno de sorpresas maravillosas y momentos de felicidad.",
+      "Hoy es un día para celebrarte a ti y todo lo que representas para nosotros. Eres una pieza fundamental de esta familia laboral. Deseamos que este nuevo año de vida te traiga prosperidad, salud y muchos motivos para sonreír."
+    ];
+    
+    // Get random message (using event title as seed for consistency during the day)
+    const randomMessage = nextEvent ? birthdayMessages[nextEvent.title.length % birthdayMessages.length] : birthdayMessages[0];
+    
+    if (isBirthday) {
+      return (
+        <div className="relative p-6 md:p-8">
+          {/* Animated confetti background */}
+          <div className="absolute inset-0 overflow-hidden">
+            <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-pink-400 via-purple-400 via-blue-400 via-green-400 via-yellow-400 to-red-400"></div>
+            {/* Decorative elements */}
+            <div className="absolute top-4 left-4 text-yellow-400 text-2xl animate-pulse">🎈</div>
+            <div className="absolute top-8 right-8 text-pink-400 text-2xl animate-bounce" style={{ animationDelay: '0.2s' }}>🎉</div>
+            <div className="absolute bottom-8 left-12 text-purple-400 text-xl animate-pulse" style={{ animationDelay: '0.4s' }}>✨</div>
+            <div className="absolute bottom-12 right-16 text-blue-400 text-xl animate-bounce" style={{ animationDelay: '0.6s' }}>🎊</div>
           </div>
 
-          <h2 className="text-xl md:text-2xl font-bold text-gray-900 mb-2">
-            {nextEvent.title}
-          </h2>
+          <div className="relative flex flex-col md:flex-row items-center gap-6">
+            {/* Left side - Birthday message */}
+            <div className="md:flex-1 text-center md:text-left">
+              <div className="inline-flex items-center gap-2 mb-4 px-4 py-2 rounded-full bg-gradient-to-r from-pink-100 via-purple-100 to-blue-100">
+                <span className="text-2xl">🎂</span>
+                <span className="text-sm font-bold bg-gradient-to-r from-pink-600 via-purple-600 to-blue-600 text-transparent bg-clip-text">
+                  ¡Celebración Especial!
+                </span>
+              </div>
 
-          {/* Format date/time or "All day" with +1 day adjustment */}
-          {(() => {
-            const dt = nextEvent.date.toDate();
-            const adjustedDt = addOneDay(dt); // Add one day for display
-            const isAllDay = dt.getHours() === 0 && dt.getMinutes() === 0 && dt.getSeconds() === 0;
-            const isToday = isEventToday(dt);
+              <h2 className="text-2xl md:text-3xl font-bold mb-3 bg-gradient-to-r from-pink-600 via-purple-600 to-blue-600 text-transparent bg-clip-text">
+                {nextEvent?.title}
+              </h2>
 
-            if (isAllDay) {
-              return (
-                <p className="text-xs text-gray-500 mb-3">
-                  {isToday ? 'Hoy' : adjustedDt.toLocaleDateString('es-ES', {
-                    day: 'numeric',
-                    month: 'long',
-                    year: 'numeric'
-                  })} — Todo el día
+              {/* Date */}
+              {(() => {
+                const dt = nextEvent?.date.toDate();
+                if (!dt) return null;
+                const adjustedDt = addOneDay(dt);
+                const isToday = isEventToday(dt);
+
+                return (
+                  <p className="text-sm text-gray-600 mb-4 font-medium">
+                    {isToday ? '🎈 ¡Hoy es el gran día!' : `📅 ${adjustedDt.toLocaleDateString('es-ES', {
+                      day: 'numeric',
+                      month: 'long',
+                      year: 'numeric'
+                    })}`}
+                  </p>
+                );
+              })()}
+
+              {/* Special birthday message */}
+              <div className="bg-gradient-to-br from-pink-50 via-purple-50 to-blue-50 rounded-xl p-5 mb-5 border-2 border-purple-200">
+                <p className="text-gray-700 leading-relaxed text-sm md:text-base">
+                  {randomMessage}
                 </p>
-              );
-            } else {
-              // For timed events, keep original time but show adjusted date
-              return (
-                <p className="text-xs text-gray-500 mb-3">
-                  {isToday ? 'Hoy' : adjustedDt.toLocaleDateString('es-ES', {
-                    day: 'numeric',
-                    month: 'long',
-                    year: 'numeric'
-                  })},{' '}
-                  {dt.toLocaleTimeString('es-ES', {
-                    hour: '2-digit',
-                    minute: '2-digit'
-                  })}
-                </p>
-              );
-            }
-          })()}
+              </div>
 
-          <p className="mb-4 text-gray-600">{nextEvent.description}</p>
-          
-          {/* Show additional events today if any */}
-          {todayEventsCount > 1 && (
-            <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
-              <p className="text-sm text-blue-800 font-medium mb-2">
-                📅 Hay {todayEventsCount} eventos hoy
-              </p>
-              {additionalTodayEvents.length > 0 && (
-                <div className="space-y-1">
-                  {additionalTodayEvents.slice(0, 2).map((event, idx) => (
-                    <p key={idx} className="text-xs text-blue-700">
-                      • {event.title}
-                      {(() => {
-                        const dt = event.date.toDate();
-                        const isAllDay = dt.getHours() === 0 && dt.getMinutes() === 0 && dt.getSeconds() === 0;
-                        return isAllDay ? '' : ` (${dt.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })})`;
-                      })()}
-                    </p>
-                  ))}
-                  {additionalTodayEvents.length > 2 && (
-                    <p className="text-xs text-blue-600">
-                      y {additionalTodayEvents.length - 2} más...
-                    </p>
+              {/* Show additional events if any */}
+              {todayEventsCount > 1 && (
+                <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                  <p className="text-sm text-blue-800 font-medium mb-2">
+                    📅 Hay {todayEventsCount} eventos hoy
+                  </p>
+                  {additionalTodayEvents.length > 0 && (
+                    <div className="space-y-1">
+                      {additionalTodayEvents.slice(0, 2).map((event, idx) => (
+                        <p key={idx} className="text-xs text-blue-700">
+                          • {event.title}
+                        </p>
+                      ))}
+                    </div>
                   )}
                 </div>
               )}
-            </div>
-          )}
-          
-          <a href='dashboard/calendar'>
-            <button className="inline-flex items-center px-5 py-2.5 bg-gradient-to-r from-[#ff9900] to-[#ffb347] text-white rounded-full font-medium text-sm hover:from-[#e68a00] hover:to-[#ff9900] transition-all shadow-sm hover:shadow transform hover:-translate-y-0.5 duration-200">
-              Ver detalles
-              <ChevronRight className="ml-1 h-4 w-4" />
-            </button>
-          </a>
-        </>
-      ) : (
-        <p className="text-gray-500">No hay eventos próximos</p>
-      )}
-    </div>
 
-    {/* Event image or placeholder */}
-    <div className="flex-shrink-0 w-full md:w-auto">
-      {loadingEvent ? (
-        <div className="h-40 w-full md:w-64 bg-gray-100 rounded-xl animate-pulse" />
-      ) : nextEvent ? (
-        <img
-          src={nextEvent.image}
-          alt={nextEvent.title}
-          className="rounded-xl shadow h-40 w-full object-cover md:w-64"
-        />
-      ) : (
-        <div className="h-40 w-full md:w-64 flex items-center justify-center text-gray-400 rounded-xl border border-gray-200">
-          No hay imagen
+              <a href='dashboard/calendar'>
+                <button className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-pink-500 via-purple-500 to-blue-500 text-white rounded-full font-bold text-sm hover:from-pink-600 hover:via-purple-600 hover:to-blue-600 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-1 duration-200">
+                  Ver más celebraciones
+                  <ChevronRight className="ml-2 h-5 w-5" />
+                </button>
+              </a>
+            </div>
+
+            {/* Right side - Image with birthday decoration */}
+            <div className="flex-shrink-0 w-full md:w-auto relative">
+              {nextEvent?.image ? (
+                <div className="relative">
+                  <div className="absolute -top-3 -right-3 text-4xl animate-spin-slow">🎉</div>
+                  <div className="absolute -bottom-3 -left-3 text-4xl animate-bounce">🎁</div>
+                  <img
+                    src={nextEvent.image}
+                    alt={nextEvent.title}
+                    className="rounded-2xl shadow-2xl h-48 w-full object-cover md:w-72 ring-4 ring-purple-200"
+                  />
+                </div>
+              ) : (
+                <div className="h-48 w-full md:w-72 flex items-center justify-center text-6xl rounded-2xl bg-gradient-to-br from-pink-100 via-purple-100 to-blue-100 shadow-xl">
+                  🎂
+                </div>
+              )}
+            </div>
+          </div>
         </div>
-      )}
-    </div>
-  </div>
+      );
+    } else {
+      // Regular event display
+      return (
+        <div className="relative p-6 md:p-8 flex flex-col md:flex-row items-center">
+          <div className="absolute top-0 right-0 w-full h-1 bg-gradient-to-r from-[#ff9900] via-[#ffb347] to-white"></div>
+
+          <div className="md:flex-1 mb-6 md:mb-0 md:pr-6">
+            {loadingEvent ? (
+              <p className="text-gray-500">Cargando evento…</p>
+            ) : nextEvent ? (
+              <>
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="inline-block px-3 py-1 rounded-full bg-[#ff9900]/10 text-[#ff9900] text-xs font-medium">
+                    Evento destacado
+                  </div>
+                  {(() => {
+                    const eventStatus = getEventStatus(nextEvent.date.toDate());
+                    return (
+                      <div className={`inline-block px-2 py-1 rounded-full ${eventStatus.color} text-white text-xs font-medium`}>
+                        {eventStatus.label}
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                <h2 className="text-xl md:text-2xl font-bold text-gray-900 mb-2">
+                  {nextEvent.title}
+                </h2>
+
+                {/* Format date/time or "All day" with +1 day adjustment */}
+                {(() => {
+                  const dt = nextEvent.date.toDate();
+                  const adjustedDt = addOneDay(dt);
+                  const isAllDay = dt.getHours() === 0 && dt.getMinutes() === 0 && dt.getSeconds() === 0;
+                  const isToday = isEventToday(dt);
+
+                  if (isAllDay) {
+                    return (
+                      <p className="text-xs text-gray-500 mb-3">
+                        {isToday ? 'Hoy' : adjustedDt.toLocaleDateString('es-ES', {
+                          day: 'numeric',
+                          month: 'long',
+                          year: 'numeric'
+                        })} — Todo el día
+                      </p>
+                    );
+                  } else {
+                    return (
+                      <p className="text-xs text-gray-500 mb-3">
+                        {isToday ? 'Hoy' : adjustedDt.toLocaleDateString('es-ES', {
+                          day: 'numeric',
+                          month: 'long',
+                          year: 'numeric'
+                        })},{' '}
+                        {dt.toLocaleTimeString('es-ES', {
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
+                      </p>
+                    );
+                  }
+                })()}
+
+                <p className="mb-4 text-gray-600">{nextEvent.description}</p>
+                
+                {/* Show additional events today if any */}
+                {todayEventsCount > 1 && (
+                  <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                    <p className="text-sm text-blue-800 font-medium mb-2">
+                      📅 Hay {todayEventsCount} eventos hoy
+                    </p>
+                    {additionalTodayEvents.length > 0 && (
+                      <div className="space-y-1">
+                        {additionalTodayEvents.slice(0, 2).map((event, idx) => (
+                          <p key={idx} className="text-xs text-blue-700">
+                            • {event.title}
+                            {(() => {
+                              const dt = event.date.toDate();
+                              const isAllDay = dt.getHours() === 0 && dt.getMinutes() === 0 && dt.getSeconds() === 0;
+                              return isAllDay ? '' : ` (${dt.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })})`;
+                            })()}
+                          </p>
+                        ))}
+                        {additionalTodayEvents.length > 2 && (
+                          <p className="text-xs text-blue-600">
+                            y {additionalTodayEvents.length - 2} más...
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+                
+                <a href='dashboard/calendar'>
+                  <button className="inline-flex items-center px-5 py-2.5 bg-gradient-to-r from-[#ff9900] to-[#ffb347] text-white rounded-full font-medium text-sm hover:from-[#e68a00] hover:to-[#ff9900] transition-all shadow-sm hover:shadow transform hover:-translate-y-0.5 duration-200">
+                    Ver detalles
+                    <ChevronRight className="ml-1 h-4 w-4" />
+                  </button>
+                </a>
+              </>
+            ) : (
+              <p className="text-gray-500">No hay eventos próximos</p>
+            )}
+          </div>
+
+          {/* Event image or placeholder */}
+          <div className="flex-shrink-0 w-full md:w-auto">
+            {loadingEvent ? (
+              <div className="h-40 w-full md:w-64 bg-gray-100 rounded-xl animate-pulse" />
+            ) : nextEvent ? (
+              <img
+                src={nextEvent.image}
+                alt={nextEvent.title}
+                className="rounded-xl shadow h-40 w-full object-cover md:w-64"
+              />
+            ) : (
+              <div className="h-40 w-full md:w-64 flex items-center justify-center text-gray-400 rounded-xl border border-gray-200">
+                No hay imagen
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+  })()}
 </div>
 
                 {/* Quick actions with improved design */}

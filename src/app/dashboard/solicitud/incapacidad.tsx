@@ -65,32 +65,36 @@ const IncapacidadForm = () => {
 
   // NEW FUNCTION: Send email notification
   const sendEmailNotification = async (userName: string) => {
-    try {
-      const response = await fetch('https://formsubmit.co/ajax/marcelagonzalez@merquellantas.com', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify({
-          _subject: 'Nueva Solicitud de Incapacidad - Alerta',
-          _cc: 'saludocupacional@merquellantas.com, dptodelagente@merquellantas.com',
-          _template: 'basic',
-          message: `Hay una nueva solicitud de incapacidad esperándote de ${userName}. Por favor revisa el sistema.`,
-          tipo_solicitud: 'Incapacidad',
-          usuario: userName,
-          fecha: new Date().toLocaleDateString('es-ES')
-        })
-      });
+  const emails = [
+    "marcelagonzalez@merquellantas.com",
+    "saludocupacional@merquellantas.com",
+    "dptodelagente@merquellantas.com"
+  ];
 
-      if (!response.ok) {
-        console.error('Error sending email notification');
-      }
-    } catch (error) {
-      console.error('Error sending email notification:', error);
-      // Don't throw error to avoid breaking the main form submission
-    }
-  };
+  try {
+    await Promise.all(
+      emails.map(email =>
+        fetch(`https://formsubmit.co/ajax/${email}`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+          body: JSON.stringify({
+            _subject: "Nueva Solicitud de Incapacidad - Alerta",
+            message: `Hay una nueva solicitud de incapacidad esperándote de ${userName}. Por favor revisa el sistema.`,
+            tipo_solicitud: "Incapacidad",
+            usuario: userName,
+            fecha: new Date().toLocaleDateString("es-ES"),
+            _captcha: "false",
+          }),
+        })
+      )
+    );
+  } catch (error) {
+    console.error("Error sending email notification:", error);
+  }
+};
 
   useEffect(() => {
   if (formData.startDate && formData.endDate) {
