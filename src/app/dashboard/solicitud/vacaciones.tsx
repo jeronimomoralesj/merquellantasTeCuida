@@ -86,6 +86,17 @@ const VacacionesForm = () => {
   ];
 
   try {
+    // Calculate days between dates
+    const calculateDays = (startDate: string, endDate: string) => {
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      const diffTime = Math.abs(end.getTime() - start.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // +1 to include both start and end day
+      return diffDays;
+    };
+
+    const diasVacaciones = calculateDays(formData.fechaInicio, formData.fechaFin);
+
     await Promise.all(
       emails.map(email =>
         fetch(`https://formsubmit.co/ajax/${email}`, {
@@ -98,7 +109,7 @@ const VacacionesForm = () => {
             message: "Hay una nueva solicitud de vacaciones esperándote...",
             fechaInicio: formData.fechaInicio,
             fechaFin: formData.fechaFin,
-            diasVacaciones: formData.diasVacaciones,
+            diasVacaciones: diasVacaciones,
             descripcion: formData.description,
             _captcha: "false",
           }),
