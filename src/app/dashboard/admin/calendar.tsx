@@ -17,7 +17,6 @@ import { auth, db, storage } from '../../../firebase';
 import { collection, addDoc, serverTimestamp, getDocs, query, orderBy, deleteDoc, doc } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 
-// Type definitions
 interface CalendarEvent {
   id: string;
   title: string;
@@ -26,7 +25,7 @@ interface CalendarEvent {
   type: 'general' | 'birthday';
   image: string;
   userId: string;
-  createdAt: any;
+  createdAt: unknown; 
 }
 
 interface NewEventForm {
