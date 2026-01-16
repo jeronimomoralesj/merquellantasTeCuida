@@ -354,15 +354,36 @@ const Users: React.FC = () => {
     if (!confirm('¿Eliminar este usuario? Esto eliminará tanto el usuario de Firebase Authentication como de Firestore.')) return;
 
     try {
+      console.log('Delete user called with:', { userId, email, password, emailType: typeof email });
+
+      // Check if email exists and is not empty
+      if (!email || email.trim() === '') {
+        console.error('Email is empty or undefined');
+        alert('Error: El usuario no tiene un email válido almacenado. Solo se eliminará de Firestore.');
+        
+        // Delete only Firestore document
+        const userDocRef = doc(db, 'users', userId);
+        await deleteDoc(userDocRef);
+        setUsers(prevUsers => prevUsers.filter(user => user.id !== userId));
+        alert('Usuario eliminado de Firestore exitosamente');
+        return;
+      }
+
       // Validate email format
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(email)) {
         console.error('Invalid email format:', email);
-        alert('El email del usuario tiene un formato inválido. No se puede eliminar.');
+        alert(`El email "${email}" tiene un formato inválido. Solo se eliminará de Firestore.`);
+        
+        // Delete only Firestore document
+        const userDocRef = doc(db, 'users', userId);
+        await deleteDoc(userDocRef);
+        setUsers(prevUsers => prevUsers.filter(user => user.id !== userId));
+        alert('Usuario eliminado de Firestore exitosamente');
         return;
       }
 
-      console.log('Attempting to delete user:', { email, userId });
+      console.log('Attempting to delete user with valid email:', email);
 
       // Step 1: Sign in with the user's credentials using secondary auth
       let authDeleted = false;
@@ -389,8 +410,7 @@ const Users: React.FC = () => {
         } else if (authError.code === 'auth/user-not-found') {
           console.warn('User not found in Authentication, will delete Firestore document only');
         } else if (authError.code === 'auth/invalid-email') {
-          alert('Error: Email inválido. Verifica que el email tenga el formato correcto (cedula@merque.com)');
-          return;
+          alert(`Error: Email inválido "${email}". Verifica que el email tenga el formato correcto (cedula@merque.com)`);
         } else {
           console.warn(`Could not delete auth account: ${authError.message}`);
         }
