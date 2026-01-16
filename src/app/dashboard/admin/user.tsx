@@ -354,13 +354,34 @@ const Users: React.FC = () => {
     if (!confirm('¿Eliminar este usuario?')) return;
 
     try {
-      await signInWithEmailAndPassword(secondaryAuth, email, password);
-
-      if (secondaryAuth.currentUser) {
-        await firebaseDeleteUser(secondaryAuth.currentUser);
-        console.log(`Auth account deleted for UID: ${userId}`);
+      // Validate email format before attempting to sign in
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        console.error('Invalid email format:', email);
+        alert('El email del usuario tiene un formato inválido. Se eliminará solo el documento de Firestore.');
+        
+        // Delete only Firestore document if email is invalid
+        const userDocRef = doc(db, 'users', userId);
+        await deleteDoc(userDocRef);
+        setUsers(prevUsers => prevUsers.filter(user => user.id !== userId));
+        alert('Usuario eliminado de Firestore exitosamente');
+        return;
       }
 
+      // Try to sign in and delete auth account
+      try {
+        const userCredential = await signInWithEmailAndPassword(secondaryAuth, email, password);
+        
+        if (userCredential.user) {
+          await firebaseDeleteUser(userCredential.user);
+          console.log(`Auth account deleted for UID: ${userId}`);
+        }
+      } catch (authError: any) {
+        console.warn('Could not delete auth account:', authError.message);
+        // Continue to delete Firestore document even if auth deletion fails
+      }
+
+      // Delete Firestore document
       const userDocRef = doc(db, 'users', userId);
       await deleteDoc(userDocRef);
       console.log(`Firestore document deleted for UID: ${userId}`);
@@ -368,9 +389,9 @@ const Users: React.FC = () => {
       setUsers(prevUsers => prevUsers.filter(user => user.id !== userId));
 
       alert('Usuario eliminado exitosamente');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error deleting user:', error);
-      alert('Error al eliminar usuario');
+      alert(`Error al eliminar usuario: ${error.message || 'Error desconocido'}`);
     }
   };
 
