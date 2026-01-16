@@ -351,44 +351,64 @@ const Users: React.FC = () => {
   };
 
   const deleteUser = async (userId: string, email: string, password: string) => {
-    if (!confirm('¿Eliminar este usuario?')) return;
+    if (!confirm('¿Eliminar este usuario? Esto eliminará tanto el usuario de Firebase Authentication como de Firestore.')) return;
 
     try {
-      // Validate email format before attempting to sign in
+      // Validate email format
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(email)) {
         console.error('Invalid email format:', email);
-        alert('El email del usuario tiene un formato inválido. Se eliminará solo el documento de Firestore.');
-        
-        // Delete only Firestore document if email is invalid
-        const userDocRef = doc(db, 'users', userId);
-        await deleteDoc(userDocRef);
-        setUsers(prevUsers => prevUsers.filter(user => user.id !== userId));
-        alert('Usuario eliminado de Firestore exitosamente');
+        alert('El email del usuario tiene un formato inválido. No se puede eliminar.');
         return;
       }
 
-      // Try to sign in and delete auth account
+      console.log('Attempting to delete user:', { email, userId });
+
+      // Step 1: Sign in with the user's credentials using secondary auth
+      let authDeleted = false;
       try {
         const userCredential = await signInWithEmailAndPassword(secondaryAuth, email, password);
+        console.log('Successfully signed in as user:', userCredential.user.uid);
         
-        if (userCredential.user) {
-          await firebaseDeleteUser(userCredential.user);
-          console.log(`Auth account deleted for UID: ${userId}`);
+        // Step 2: Delete the auth user
+        if (secondaryAuth.currentUser) {
+          await firebaseDeleteUser(secondaryAuth.currentUser);
+          console.log('Auth account deleted successfully');
+          authDeleted = true;
         }
+        
+        // Step 3: Sign out from secondary auth
+        await secondaryAuth.signOut();
+        console.log('Signed out from secondary auth');
       } catch (authError: any) {
-        console.warn('Could not delete auth account:', authError.message);
-        // Continue to delete Firestore document even if auth deletion fails
+        console.error('Auth deletion error:', authError);
+        
+        // Provide specific error messages
+        if (authError.code === 'auth/wrong-password') {
+          alert('Error: La contraseña almacenada no coincide con Firebase Authentication. Se eliminará solo el documento de Firestore.');
+        } else if (authError.code === 'auth/user-not-found') {
+          console.warn('User not found in Authentication, will delete Firestore document only');
+        } else if (authError.code === 'auth/invalid-email') {
+          alert('Error: Email inválido. Verifica que el email tenga el formato correcto (cedula@merque.com)');
+          return;
+        } else {
+          console.warn(`Could not delete auth account: ${authError.message}`);
+        }
       }
 
-      // Delete Firestore document
+      // Step 4: Delete Firestore document (always do this, even if auth deletion fails)
       const userDocRef = doc(db, 'users', userId);
       await deleteDoc(userDocRef);
-      console.log(`Firestore document deleted for UID: ${userId}`);
+      console.log('Firestore document deleted successfully');
 
+      // Step 5: Update UI
       setUsers(prevUsers => prevUsers.filter(user => user.id !== userId));
 
-      alert('Usuario eliminado exitosamente');
+      if (authDeleted) {
+        alert('Usuario eliminado completamente (Authentication + Firestore)');
+      } else {
+        alert('Usuario eliminado de Firestore. Nota: No se pudo eliminar de Authentication.');
+      }
     } catch (error: any) {
       console.error('Error deleting user:', error);
       alert(`Error al eliminar usuario: ${error.message || 'Error desconocido'}`);
