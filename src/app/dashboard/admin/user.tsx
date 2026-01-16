@@ -359,13 +359,13 @@ const Users: React.FC = () => {
       // Check if email exists and is not empty
       if (!email || email.trim() === '') {
         console.error('Email is empty or undefined');
-        alert('Error: El usuario no tiene un email válido almacenado. Solo se eliminará de Firestore.');
         
-        // Delete only Firestore document
-        const userDocRef = doc(db, 'users', userId);
-        await deleteDoc(userDocRef);
-        setUsers(prevUsers => prevUsers.filter(user => user.id !== userId));
-        alert('Usuario eliminado de Firestore exitosamente');
+        if (confirm('El usuario no tiene un email válido almacenado. ¿Desea eliminarlo solo de Firestore?')) {
+          const userDocRef = doc(db, 'users', userId);
+          await deleteDoc(userDocRef);
+          setUsers(prevUsers => prevUsers.filter(user => user.id !== userId));
+          alert('Usuario eliminado de Firestore exitosamente');
+        }
         return;
       }
 
@@ -373,65 +373,95 @@ const Users: React.FC = () => {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(email)) {
         console.error('Invalid email format:', email);
-        alert(`El email "${email}" tiene un formato inválido. Solo se eliminará de Firestore.`);
         
-        // Delete only Firestore document
-        const userDocRef = doc(db, 'users', userId);
-        await deleteDoc(userDocRef);
-        setUsers(prevUsers => prevUsers.filter(user => user.id !== userId));
-        alert('Usuario eliminado de Firestore exitosamente');
+        if (confirm(`El email "${email}" tiene un formato inválido. ¿Desea eliminarlo solo de Firestore?`)) {
+          const userDocRef = doc(db, 'users', userId);
+          await deleteDoc(userDocRef);
+          setUsers(prevUsers => prevUsers.filter(user => user.id !== userId));
+          alert('Usuario eliminado de Firestore exitosamente');
+        }
         return;
       }
 
       console.log('Attempting to delete user with valid email:', email);
 
-      // Step 1: Sign in with the user's credentials using secondary auth
+      // Step 1: Try to sign in and delete from Authentication
       let authDeleted = false;
+      let userNotFoundInAuth = false;
+      
       try {
+        console.log('Attempting to sign in with:', email);
         const userCredential = await signInWithEmailAndPassword(secondaryAuth, email, password);
         console.log('Successfully signed in as user:', userCredential.user.uid);
         
-        // Step 2: Delete the auth user
+        // Delete the auth user
         if (secondaryAuth.currentUser) {
           await firebaseDeleteUser(secondaryAuth.currentUser);
           console.log('Auth account deleted successfully');
           authDeleted = true;
         }
         
-        // Step 3: Sign out from secondary auth
+        // Sign out from secondary auth
         await secondaryAuth.signOut();
         console.log('Signed out from secondary auth');
-      } catch (authError: any) {
-        console.error('Auth deletion error:', authError);
         
-        // Provide specific error messages
-        if (authError.code === 'auth/wrong-password') {
-          alert('Error: La contraseña almacenada no coincide con Firebase Authentication. Se eliminará solo el documento de Firestore.');
-        } else if (authError.code === 'auth/user-not-found') {
-          console.warn('User not found in Authentication, will delete Firestore document only');
+      } catch (authError: any) {
+        console.error('Auth deletion error:', authError.code, authError.message);
+        
+        if (authError.code === 'auth/user-not-found') {
+          console.warn('User not found in Authentication');
+          userNotFoundInAuth = true;
+          
+          // Ask user if they want to delete from Firestore anyway
+          if (!confirm(`El usuario con email "${email}" no existe en Firebase Authentication (puede haber sido eliminado previamente o nunca fue creado). ¿Desea eliminarlo de Firestore?`)) {
+            return;
+          }
+        } else if (authError.code === 'auth/wrong-password') {
+          console.warn('Wrong password for user');
+          
+          if (!confirm('La contraseña almacenada no coincide. El usuario puede no existir en Authentication. ¿Desea eliminarlo de Firestore de todos modos?')) {
+            return;
+          }
         } else if (authError.code === 'auth/invalid-email') {
-          alert(`Error: Email inválido "${email}". Verifica que el email tenga el formato correcto (cedula@merque.com)`);
+          alert(`Error: Email inválido "${email}". No se puede proceder con la eliminación.`);
+          return;
+        } else if (authError.code === 'auth/too-many-requests') {
+          alert('Demasiados intentos fallidos. Por favor, espere unos minutos e intente de nuevo.');
+          return;
         } else {
-          console.warn(`Could not delete auth account: ${authError.message}`);
+          console.warn(`Auth error: ${authError.message}`);
+          
+          if (!confirm(`Error al eliminar de Authentication: ${authError.message}. ¿Desea eliminarlo de Firestore de todos modos?`)) {
+            return;
+          }
         }
       }
 
-      // Step 4: Delete Firestore document (always do this, even if auth deletion fails)
-      const userDocRef = doc(db, 'users', userId);
-      await deleteDoc(userDocRef);
-      console.log('Firestore document deleted successfully');
-
-      // Step 5: Update UI
-      setUsers(prevUsers => prevUsers.filter(user => user.id !== userId));
-
-      if (authDeleted) {
-        alert('Usuario eliminado completamente (Authentication + Firestore)');
-      } else {
-        alert('Usuario eliminado de Firestore. Nota: No se pudo eliminar de Authentication.');
+      // Step 2: Delete Firestore document
+      try {
+        const userDocRef = doc(db, 'users', userId);
+        await deleteDoc(userDocRef);
+        console.log('Firestore document deleted successfully');
+        
+        // Update UI
+        setUsers(prevUsers => prevUsers.filter(user => user.id !== userId));
+        
+        // Show appropriate success message
+        if (authDeleted) {
+          alert('✓ Usuario eliminado completamente de Authentication y Firestore');
+        } else if (userNotFoundInAuth) {
+          alert('✓ Usuario eliminado de Firestore (no existía en Authentication)');
+        } else {
+          alert('✓ Usuario eliminado de Firestore (no se pudo verificar Authentication)');
+        }
+      } catch (firestoreError: any) {
+        console.error('Firestore deletion error:', firestoreError);
+        alert(`Error al eliminar de Firestore: ${firestoreError.message}`);
       }
+      
     } catch (error: any) {
-      console.error('Error deleting user:', error);
-      alert(`Error al eliminar usuario: ${error.message || 'Error desconocido'}`);
+      console.error('Unexpected error deleting user:', error);
+      alert(`Error inesperado: ${error.message || 'Error desconocido'}`);
     }
   };
 
