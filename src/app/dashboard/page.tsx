@@ -311,7 +311,6 @@ useEffect(() => {
 
   fetchNextEvent();
 }, []);
-
   // Load user profile with date conversion and antiguedad calculation
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
