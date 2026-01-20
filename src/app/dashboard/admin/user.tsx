@@ -205,16 +205,17 @@ const Users: React.FC = () => {
       await setDoc(userDocRef, payload);
 
       const newUser: User = {
-        id: userDocRef.id,
-        cedula: formData.cedula,
-        email,
-        password,
-        createdAt: new Date(),
-        extra: {
-          ...formData.extra,
-          'Fecha Ingreso': formData.extra['Fecha Ingreso']
-        }
-      };
+  id: userDocRef.id,
+  cedula: formData.cedula,
+  nombre: formData.nombre, // ✅ ADD THIS LINE
+  email,
+  password,
+  createdAt: new Date(),
+  extra: {
+    ...formData.extra,
+    'Fecha Ingreso': formData.extra['Fecha Ingreso']
+  }
+};
 
       setUsers(prev => [...prev, newUser]);
       setFormData(initialFormData);
