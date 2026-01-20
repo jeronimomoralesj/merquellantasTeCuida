@@ -21,6 +21,8 @@ interface CalendarEvent {
   image: string;
   date: Timestamp;
   type?: string;
+  videoUrl?: string;
+  videoPath?: string;
 }
 
 interface PendingRequest {
@@ -225,61 +227,89 @@ const getEventStatus = (eventDate: Date) => {
     return () => unsubscribe();
   }, []);
 
-  // Fetch the next calendar event
+// Normaliza una fecha de cumpleaños al próximo cumpleaños válido
+const normalizeBirthdayDate = (originalDate: Date): Date => {
+  const today = new Date();
+  const currentYear = today.getFullYear();
+
+  const birthdayThisYear = new Date(
+    currentYear,
+    originalDate.getMonth(),
+    originalDate.getDate()
+  );
+
+  birthdayThisYear.setHours(0, 0, 0, 0);
+
+  // Si ya pasó este año, usar el siguiente
+  if (birthdayThisYear < today) {
+    birthdayThisYear.setFullYear(currentYear + 1);
+  }
+
+  return birthdayThisYear;
+};
+
+// Determina si HOY es cumpleaños (ignorando año)
+const isBirthdayToday = (originalDate: Date): boolean => {
+  const today = new Date();
+  return (
+    today.getDate() === originalDate.getDate() &&
+    today.getMonth() === originalDate.getMonth()
+  );
+};
+
 useEffect(() => {
-  async function fetchNext() {
+  async function fetchNextEvent() {
     try {
-      // Get start of today but subtract one day to account for our +1 day display offset
-      const startOfToday = new Date();
-      startOfToday.setHours(0, 0, 0, 0);
-      startOfToday.setDate(startOfToday.getDate() - 1); // Subtract 1 day for database query
-      
+      setLoadingEvent(true);
+
       const q = query(
         collection(db, 'calendar'),
-        where('date', '>=', Timestamp.fromDate(startOfToday)),
         orderBy('date', 'asc'),
-        limit(5) // Get more events to check for multiple today
+        limit(100)
       );
+
       const snap = await getDocs(q);
 
-      if (!snap.empty) {
-        const events = snap.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        })) as (CalendarEvent & { id: string })[];
-        
-        // Set the first/next event as the main event
-        setNextEvent(events[0]);
-        
-        // Check for multiple events today (with date adjustment)
-        const today = new Date();
-        today.setHours(23, 59, 59, 999); // End of today
-        const todayStart = new Date();
-        todayStart.setHours(0, 0, 0, 0);
-        
-        const todayEvents = events.filter(event => {
-          const adjustedEventDate = addOneDay(event.date.toDate());
-          return adjustedEventDate >= todayStart && adjustedEventDate <= today;
-        });
-        
-        // Store additional today events info
-        setTodayEventsCount(todayEvents.length);
-        setAdditionalTodayEvents(todayEvents.slice(1)); // Exclude the main event
-      } else {
-        setNextEvent(null);
-        setTodayEventsCount(0);
-        setAdditionalTodayEvents([]);
-      }
+      const now = new Date();
+      now.setHours(0, 0, 0, 0);
+
+      const events = snap.docs
+        .map(doc => {
+          const data = doc.data() as CalendarEvent;
+          const originalDate = data.date.toDate();
+
+          let effectiveDate = originalDate;
+
+          if (
+            data.type === 'cumpleaños' ||
+            data.title.toLowerCase().includes('cumpleaños')
+          ) {
+            effectiveDate = normalizeBirthdayDate(originalDate);
+          }
+
+          return {
+            ...data,
+            _originalDate: originalDate,
+            date: Timestamp.fromDate(effectiveDate),
+          };
+        })
+        .filter(evt => {
+          const eventDate = evt.date.toDate();
+          eventDate.setHours(0, 0, 0, 0);
+          return eventDate >= now;
+        })
+        .sort((a, b) => a.date.toMillis() - b.date.toMillis());
+
+      setNextEvent(events.length > 0 ? events[0] : null);
     } catch (e) {
-      console.error("Error fetching calendar:", e);
+      console.error('Error fetching next event:', e);
       setNextEvent(null);
-      setTodayEventsCount(0);
-      setAdditionalTodayEvents([]);
     } finally {
       setLoadingEvent(false);
     }
   }
-  fetchNext();
+
+  fetchNextEvent();
 }, []);
 
   // Load user profile with date conversion and antiguedad calculation
@@ -345,30 +375,55 @@ useEffect(() => {
 
   // Load upcoming events
   useEffect(() => {
-    async function fetchUpcoming() {
-      try {
-        // Subtract one day from current time for database query to account for display offset
-        const now = new Date();
-        now.setDate(now.getDate() - 1);
-        
-        const q = query(
-          collection(db, 'calendar'),
-          where('date', '>=', Timestamp.fromDate(now)),
-          orderBy('date', 'asc'),
-          limit(3)
-        );
-        const snap = await getDocs(q);
-        const events = snap.docs.map(d => d.data() as CalendarEvent);
-        setUpcomingEvents(events);
-      } catch (e) {
-        console.error("Error fetching upcoming:", e);
-      } finally {
-        setLoadingEvents(false);
-      }
-    }
-    fetchUpcoming();
-  }, []);
+  async function fetchUpcoming() {
+    try {
+      const q = query(
+        collection(db, 'calendar'),
+        orderBy('date', 'asc'),
+        limit(50) // traemos más para cumpleaños antiguos
+      );
 
+      const snap = await getDocs(q);
+
+      const now = new Date();
+      now.setHours(0, 0, 0, 0);
+
+      const events = snap.docs
+        .map(doc => {
+          const data = doc.data() as CalendarEvent;
+          const originalDate = data.date.toDate();
+
+          let effectiveDate = originalDate;
+
+          if (
+            data.type === 'cumpleaños' ||
+            data.title.toLowerCase().includes('cumpleaños')
+          ) {
+            effectiveDate = normalizeBirthdayDate(originalDate);
+          }
+
+          return {
+            ...data,
+            date: Timestamp.fromDate(effectiveDate),
+          };
+        })
+        // 🔽 FILTRAMOS DESPUÉS DE NORMALIZAR
+        .filter(evt => evt.date.toDate() >= now)
+        // 🔽 ORDEN FINAL
+        .sort((a, b) => a.date.toMillis() - b.date.toMillis())
+        // 🔽 SOLO LOS 3 PRÓXIMOS
+        .slice(0, 3);
+
+      setUpcomingEvents(events);
+    } catch (e) {
+      console.error('Error fetching upcoming:', e);
+    } finally {
+      setLoadingEvents(false);
+    }
+  }
+
+  fetchUpcoming();
+}, []);
 
 
   // If flagged, render the solicitudes screen instead of the dashboard
@@ -483,7 +538,14 @@ useEffect(() => {
                 {/* Welcome banner with gradient */}
                 <div className="bg-white rounded-2xl shadow-sm overflow-hidden border border-gray-100 hover:shadow-md transition-shadow duration-300">
   {(() => {
-    const isBirthday = nextEvent && (nextEvent.type === 'cumpleaños' || nextEvent.title.toLowerCase().includes('cumpleaños'));
+    const isBirthday =
+  nextEvent &&
+  (
+    nextEvent.type === 'cumpleaños' ||
+    nextEvent.title.toLowerCase().includes('cumpleaños')
+  ) &&
+  isBirthdayToday(nextEvent._originalDate ?? nextEvent.date.toDate());
+
     
     // Birthday messages array
     const birthdayMessages = [
@@ -701,22 +763,39 @@ useEffect(() => {
             )}
           </div>
 
-          {/* Event image or placeholder */}
-          <div className="flex-shrink-0 w-full md:w-auto">
-            {loadingEvent ? (
-              <div className="h-40 w-full md:w-64 bg-gray-100 rounded-xl animate-pulse" />
-            ) : nextEvent ? (
-              <img
-                src={nextEvent.image}
-                alt={nextEvent.title}
-                className="rounded-xl shadow h-40 w-full object-cover md:w-64"
-              />
-            ) : (
-              <div className="h-40 w-full md:w-64 flex items-center justify-center text-gray-400 rounded-xl border border-gray-200">
-                No hay imagen
-              </div>
-            )}
-          </div>
+         <div className="flex-shrink-0 w-full md:w-auto">
+  {loadingEvent ? (
+    <div className="h-40 w-full md:w-64 bg-gray-100 rounded-xl animate-pulse" />
+  ) : nextEvent ? (
+    nextEvent.videoUrl && nextEvent.videoUrl.trim() !== '' ? (
+      <div className="h-40 w-full md:w-64 rounded-xl overflow-hidden bg-black shadow">
+        <video
+          key={nextEvent.videoUrl}
+          src={nextEvent.videoUrl}
+          controls
+          playsInline
+          preload="metadata"
+          className="h-full w-full object-contain"
+        />
+      </div>
+    ) : nextEvent.image ? (
+      <img
+        src={nextEvent.image}
+        alt={nextEvent.title}
+        className="rounded-xl shadow h-40 w-full object-cover md:w-64"
+      />
+    ) : (
+      <div className="h-40 w-full md:w-64 flex items-center justify-center text-gray-400 rounded-xl border border-gray-200">
+        No hay media
+      </div>
+    )
+  ) : (
+    <div className="h-40 w-full md:w-64 flex items-center justify-center text-gray-400 rounded-xl border border-gray-200">
+      No hay evento
+    </div>
+  )}
+</div>
+
         </div>
       );
     }

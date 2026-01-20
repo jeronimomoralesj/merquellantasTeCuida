@@ -66,33 +66,21 @@ const IncapacidadForm = () => {
   // NEW FUNCTION: Send email notification
   const sendEmailNotification = async (userName: string) => {
   const emails = [
-    "marcelagonzalez@merquellantas.com",
-    "saludocupacional@merquellantas.com",
-    "dptodelagente@merquellantas.com"
+    'marcelagonzalez@merquellantas.com',
+    'saludocupacional@merquellantas.com',
+    'dptodelagente@merquellantas.com',
   ];
 
-  try {
-    await Promise.all(
-      emails.map(email =>
-        fetch(`https://formsubmit.co/ajax/${email}`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Accept: "application/json",
-          },
-          body: JSON.stringify({
-            _subject: "Nueva Solicitud de Incapacidad - Alerta",
-            message: `Hay una nueva solicitud de incapacidad esperándote de ${userName}. Por favor revisa el sistema.`,
-            tipo_solicitud: "Incapacidad",
-            usuario: userName,
-            fecha: new Date().toLocaleDateString("es-ES"),
-            _captcha: "false",
-          }),
-        })
-      )
-    );
-  } catch (error) {
-    console.error("Error sending email notification:", error);
+  const res = await fetch('/api/send-email', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ emails, userName }),
+  });
+
+  if (!res.ok) {
+    throw new Error('Email failed');
   }
 };
 

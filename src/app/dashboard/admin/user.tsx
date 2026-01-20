@@ -24,7 +24,7 @@ import {
   where
 } from 'firebase/firestore';
 import { db } from '../../../firebase';
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword, deleteUser as firebaseDeleteUser} from 'firebase/auth';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { secondaryAuth } from '../../../firebase';
 
 interface UserExtra {
@@ -36,13 +36,14 @@ interface UserExtra {
   'FONDO DE PENSIONES': string;
   'Fecha Ingreso': string;
   'Fondo Cesantías': string;
-  'Nombre Área Funcional': string;
+  'Cargo Empleado': string;
   'Número Cuenta': string;
   'Tipo Cuenta': string;
   'Tipo de Documento': string;
   'nombre': string;
   'posicion': string;
   'fechaNacimiento': string;
+  'rol': 'user' | 'admin';
 }
 
 interface User {
@@ -51,8 +52,6 @@ interface User {
   email: string;
   password: string;
   createdAt: Date;
-  nombre: string;   
-  rol: 'user' | 'admin';    
   extra: UserExtra;
 }
 
@@ -60,11 +59,8 @@ interface FirestoreUserData {
   cedula?: string;
   email?: string;
   password?: string;
-  nombre?: string;
-  rol?: string;
   createdAt?: Timestamp | Date;
   extra?: Partial<UserExtra> & {
-    rol?: string;
     'Fecha Ingreso'?: string | number;
     'fechaNacimiento'?: string;
   };
@@ -89,8 +85,6 @@ const Users: React.FC = () => {
 
   const initialFormData: Omit<User, 'id' | 'email' | 'password' | 'createdAt'> = {
     cedula: '',
-    nombre: '',
-    rol: 'user',
     extra: {
       'Dpto Donde Labora': '',
       'ARL': '',
@@ -100,13 +94,14 @@ const Users: React.FC = () => {
       'FONDO DE PENSIONES': '',
       'Fecha Ingreso': '',
       'Fondo Cesantías': '',
-      'Nombre Área Funcional': '',
+      'Cargo Empleado': '',
       'Número Cuenta': '',
       'Tipo Cuenta': '',
       'Tipo de Documento': '',
       'nombre': '',
       'posicion': '',
       'fechaNacimiento': '',
+      'rol': 'user',
     }
   };
 
@@ -135,7 +130,6 @@ const Users: React.FC = () => {
     return date.toISOString().split('T')[0];
   };
 
-  // Fetch calendar events to match birthdays
   const fetchCalendarEvents = async () => {
     try {
       const eventsRef = collection(db, 'calendar');
@@ -154,36 +148,33 @@ const Users: React.FC = () => {
     }
   };
 
-  // Extract birthday from calendar events for a user
- const getBirthdayFromCalendar = (userName: string): string => {
-  const birthdayEvent = calendarEvents.find(event =>
-    event.title.toLowerCase().includes(userName.toLowerCase()) ||
-    (event.title.toLowerCase().includes('cumpleaños') &&
-     event.title.toLowerCase().includes(userName.toLowerCase().split(' ')[0]))
-  );
+  const getBirthdayFromCalendar = (userName: string): string => {
+    const birthdayEvent = calendarEvents.find(event =>
+      event.title.toLowerCase().includes(userName.toLowerCase()) ||
+      (event.title.toLowerCase().includes('cumpleaños') &&
+       event.title.toLowerCase().includes(userName.toLowerCase().split(' ')[0]))
+    );
 
-  if (birthdayEvent && birthdayEvent.date) {
-    let date: Date;
+    if (birthdayEvent && birthdayEvent.date) {
+      let date: Date;
 
-    // ✅ Safely handle Firestore Timestamp or plain Date/string
-    if (typeof birthdayEvent.date === 'object' && birthdayEvent.date !== null && 'toDate' in birthdayEvent.date) {
-      date = birthdayEvent.date.toDate();
-    } else if (birthdayEvent.date instanceof Date) {
-      date = birthdayEvent.date;
-    } else {
-      date = new Date(birthdayEvent.date);
+      if (typeof birthdayEvent.date === 'object' && birthdayEvent.date !== null && 'toDate' in birthdayEvent.date) {
+        date = birthdayEvent.date.toDate();
+      } else if (birthdayEvent.date instanceof Date) {
+        date = birthdayEvent.date;
+      } else {
+        date = new Date(birthdayEvent.date);
+      }
+
+      date.setDate(date.getDate() + 1);
+      return date.toISOString().split('T')[0];
     }
 
-    // Add one day to match the calendar display logic
-    date.setDate(date.getDate() + 1);
-    return date.toISOString().split('T')[0];
-  }
-
-  return '';
-};
+    return '';
+  };
 
   const createUser = async () => {
-    if (!formData.cedula || !formData.nombre) {
+    if (!formData.cedula || !formData.extra.nombre) {
       alert('Por favor, complete los campos obligatorios (Cédula y Nombre)');
       return;
     }
@@ -199,8 +190,6 @@ const Users: React.FC = () => {
         cedula: formData.cedula,
         email,
         password,
-        nombre: formData.nombre,
-        rol: formData.rol,
         createdAt,
         extra: {
           ...formData.extra,
@@ -216,8 +205,6 @@ const Users: React.FC = () => {
         cedula: formData.cedula,
         email,
         password,
-        rol: formData.rol,
-        nombre: formData.nombre,
         createdAt: new Date(),
         extra: {
           ...formData.extra,
@@ -243,14 +230,12 @@ const Users: React.FC = () => {
   const fetchUsers = async () => {
     setLoading(true);
     try {
-      // Fetch calendar events first
       await fetchCalendarEvents();
       
       const snap = await getDocs(collection(db, 'users'));
       const fetched: User[] = snap.docs.map(docSnap => {
         const data: FirestoreUserData = docSnap.data() || {};
-        const rawExtra: Partial<UserExtra> & { rol?: string; 'Fecha Ingreso'?: string | number; 'fechaNacimiento'?: string } = data.extra || {};
-        const { rol: extraRol, ...extraWithoutRol } = rawExtra;
+        const rawExtra: Partial<UserExtra> & { 'Fecha Ingreso'?: string | number; 'fechaNacimiento'?: string } = data.extra || {};
 
         let createdAt: Date;
         if (data.createdAt && typeof data.createdAt === 'object' && 'toDate' in data.createdAt) {
@@ -261,32 +246,31 @@ const Users: React.FC = () => {
           createdAt = new Date();
         }
 
-        const rol = (data.rol as 'user' | 'admin') ?? (extraRol as 'user' | 'admin') ?? 'user';
-
-        // Get birthday from stored data or from calendar
-        let birthday = extraWithoutRol['fechaNacimiento'] || '';
-        if (!birthday && data.nombre) {
-          birthday = getBirthdayFromCalendar(data.nombre);
+        const nombre = rawExtra['nombre'] || '';
+        let birthday = rawExtra['fechaNacimiento'] || '';
+        if (!birthday && nombre) {
+          birthday = getBirthdayFromCalendar(nombre);
         }
 
         const completeExtra: UserExtra = {
-          'Dpto Donde Labora': extraWithoutRol['Dpto Donde Labora'] || '',
-          'ARL': extraWithoutRol['ARL'] || '',
-          'Banco': extraWithoutRol['Banco'] || '',
-          'CAJA DE COMPENSACION': extraWithoutRol['CAJA DE COMPENSACION'] || '',
-          'EPS': extraWithoutRol['EPS'] || '',
-          'FONDO DE PENSIONES': extraWithoutRol['FONDO DE PENSIONES'] || '',
+          'Dpto Donde Labora': rawExtra['Dpto Donde Labora'] || '',
+          'ARL': rawExtra['ARL'] || '',
+          'Banco': rawExtra['Banco'] || '',
+          'CAJA DE COMPENSACION': rawExtra['CAJA DE COMPENSACION'] || '',
+          'EPS': rawExtra['EPS'] || '',
+          'FONDO DE PENSIONES': rawExtra['FONDO DE PENSIONES'] || '',
           'Fecha Ingreso': typeof rawExtra['Fecha Ingreso'] === 'number'
             ? excelSerialToDate(rawExtra['Fecha Ingreso'])
             : rawExtra['Fecha Ingreso'] || '',
-          'Fondo Cesantías': extraWithoutRol['Fondo Cesantías'] || '',
-          'Nombre Área Funcional': extraWithoutRol['Nombre Área Funcional'] || '',
-          'Número Cuenta': extraWithoutRol['Número Cuenta'] || '',
-          'Tipo Cuenta': extraWithoutRol['Tipo Cuenta'] || '',
-          'Tipo de Documento': extraWithoutRol['Tipo de Documento'] || '',
-          'nombre': extraWithoutRol['nombre'] || '',
-          'posicion': extraWithoutRol['posicion'] || '',
+          'Fondo Cesantías': rawExtra['Fondo Cesantías'] || '',
+          'Cargo Empleado': rawExtra['Cargo Empleado'] || '',
+          'Número Cuenta': rawExtra['Número Cuenta'] || '',
+          'Tipo Cuenta': rawExtra['Tipo Cuenta'] || '',
+          'Tipo de Documento': rawExtra['Tipo de Documento'] || '',
+          'nombre': nombre,
+          'posicion': rawExtra['posicion'] || '',
           'fechaNacimiento': birthday,
+          'rol': (rawExtra['rol'] as 'user' | 'admin') || 'user',
         };
 
         return {
@@ -294,8 +278,6 @@ const Users: React.FC = () => {
           cedula: data.cedula || '',
           email: data.email || '',
           password: data.password || '',
-          nombre: data.nombre || '',
-          rol,
           createdAt,
           extra: completeExtra,
         };
@@ -314,8 +296,6 @@ const Users: React.FC = () => {
     
     const updatedPayload = {
       cedula: formData.cedula,
-      nombre: formData.nombre,
-      rol: formData.rol,
       extra: {
         ...formData.extra,
         'Fecha Ingreso': dateToExcelSerial(formData.extra['Fecha Ingreso']),
@@ -350,139 +330,53 @@ const Users: React.FC = () => {
     }
   };
 
-  const deleteUser = async (userId: string, email: string, password: string) => {
-    if (!confirm('¿Eliminar este usuario? Esto eliminará tanto el usuario de Firebase Authentication como de Firestore.')) return;
+  const deleteUser = async (uid: string) => {
+    if (!confirm('¿Eliminar este usuario permanentemente?')) return;
 
     try {
-      console.log('Delete user called with:', { userId, email, password, emailType: typeof email });
+      const res = await fetch('/api/delete-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uid })
+      });
 
-      // Check if email exists and is not empty
-      if (!email || email.trim() === '') {
-        console.error('Email is empty or undefined');
-        
-        if (confirm('El usuario no tiene un email válido almacenado. ¿Desea eliminarlo solo de Firestore?')) {
-          const userDocRef = doc(db, 'users', userId);
-          await deleteDoc(userDocRef);
-          setUsers(prevUsers => prevUsers.filter(user => user.id !== userId));
-          alert('Usuario eliminado de Firestore exitosamente');
-        }
+      if (!res.ok) {
+        const err = await res.json();
+        alert(err.error);
         return;
       }
 
-      // Validate email format
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(email)) {
-        console.error('Invalid email format:', email);
-        
-        if (confirm(`El email "${email}" tiene un formato inválido. ¿Desea eliminarlo solo de Firestore?`)) {
-          const userDocRef = doc(db, 'users', userId);
-          await deleteDoc(userDocRef);
-          setUsers(prevUsers => prevUsers.filter(user => user.id !== userId));
-          alert('Usuario eliminado de Firestore exitosamente');
-        }
-        return;
-      }
-
-      console.log('Attempting to delete user with valid email:', email);
-
-      // Step 1: Try to sign in and delete from Authentication
-      let authDeleted = false;
-      let userNotFoundInAuth = false;
+      const calendarRef = collection(db, 'calendar');
+      const q = query(calendarRef, where('userId', '==', uid), where('type', '==', 'birthday'));
+      const querySnapshot = await getDocs(q);
       
-      try {
-        console.log('Attempting to sign in with:', email);
-        const userCredential = await signInWithEmailAndPassword(secondaryAuth, email, password);
-        console.log('Successfully signed in as user:', userCredential.user.uid);
-        
-        // Delete the auth user
-        if (secondaryAuth.currentUser) {
-          await firebaseDeleteUser(secondaryAuth.currentUser);
-          console.log('Auth account deleted successfully');
-          authDeleted = true;
-        }
-        
-        // Sign out from secondary auth
-        await secondaryAuth.signOut();
-        console.log('Signed out from secondary auth');
-        
-      } catch (authError: any) {
-        console.error('Auth deletion error:', authError.code, authError.message);
-        
-        if (authError.code === 'auth/user-not-found') {
-          console.warn('User not found in Authentication');
-          userNotFoundInAuth = true;
-          
-          // Ask user if they want to delete from Firestore anyway
-          if (!confirm(`El usuario con email "${email}" no existe en Firebase Authentication (puede haber sido eliminado previamente o nunca fue creado). ¿Desea eliminarlo de Firestore?`)) {
-            return;
-          }
-        } else if (authError.code === 'auth/wrong-password') {
-          console.warn('Wrong password for user');
-          
-          if (!confirm('La contraseña almacenada no coincide. El usuario puede no existir en Authentication. ¿Desea eliminarlo de Firestore de todos modos?')) {
-            return;
-          }
-        } else if (authError.code === 'auth/invalid-email') {
-          alert(`Error: Email inválido "${email}". No se puede proceder con la eliminación.`);
-          return;
-        } else if (authError.code === 'auth/too-many-requests') {
-          alert('Demasiados intentos fallidos. Por favor, espere unos minutos e intente de nuevo.');
-          return;
-        } else {
-          console.warn(`Auth error: ${authError.message}`);
-          
-          if (!confirm(`Error al eliminar de Authentication: ${authError.message}. ¿Desea eliminarlo de Firestore de todos modos?`)) {
-            return;
-          }
-        }
-      }
-
-      // Step 2: Delete Firestore document
-      try {
-        const userDocRef = doc(db, 'users', userId);
-        await deleteDoc(userDocRef);
-        console.log('Firestore document deleted successfully');
-        
-        // Update UI
-        setUsers(prevUsers => prevUsers.filter(user => user.id !== userId));
-        
-        // Show appropriate success message
-        if (authDeleted) {
-          alert('✓ Usuario eliminado completamente de Authentication y Firestore');
-        } else if (userNotFoundInAuth) {
-          alert('✓ Usuario eliminado de Firestore (no existía en Authentication)');
-        } else {
-          alert('✓ Usuario eliminado de Firestore (no se pudo verificar Authentication)');
-        }
-      } catch (firestoreError: any) {
-        console.error('Firestore deletion error:', firestoreError);
-        alert(`Error al eliminar de Firestore: ${firestoreError.message}`);
-      }
+      const deletePromises = querySnapshot.docs.map(async (docSnapshot) => {
+        await deleteDoc(doc(db, 'calendar', docSnapshot.id));
+      });
       
-    } catch (error: any) {
-      console.error('Unexpected error deleting user:', error);
-      alert(`Error inesperado: ${error.message || 'Error desconocido'}`);
+      await Promise.all(deletePromises);
+
+      setUsers(prev => prev.filter(u => u.id !== uid));
+      
+      alert('Usuario y eventos de cumpleaños eliminados completamente');
+    } catch (error) {
+      console.error('Error deleting user and calendar events:', error);
+      alert('Error al eliminar usuario. Por favor intente nuevamente.');
     }
   };
 
-  const handleInputChange = (field: string, value: string | number | boolean, isExtra = false): void => {
-    if (isExtra) {
-      setFormData(prev => ({
-        ...prev,
-        extra: { ...prev.extra, [field]: value }
-      }));
-    } else {
-      setFormData(prev => ({ ...prev, [field]: value }));
-    }
+  const handleInputChange = (field: string, value: string | number | boolean): void => {
+    setFormData(prev => ({
+      ...prev,
+      extra: { ...prev.extra, [field]: value }
+    }));
   };
 
   const startEdit = (user: User) => {
     setEditingUser(user);
     setFormData({ 
       cedula: user.cedula,
-      nombre: user.nombre,  
       extra: user.extra,
-      rol: user.rol ?? 'user',
     });
     setShowCreateForm(true);
   };
@@ -497,7 +391,7 @@ const Users: React.FC = () => {
     const searchLower = searchTerm.toLowerCase();
     return (
       u.cedula?.toLowerCase().includes(searchLower) ||
-      u.nombre?.toLowerCase().includes(searchLower) || 
+      u.extra?.nombre?.toLowerCase().includes(searchLower) || 
       u.email?.toLowerCase().includes(searchLower)
     );
   });
@@ -570,7 +464,7 @@ const Users: React.FC = () => {
                     type="text"
                     placeholder="Ingrese el número de cédula"
                     value={formData.cedula}
-                    onChange={e => handleInputChange('cedula', e.target.value)}
+                    onChange={e => setFormData(prev => ({ ...prev, cedula: e.target.value }))}
                     className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     required
                   />
@@ -580,7 +474,7 @@ const Users: React.FC = () => {
                   <input
                     type="text"
                     placeholder="Nombre y apellidos"
-                    value={formData.nombre}
+                    value={formData.extra.nombre}
                     onChange={e => handleInputChange('nombre', e.target.value)}
                     className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     required
@@ -595,7 +489,7 @@ const Users: React.FC = () => {
                     type="date"
                     placeholder="Fecha de Nacimiento"
                     value={formData.extra['fechaNacimiento']}
-                    onChange={e => handleInputChange('fechaNacimiento', e.target.value, true)}
+                    onChange={e => handleInputChange('fechaNacimiento', e.target.value)}
                     className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
@@ -603,7 +497,7 @@ const Users: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de Documento</label>
                   <select
                     value={formData.extra['Tipo de Documento']}
-                    onChange={e => handleInputChange('Tipo de Documento', e.target.value, true)}
+                    onChange={e => handleInputChange('Tipo de Documento', e.target.value)}
                     className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="">Seleccione un tipo</option>
@@ -616,7 +510,7 @@ const Users: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-1">Área</label>
                   <select
                     value={formData.extra.posicion}
-                    onChange={e => handleInputChange('posicion', e.target.value, true)}
+                    onChange={e => handleInputChange('posicion', e.target.value)}
                     className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="">Seleccione un área</option>
@@ -636,17 +530,17 @@ const Users: React.FC = () => {
                     type="text"
                     placeholder="Ej: Recursos Humanos"
                     value={formData.extra['Dpto Donde Labora']}
-                    onChange={e => handleInputChange('Dpto Donde Labora', e.target.value, true)}
+                    onChange={e => handleInputChange('Dpto Donde Labora', e.target.value)}
                     className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Área Funcional</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Cargo Empleado</label>
                   <input
                     type="text"
-                    placeholder="Ej: Administración"
-                    value={formData.extra['Nombre Área Funcional']}
-                    onChange={e => handleInputChange('Nombre Área Funcional', e.target.value, true)}
+                    placeholder="Ej: TECNICO OPERATIVO"
+                    value={formData.extra['Cargo Empleado']}
+                    onChange={e => handleInputChange('Cargo Empleado', e.target.value)}
                     className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
@@ -655,14 +549,14 @@ const Users: React.FC = () => {
                   <input
                     type="date"
                     value={formData.extra['Fecha Ingreso']}
-                    onChange={e => handleInputChange('Fecha Ingreso', e.target.value, true)}
+                    onChange={e => handleInputChange('Fecha Ingreso', e.target.value)}
                     className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Rol del Sistema</label>
                   <select
-                    value={formData.rol}
+                    value={formData.extra.rol}
                     onChange={e => handleInputChange('rol', e.target.value)}
                     className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
@@ -679,9 +573,9 @@ const Users: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-1">Banco</label>
                   <input
                     type="text"
-                    placeholder="Ej: Bancolombia"
+                    placeholder="Ej: BANCO DE BOGOTÁ"
                     value={formData.extra.Banco}
-                    onChange={e => handleInputChange('Banco', e.target.value, true)}
+                    onChange={e => handleInputChange('Banco', e.target.value)}
                     className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
@@ -691,7 +585,7 @@ const Users: React.FC = () => {
                     type="text"
                     placeholder="Ingrese el número de cuenta"
                     value={formData.extra['Número Cuenta']}
-                    onChange={e => handleInputChange('Número Cuenta', e.target.value, true)}
+                    onChange={e => handleInputChange('Número Cuenta', e.target.value)}
                     className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
@@ -699,7 +593,7 @@ const Users: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de Cuenta</label>
                   <select
                     value={formData.extra['Tipo Cuenta']}
-                    onChange={e => handleInputChange('Tipo Cuenta', e.target.value, true)}
+                    onChange={e => handleInputChange('Tipo Cuenta', e.target.value)}
                     className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="">Seleccione un tipo</option>
@@ -717,9 +611,9 @@ const Users: React.FC = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-1">ARL</label>
                     <input
                       type="text"
-                      placeholder="Ej: Sura"
+                      placeholder="Ej: ARP SURA"
                       value={formData.extra.ARL}
-                      onChange={e => handleInputChange('ARL', e.target.value, true)}
+                      onChange={e => handleInputChange('ARL', e.target.value)}
                       className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
@@ -727,9 +621,9 @@ const Users: React.FC = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-1">EPS</label>
                     <input
                       type="text"
-                      placeholder="Ej: Sanitas"
+                      placeholder="Ej: EPS NUEVA EPS"
                       value={formData.extra.EPS}
-                      onChange={e => handleInputChange('EPS', e.target.value, true)}
+                      onChange={e => handleInputChange('EPS', e.target.value)}
                       className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
@@ -737,9 +631,9 @@ const Users: React.FC = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-1">Caja de Compensación</label>
                     <input
                       type="text"
-                      placeholder="Ej: Compensar"
+                      placeholder="Ej: CAJA DE COMPENSACIÓN FAMILIAR COMFENALCO VALLE"
                       value={formData.extra['CAJA DE COMPENSACION']}
-                      onChange={e => handleInputChange('CAJA DE COMPENSACION', e.target.value, true)}
+                      onChange={e => handleInputChange('CAJA DE COMPENSACION', e.target.value)}
                       className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
@@ -747,9 +641,9 @@ const Users: React.FC = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-1">Fondo de Pensiones</label>
                     <input
                       type="text"
-                      placeholder="Ej: Porvenir"
+                      placeholder="Ej: FONDO DE PENSIONES PORVENIR S.A."
                       value={formData.extra['FONDO DE PENSIONES']}
-                      onChange={e => handleInputChange('FONDO DE PENSIONES', e.target.value, true)}
+                      onChange={e => handleInputChange('FONDO DE PENSIONES', e.target.value)}
                       className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
@@ -759,7 +653,7 @@ const Users: React.FC = () => {
                       type="text"
                       placeholder="Ej: Protección"
                       value={formData.extra['Fondo Cesantías']}
-                      onChange={e => handleInputChange('Fondo Cesantías', e.target.value, true)}
+                      onChange={e => handleInputChange('Fondo Cesantías', e.target.value)}
                       className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
@@ -811,13 +705,16 @@ const Users: React.FC = () => {
                     return (
                       <tr key={user.id} className="hover:bg-gray-50 transition-colors">
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm font-medium text-gray-900">{user.nombre || 'Sin nombre'}</div>
+                          <div className="text-sm font-medium text-gray-900">{user.extra?.nombre || 'Sin nombre'}</div>
                           <div className="text-sm text-gray-500">Cédula: {user.cedula}</div>
                           <div className="text-sm text-gray-500">{user.email}</div>
+                          <div className="text-xs text-gray-400 mt-1">
+                            Rol: {user.extra?.rol === 'admin' ? '👑 Admin' : '👤 Usuario'}
+                          </div>
                         </td>
                         <td className="px-6 py-4">
-                          <div className="text-sm text-gray-900">{user.extra?.posicion || 'Sin posición'}</div>
-                          <div className="text-sm text-gray-500">{user.extra?.['Nombre Área Funcional'] || ''}</div>
+                          <div className="text-sm text-gray-900">{user.extra?.['Cargo Empleado'] || 'Sin cargo'}</div>
+                          <div className="text-sm text-gray-500">{user.extra?.posicion || ''}</div>
                           <div className="text-sm text-gray-500">{user.extra?.['Dpto Donde Labora'] || ''}</div>
                         </td>
                         <td className="px-6 py-4">
@@ -858,7 +755,7 @@ const Users: React.FC = () => {
                             <Edit className="h-4 w-4" />
                           </button>
                           <button 
-                            onClick={() => deleteUser(user.id, user.email, user.password)} 
+                            onClick={() => deleteUser(user.id)} 
                             className="text-red-600 hover:text-red-800 transition-colors"
                           >
                             <Trash2 className="h-4 w-4" />

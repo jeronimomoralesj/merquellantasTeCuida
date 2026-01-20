@@ -78,49 +78,25 @@ const VacacionesForm = () => {
     return true;
   };
 
-  const sendEmailNotification = async (formData: VacacionesFormData) => {
+  const sendEmailNotification = async (userName: string) => {
   const emails = [
-    "marcelagonzalez@merquellantas.com",
-    "saludocupacional@merquellantas.com",
-    "dptodelagente@merquellantas.com"
+    'marcelagonzalez@merquellantas.com',
+    'saludocupacional@merquellantas.com',
+    'dptodelagente@merquellantas.com',
   ];
 
-  try {
-    // Calculate days between dates
-    const calculateDays = (startDate: string, endDate: string) => {
-      const start = new Date(startDate);
-      const end = new Date(endDate);
-      const diffTime = Math.abs(end.getTime() - start.getTime());
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // +1 to include both start and end day
-      return diffDays;
-    };
+  const res = await fetch('/api/send-email', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ emails, userName }),
+  });
 
-    const diasVacaciones = calculateDays(formData.fechaInicio, formData.fechaFin);
-
-    await Promise.all(
-      emails.map(email =>
-        fetch(`https://formsubmit.co/ajax/${email}`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            _subject: "Alerta: Nueva Solicitud de Vacaciones Pendiente",
-            message: "Hay una nueva solicitud de vacaciones esperándote...",
-            fechaInicio: formData.fechaInicio,
-            fechaFin: formData.fechaFin,
-            diasVacaciones: diasVacaciones,
-            descripcion: formData.description,
-            _captcha: "false",
-          }),
-        })
-      )
-    );
-  } catch (error) {
-    console.warn("Email notification error:", error);
+  if (!res.ok) {
+    throw new Error('Email failed');
   }
 };
-
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();

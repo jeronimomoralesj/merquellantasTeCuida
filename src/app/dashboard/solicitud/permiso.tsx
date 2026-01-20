@@ -58,36 +58,25 @@ const PermisoForm = () => {
     return true;
   };
 
-  const sendEmailNotification = async (formData: PermisoFormData) => {
+  const sendEmailNotification = async (userName: string) => {
   const emails = [
-    "marcelagonzalez@merquellantas.com",
-    "saludocupacional@merquellantas.com",
-    "dptodelagente@merquellantas.com"
+    'marcelagonzalez@merquellantas.com',
+    'saludocupacional@merquellantas.com',
+    'dptodelagente@merquellantas.com',
   ];
 
-  try {
-    await Promise.all(
-      emails.map(email =>
-        fetch(`https://formsubmit.co/ajax/${email}`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            _subject: "Alerta: Nuevo Permiso Pendiente",
-            message: "Hay un nuevo permiso esperándote...",
-            fecha: formData.fecha,
-            descripcion: formData.description,
-            _captcha: "false",
-          }),
-        })
-      )
-    );
-  } catch (error) {
-    console.warn("Email notification error:", error);
+  const res = await fetch('/api/send-email', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ emails, userName }),
+  });
+
+  if (!res.ok) {
+    throw new Error('Email failed');
   }
 };
-
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();

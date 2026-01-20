@@ -14,7 +14,7 @@ import {
 
 // Firebase imports
 import { auth, db, storage } from '../../../firebase';
-import { collection, addDoc, serverTimestamp, getDocs, query, orderBy, deleteDoc, doc } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, getDocs, query, orderBy, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 
 interface CalendarEvent {
@@ -24,8 +24,10 @@ interface CalendarEvent {
   description: string;
   type: 'general' | 'birthday';
   image: string;
+  videoUrl?: string;
+  videoPath?: string;
   userId: string;
-  createdAt: unknown; 
+  createdAt: unknown;
 }
 
 interface NewEventForm {
@@ -35,7 +37,9 @@ interface NewEventForm {
   description: string;
   type: 'general' | 'birthday';
   image: File | null;
+  video: File | null;
 }
+
 
 // Helper functions for date offset handling
 const addOneDayForDisplay = (date: Date): Date => {
@@ -62,6 +66,8 @@ export default function CalendarCard() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [allEvents, setAllEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedVideo, setSelectedVideo] = useState<File | null>(null);
+  const [videoError, setVideoError] = useState('');
   const [newEvent, setNewEvent] = useState<NewEventForm>({
     title: "",
     date: "",
@@ -103,7 +109,9 @@ export default function CalendarCard() {
           type: eventData.type || 'general',
           image: eventData.image || '',
           userId: eventData.userId || '',
-          createdAt: eventData.createdAt
+          createdAt: eventData.createdAt,
+          videoUrl: eventData.videoUrl || '',
+videoPath: eventData.videoPath || ''
         });
       });
       
@@ -139,34 +147,114 @@ export default function CalendarCard() {
   };
 
   // Delete event function
-  const deleteEvent = async (eventId: string, imageUrl: string) => {
-    if (!window.confirm("¿Estás seguro de que quieres eliminar este evento?")) {
+  const deleteEvent = async (
+  eventId: string,
+  imageUrl: string,
+  videoPath?: string
+) => {
+  if (!window.confirm("¿Estás seguro de que quieres eliminar este evento?")) {
+    return;
+  }
+
+  try {
+    setDeletingEventId(eventId);
+
+    // 1️⃣ Eliminar documento de Firestore
+    await deleteDoc(doc(db, 'calendar', eventId));
+
+    // 2️⃣ Eliminar imagen (si existe y no es la default)
+    if (imageUrl && !imageUrl.includes('freepik') && !imageUrl.includes('istockphoto')) {
+      try {
+        const imageRef = storageRef(storage, imageUrl);
+        await deleteObject(imageRef);
+      } catch (error) {
+        console.log("Error deleting image (may not exist):", error);
+      }
+    }
+
+    // 3️⃣ Eliminar video (si existe)
+    if (videoPath) {
+      try {
+        const videoRef = storageRef(storage, videoPath);
+        await deleteObject(videoRef);
+      } catch (error) {
+        console.log("Error deleting video (may not exist):", error);
+      }
+    }
+
+    // 4️⃣ Refrescar eventos
+    fetchEvents();
+
+  } catch (error) {
+    console.error("Error deleting event:", error);
+    alert("Error al eliminar el evento. Por favor intente nuevamente.");
+  } finally {
+    setDeletingEventId(null);
+  }
+};
+
+const uploadBirthdayVideo = async (
+  eventId: string,
+  userId: string
+) => {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = "video/mp4,video/webm,video/quicktime";
+
+  input.onchange = async () => {
+    const file = input.files?.[0];
+    if (!file) return;
+
+    // 1️⃣ Tamaño máximo (50MB)
+    if (file.size > 50 * 1024 * 1024) {
+      alert("El video no debe superar 50MB");
       return;
     }
 
-    try {
-      setDeletingEventId(eventId);
-      
-      await deleteDoc(doc(db, 'calendar', eventId));
-      
-      if (imageUrl && !imageUrl.includes('istockphoto.com')) {
-        try {
-          const imageRef = storageRef(storage, imageUrl);
-          await deleteObject(imageRef);
-        } catch (error) {
-          console.log("Error deleting image (may not exist):", error);
-        }
+    // 2️⃣ Validar duración
+    const video = document.createElement("video");
+    video.preload = "metadata";
+
+    video.onloadedmetadata = async () => {
+      URL.revokeObjectURL(video.src);
+
+      if (video.duration > 20) {
+        alert("El video no puede durar más de 20 segundos");
+        return;
       }
-      
-      fetchEvents();
-      
-    } catch (error) {
-      console.error("Error deleting event:", error);
-      alert("Error al eliminar el evento. Por favor intente nuevamente.");
-    } finally {
-      setDeletingEventId(null);
-    }
+
+      // 3️⃣ Subida a Firebase
+      try {
+        const videoPath = `calendar/videos/${userId}/${Date.now()}_${file.name}`;
+        const videoRef = storageRef(storage, videoPath);
+
+        await uploadBytes(videoRef, file);
+        const videoUrl = await getDownloadURL(videoRef);
+
+        await updateDoc(doc(db, "calendar", eventId), {
+          videoUrl,
+          videoPath,
+        });
+
+        fetchEvents();
+        alert("Video subido correctamente");
+
+      } catch (error) {
+        console.error("Error uploading video:", error);
+        alert("Error al subir el video");
+      }
+    };
+
+    video.onerror = () => {
+      alert("No se pudo leer el video");
+    };
+
+    video.src = URL.createObjectURL(file);
   };
+
+  input.click();
+};
+
 
   // Calendar generation functions
   const getDaysInMonth = (year: number, month: number): number => {
@@ -311,6 +399,16 @@ export default function CalendarCard() {
         const [hours, minutes] = newEvent.time.split(':').map(Number);
         eventDate.setHours(hours, minutes, 0, 0);
       }
+
+      let videoUrl = "";
+let videoPath = "";
+
+if (selectedVideo) {
+  videoPath = `calendar/videos/${user.uid}/${Date.now()}_${selectedVideo.name}`;
+  const videoRef = storageRef(storage, videoPath);
+  await uploadBytes(videoRef, selectedVideo);
+  videoUrl = await getDownloadURL(videoRef);
+}
       
       await addDoc(collection(db, 'calendar'), {
         title: newEvent.title,
@@ -319,7 +417,9 @@ export default function CalendarCard() {
         type: newEvent.type,
         image: imageUrl,
         userId: user.uid,
-        createdAt: serverTimestamp()
+        createdAt: serverTimestamp(),
+        videoUrl,
+        videoPath
       });
       
       setIsModalOpen(false);
@@ -510,6 +610,28 @@ export default function CalendarCard() {
                       {event.description && (
                         <p className="text-xs text-gray-600 mt-1 truncate">{event.description}</p>
                       )}
+                      {event.type === "birthday" && (
+  <>
+    {event.videoUrl ? (
+      <a
+        href={event.videoUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-xs text-blue-600 underline mt-1 inline-block"
+      >
+        Ver video actual
+      </a>
+    ) : (
+      <button
+        onClick={() => uploadBirthdayVideo(event.id, event.userId)}
+        className="text-xs text-blue-600 underline mt-1 inline-block hover:text-blue-800"
+      >
+        Subir video
+      </button>
+    )}
+  </>
+)}
+
                     </div>
                     <button
                       onClick={() => deleteEvent(event.id, event.image)}
@@ -695,6 +817,7 @@ export default function CalendarCard() {
                         <p className="mt-2 text-sm text-red-600 text-center">{imageError}</p>
                       )}
                     </div>
+                    
                   ) : (
                     <div className="border rounded-lg p-3 sm:p-4 flex items-center justify-between bg-blue-50 border-blue-200">
                       <div className="flex items-center min-w-0 flex-1">
@@ -715,6 +838,37 @@ export default function CalendarCard() {
                   )}
                 </div>
               </div>
+
+              {newEvent.type === "birthday" && (
+  <div>
+    <label className="block text-sm font-medium text-gray-700 mb-2">
+      Video de cumpleaños (opcional)
+    </label>
+
+    <input
+      type="file"
+      accept="video/mp4,video/webm,video/quicktime"
+      onChange={(e) => {
+        const file = e.target.files?.[0] ?? null;
+        if (!file) return;
+
+        if (file.size > 50 * 1024 * 1024) {
+          setVideoError("El video no debe superar 50MB");
+          setSelectedVideo(null);
+          return;
+        }
+
+        setVideoError("");
+        setSelectedVideo(file);
+      }}
+      className="block w-full text-sm text-gray-700"
+    />
+
+    {videoError && (
+      <p className="text-xs text-red-600 mt-1">{videoError}</p>
+    )}
+  </div>
+)}
 
               <div className="mt-6 sm:mt-8 flex flex-col sm:flex-row justify-end gap-3 sm:gap-2">
                 <button
