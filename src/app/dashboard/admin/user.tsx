@@ -256,10 +256,8 @@ const Users: React.FC = () => {
 
         let birthday: string = '';
         if (rawExtra.fechaNacimiento) {
-          birthday = typeof rawExtra.fechaNacimiento === 'string' 
-            ? rawExtra.fechaNacimiento 
-            : rawExtra.fechaNacimiento.toString();
-        }
+  birthday = rawExtra.fechaNacimiento;
+}
 
         if (!birthday && nombre) {
           birthday = getBirthdayFromCalendar(nombre);
