@@ -40,7 +40,6 @@ interface UserExtra {
   'Número Cuenta': string;
   'Tipo Cuenta': string;
   'Tipo de Documento': string;
-  'nombre': string;
   'posicion': string;
   'fechaNacimiento': string;
   'rol': 'user' | 'admin';
@@ -53,6 +52,7 @@ interface User {
   password: string;
   createdAt: Date;
   extra: UserExtra;
+  nombre: string;
 }
 
 interface FirestoreUserData {
@@ -83,27 +83,27 @@ const Users: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
 
-  const initialFormData: Omit<User, 'id' | 'email' | 'password' | 'createdAt'> = {
-    cedula: '',
-    extra: {
-      'Dpto Donde Labora': '',
-      'ARL': '',
-      'Banco': '',
-      'CAJA DE COMPENSACION': '',
-      'EPS': '',
-      'FONDO DE PENSIONES': '',
-      'Fecha Ingreso': '',
-      'Fondo Cesantías': '',
-      'Cargo Empleado': '',
-      'Número Cuenta': '',
-      'Tipo Cuenta': '',
-      'Tipo de Documento': '',
-      'nombre': '',
-      'posicion': '',
-      'fechaNacimiento': '',
-      'rol': 'user',
-    }
-  };
+  const initialFormData = {
+  cedula: '',
+  nombre: '', // ✅ TOP-LEVEL
+  extra: {
+    'Dpto Donde Labora': '',
+    'ARL': '',
+    'Banco': '',
+    'CAJA DE COMPENSACION': '',
+    'EPS': '',
+    'FONDO DE PENSIONES': '',
+    'Fecha Ingreso': '',
+    'Fondo Cesantías': '',
+    'Cargo Empleado': '',
+    'Número Cuenta': '',
+    'Tipo Cuenta': '',
+    'Tipo de Documento': '',
+    'posicion': '',
+    'fechaNacimiento': '',
+    'rol': 'user',
+  }
+};
 
   const [formData, setFormData] = useState(initialFormData);
 
@@ -174,7 +174,7 @@ const Users: React.FC = () => {
   };
 
   const createUser = async () => {
-    if (!formData.cedula || !formData.extra.nombre) {
+    if (!formData.cedula || !formData.nombre) {
       alert('Por favor, complete los campos obligatorios (Cédula y Nombre)');
       return;
     }
@@ -187,16 +187,16 @@ const Users: React.FC = () => {
       const createdAt = serverTimestamp();
 
       const payload = {
-        cedula: formData.cedula,
-        email,
-        password,
-        createdAt,
-        extra: {
-          ...formData.extra,
-          'Fecha Ingreso': dateToExcelSerial(formData.extra['Fecha Ingreso']),
-          'fechaNacimiento': formData.extra['fechaNacimiento']
-        }
-      };
+  cedula: formData.cedula,
+  nombre: formData.nombre,
+  email,
+  password,
+  createdAt,
+  extra: {
+    ...formData.extra,
+    'Fecha Ingreso': dateToExcelSerial(formData.extra['Fecha Ingreso']),
+  }
+};
 
       await setDoc(userDocRef, payload);
 
@@ -246,41 +246,50 @@ const Users: React.FC = () => {
           createdAt = new Date();
         }
 
-        const nombre = rawExtra['nombre'] || '';
-        let birthday = rawExtra['fechaNacimiento'] || '';
+        const nombre = data.nombre?.toString().trim() || '';
+
+        let birthday: string = '';
+        if (rawExtra.fechaNacimiento) {
+          birthday = typeof rawExtra.fechaNacimiento === 'string' 
+            ? rawExtra.fechaNacimiento 
+            : rawExtra.fechaNacimiento.toString();
+        }
+
         if (!birthday && nombre) {
           birthday = getBirthdayFromCalendar(nombre);
         }
 
         const completeExtra: UserExtra = {
-          'Dpto Donde Labora': rawExtra['Dpto Donde Labora'] || '',
-          'ARL': rawExtra['ARL'] || '',
-          'Banco': rawExtra['Banco'] || '',
-          'CAJA DE COMPENSACION': rawExtra['CAJA DE COMPENSACION'] || '',
-          'EPS': rawExtra['EPS'] || '',
-          'FONDO DE PENSIONES': rawExtra['FONDO DE PENSIONES'] || '',
-          'Fecha Ingreso': typeof rawExtra['Fecha Ingreso'] === 'number'
-            ? excelSerialToDate(rawExtra['Fecha Ingreso'])
-            : rawExtra['Fecha Ingreso'] || '',
-          'Fondo Cesantías': rawExtra['Fondo Cesantías'] || '',
-          'Cargo Empleado': rawExtra['Cargo Empleado'] || '',
-          'Número Cuenta': rawExtra['Número Cuenta'] || '',
-          'Tipo Cuenta': rawExtra['Tipo Cuenta'] || '',
-          'Tipo de Documento': rawExtra['Tipo de Documento'] || '',
+          'Dpto Donde Labora': rawExtra['Dpto Donde Labora']?.toString() || '',
+          'ARL': rawExtra['ARL']?.toString() || '',
+          'Banco': rawExtra['Banco']?.toString() || '',
+          'CAJA DE COMPENSACION': rawExtra['CAJA DE COMPENSACION']?.toString() || '',
+          'EPS': rawExtra['EPS']?.toString() || '',
+          'FONDO DE PENSIONES': rawExtra['FONDO DE PENSIONES']?.toString() || '',
+          'Fecha Ingreso':
+            typeof rawExtra['Fecha Ingreso'] === 'number'
+              ? excelSerialToDate(rawExtra['Fecha Ingreso'])
+              : rawExtra['Fecha Ingreso']?.toString() || '',
+          'Fondo Cesantías': rawExtra['Fondo Cesantías']?.toString() || '',
+          'Cargo Empleado': rawExtra['Cargo Empleado']?.toString() || '',
+          'Número Cuenta': rawExtra['Número Cuenta']?.toString() || '',
+          'Tipo Cuenta': rawExtra['Tipo Cuenta']?.toString() || '',
+          'Tipo de Documento': rawExtra['Tipo de Documento']?.toString() || '',
           'nombre': nombre,
-          'posicion': rawExtra['posicion'] || '',
+          'posicion': rawExtra['posicion']?.toString() || '',
           'fechaNacimiento': birthday,
           'rol': (rawExtra['rol'] as 'user' | 'admin') || 'user',
         };
 
         return {
-          id: docSnap.id,
-          cedula: data.cedula || '',
-          email: data.email || '',
-          password: data.password || '',
-          createdAt,
-          extra: completeExtra,
-        };
+  id: docSnap.id,
+  cedula: data.cedula || '',
+  nombre,
+  email: data.email || '',
+  password: data.password || '',
+  createdAt,
+  extra: completeExtra,
+};
       });
       setUsers(fetched);
     } catch (error) {
@@ -295,13 +304,13 @@ const Users: React.FC = () => {
     if (!editingUser) return;
     
     const updatedPayload = {
-      cedula: formData.cedula,
-      extra: {
-        ...formData.extra,
-        'Fecha Ingreso': dateToExcelSerial(formData.extra['Fecha Ingreso']),
-        'fechaNacimiento': formData.extra['fechaNacimiento']
-      }
-    };
+  cedula: formData.cedula,
+  nombre: formData.nombre,
+  extra: {
+    ...formData.extra,
+    'Fecha Ingreso': dateToExcelSerial(formData.extra['Fecha Ingreso']),
+  }
+};
 
     try {
       const userDocRef = doc(db, 'users', editingUser.id);
@@ -373,14 +382,14 @@ const Users: React.FC = () => {
   };
 
   const startEdit = (user: User) => {
-    setEditingUser(user);
-    setFormData({ 
-      cedula: user.cedula,
-      extra: user.extra,
-    });
-    setShowCreateForm(true);
-  };
-
+  setEditingUser(user);
+  setFormData({
+    cedula: user.cedula,
+    nombre: user.nombre,
+    extra: { ...user.extra },
+  });
+  setShowCreateForm(true);
+};
   const cancelEdit = () => {
     setEditingUser(null);
     setFormData(initialFormData);
@@ -388,13 +397,13 @@ const Users: React.FC = () => {
   };
 
   const filteredUsers = users.filter(u => {
-    const searchLower = searchTerm.toLowerCase();
-    return (
-      u.cedula?.toLowerCase().includes(searchLower) ||
-      u.extra?.nombre?.toLowerCase().includes(searchLower) || 
-      u.email?.toLowerCase().includes(searchLower)
-    );
-  });
+  const searchLower = searchTerm.toLowerCase();
+  return (
+    u.cedula?.toLowerCase().includes(searchLower) ||
+    u.nombre?.toLowerCase().includes(searchLower) ||
+    u.email?.toLowerCase().includes(searchLower)
+  );
+});
 
   const calculateAge = (birthday: string): number | null => {
     if (!birthday) return null;
@@ -474,7 +483,7 @@ const Users: React.FC = () => {
                   <input
                     type="text"
                     placeholder="Nombre y apellidos"
-                    value={formData.extra.nombre}
+                    value={formData.nombre}
                     onChange={e => handleInputChange('nombre', e.target.value)}
                     className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     required
@@ -705,7 +714,7 @@ const Users: React.FC = () => {
                     return (
                       <tr key={user.id} className="hover:bg-gray-50 transition-colors">
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm font-medium text-gray-900">{user.extra?.nombre || 'Sin nombre'}</div>
+                          <div className="text-sm font-medium text-gray-900">{user.nombre || 'Sin nombre'}</div>
                           <div className="text-sm text-gray-500">Cédula: {user.cedula}</div>
                           <div className="text-sm text-gray-500">{user.email}</div>
                           <div className="text-xs text-gray-400 mt-1">

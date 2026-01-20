@@ -278,33 +278,49 @@ useEffect(() => {
       const events = snap.docs
         .map(doc => {
           const data = doc.data() as CalendarEvent;
-          const originalDate = data.date.toDate();
+          const storedDate = data.date.toDate();
+          
+          // Apply +1 day to the stored date (matching calendar behavior)
+          const adjustedDate = addOneDay(storedDate);
+          
+          let comparisonDate = new Date(adjustedDate);
 
-          let effectiveDate = originalDate;
-
+          // For birthdays, normalize to next occurrence (using the already adjusted date)
           if (
             data.type === 'cumpleaños' ||
             data.title.toLowerCase().includes('cumpleaños')
           ) {
-            effectiveDate = normalizeBirthdayDate(originalDate);
+            comparisonDate = normalizeBirthdayDate(adjustedDate);
           }
+
+          // Set to start of day for comparison
+          comparisonDate.setHours(0, 0, 0, 0);
 
           return {
             ...data,
-            _originalDate: originalDate,
-            date: Timestamp.fromDate(effectiveDate),
+            date: data.date, // Keep original Timestamp
+            _originalDate: storedDate, // Store the original date from DB
+            _adjustedDate: adjustedDate, // Store the +1 adjusted date
+            _comparisonDate: comparisonDate, // Store the final comparison date
           };
         })
+        // Keep only future or today events
         .filter(evt => {
-          const eventDate = evt.date.toDate();
+          const eventDate = new Date(evt._comparisonDate!);
           eventDate.setHours(0, 0, 0, 0);
-          return eventDate >= now;
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          return eventDate >= today;
         })
-        .sort((a, b) => a.date.toMillis() - b.date.toMillis());
+        // Sort by closest date
+        .sort(
+          (a, b) =>
+            a._comparisonDate!.getTime() - b._comparisonDate!.getTime()
+        );
 
       setNextEvent(events.length > 0 ? events[0] : null);
-    } catch (e) {
-      console.error('Error fetching next event:', e);
+    } catch (error) {
+      console.error('Error fetching next event:', error);
       setNextEvent(null);
     } finally {
       setLoadingEvent(false);
@@ -313,6 +329,7 @@ useEffect(() => {
 
   fetchNextEvent();
 }, []);
+
   // Load user profile with date conversion and antiguedad calculation
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
@@ -518,6 +535,9 @@ useEffect(() => {
     )}
         {/* Main content */}
         <main className="pb-16 px-4 sm:px-6 lg:px-8">
+          <br />
+          <br />
+          <br />
           <div className="max-w-7xl mx-auto">
             {/* Header with welcome message */}
             <div className="mb-8 mt-4">
@@ -595,13 +615,12 @@ useEffect(() => {
                 const isToday = isEventToday(dt);
 
                 return (
-                  <p className="text-sm text-gray-600 mb-4 font-medium">
-                    {isToday ? '🎈 ¡Hoy es el gran día!' : `📅 ${adjustedDt.toLocaleDateString('es-ES', {
-                      day: 'numeric',
-                      month: 'long',
-                      year: 'numeric'
-                    })}`}
-                  </p>
+                 <p className="text-sm text-gray-600 mb-4 font-medium">
+  {isToday ? '🎈 ¡Hoy es el gran día!' : `📅 ${adjustedDt.toLocaleDateString('es-ES', {
+    day: 'numeric',
+    month: 'long'
+  })}`}
+</p>
                 );
               })()}
 
@@ -640,20 +659,26 @@ useEffect(() => {
 
             {/* Right side - Image with birthday decoration */}
             <div className="flex-shrink-0 w-full md:w-auto relative">
-              {nextEvent?.image ? (
-                <div className="relative">
-                  <div className="absolute -top-3 -right-3 text-4xl animate-spin-slow">🎉</div>
-                  <div className="absolute -bottom-3 -left-3 text-4xl animate-bounce">🎁</div>
-                  <img
-                    src={nextEvent.image}
-                    alt={nextEvent.title}
-                    className="rounded-2xl shadow-2xl h-48 w-full object-cover md:w-72 ring-4 ring-purple-200"
-                  />
-                </div>
-              ) : (
-                <div className="h-48 w-full md:w-72 flex items-center justify-center text-6xl rounded-2xl bg-gradient-to-br from-pink-100 via-purple-100 to-blue-100 shadow-xl">
-                  🎂
-                </div>
+              {nextEvent?.videoUrl && nextEvent.videoUrl.trim() !== '' ? (
+  <div className="h-48 w-full md:w-72 rounded-2xl overflow-hidden shadow-2xl ring-4 ring-purple-200 bg-black">
+    <video
+      src={nextEvent.videoUrl}
+      controls
+      playsInline
+      preload="metadata"
+      className="h-full w-full object-contain"
+    />
+  </div>
+) : nextEvent?.image ? (
+  <img
+    src={nextEvent.image}
+    alt={nextEvent.title}
+    className="rounded-2xl shadow-2xl h-48 w-full object-cover md:w-72 ring-4 ring-purple-200"
+  />
+) : (
+  <div className="h-48 w-full md:w-72 flex items-center justify-center text-6xl rounded-2xl bg-gradient-to-br from-pink-100 via-purple-100 to-blue-100 shadow-xl">
+    🎂
+  </div>
               )}
             </div>
           </div>
@@ -690,37 +715,35 @@ useEffect(() => {
 
                 {/* Format date/time or "All day" with +1 day adjustment */}
                 {(() => {
-                  const dt = nextEvent.date.toDate();
-                  const adjustedDt = addOneDay(dt);
-                  const isAllDay = dt.getHours() === 0 && dt.getMinutes() === 0 && dt.getSeconds() === 0;
-                  const isToday = isEventToday(dt);
+  const dt = nextEvent.date.toDate();
+  const adjustedDt = addOneDay(dt);
+  const isAllDay = dt.getHours() === 0 && dt.getMinutes() === 0 && dt.getSeconds() === 0;
+  const isToday = isEventToday(dt);
 
-                  if (isAllDay) {
-                    return (
-                      <p className="text-xs text-gray-500 mb-3">
-                        {isToday ? 'Hoy' : adjustedDt.toLocaleDateString('es-ES', {
-                          day: 'numeric',
-                          month: 'long',
-                          year: 'numeric'
-                        })} — Todo el día
-                      </p>
-                    );
-                  } else {
-                    return (
-                      <p className="text-xs text-gray-500 mb-3">
-                        {isToday ? 'Hoy' : adjustedDt.toLocaleDateString('es-ES', {
-                          day: 'numeric',
-                          month: 'long',
-                          year: 'numeric'
-                        })},{' '}
-                        {dt.toLocaleTimeString('es-ES', {
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })}
-                      </p>
-                    );
-                  }
-                })()}
+  if (isAllDay) {
+    return (
+      <p className="text-xs text-gray-500 mb-3">
+        {isToday ? 'Hoy' : adjustedDt.toLocaleDateString('es-ES', {
+          day: 'numeric',
+          month: 'long'
+        })} — Todo el día
+      </p>
+    );
+  } else {
+    return (
+      <p className="text-xs text-gray-500 mb-3">
+        {isToday ? 'Hoy' : adjustedDt.toLocaleDateString('es-ES', {
+          day: 'numeric',
+          month: 'long'
+        })},{' '}
+        {dt.toLocaleTimeString('es-ES', {
+          hour: '2-digit',
+          minute: '2-digit'
+        })}
+      </p>
+    );
+  }
+})()}
 
                 <p className="mb-4 text-gray-600">{nextEvent.description}</p>
                 
