@@ -23,6 +23,8 @@ interface CalendarEvent {
   type?: string;
   videoUrl?: string;
   videoPath?: string;
+
+  _originalDate?: Date; // ✅ ADD THIS
 }
 
 interface PendingRequest {
