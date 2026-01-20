@@ -9,7 +9,6 @@ import {
   Loader2,
   AlertCircle,
 } from 'lucide-react';
-import DeleteAllUsersButton from './delete';
 
 interface ExcelRow {
   'Tipo de Documento': string;
@@ -187,8 +186,6 @@ const ExcelUserUpload: React.FC = () => {
           </div>
         )}
       </div>
-
-      <DeleteAllUsersButton />
     </div>
   );
 };
