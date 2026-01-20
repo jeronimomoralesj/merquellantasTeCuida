@@ -40,7 +40,6 @@ interface NewEventForm {
   video: File | null;
 }
 
-
 // Helper functions for date offset handling
 const addOneDayForDisplay = (date: Date): Date => {
   const newDate = new Date(date);
@@ -68,14 +67,18 @@ export default function CalendarCard() {
   const [loading, setLoading] = useState(true);
   const [selectedVideo, setSelectedVideo] = useState<File | null>(null);
   const [videoError, setVideoError] = useState('');
+  
+  // ✅ FIX: Add video: null to initial state
   const [newEvent, setNewEvent] = useState<NewEventForm>({
     title: "",
     date: "",
     time: "",
     description: "",
     type: "general",
-    image: null
+    image: null,
+    video: null // ✅ Added this line
   });
+  
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imageFileName, setImageFileName] = useState("");
   const [imageError, setImageError] = useState("");
@@ -320,55 +323,22 @@ const uploadBirthdayVideo = async (
     const displayDate = addOneDayForDisplay(today);
     const formattedDate = formatDateForInput(displayDate);
     
+    // ✅ FIX: Add video: null here too
     setNewEvent({
       title: "",
       date: formattedDate,
       time: "",
       description: "",
       type: "general",
-      image: null
+      image: null,
+      video: null // ✅ Added this line
     });
     setSelectedImage(null);
     setImageFileName("");
     setImageError("");
+    setSelectedVideo(null); // ✅ Also reset selectedVideo
+    setVideoError(""); // ✅ Reset video error
     setIsModalOpen(true);
-  };
-
-  const closeModal = () => {
-    setIsModalOpen(false);
-  };
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setNewEvent({
-      ...newEvent,
-      [name]: value,
-    });
-  };
-
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0] ?? null;
-    if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        setImageError("La imagen no debe superar los 5MB");
-        setSelectedImage(null);
-        setImageFileName("");
-      } else if (!file.type.startsWith('image/')) {
-        setImageError("El archivo debe ser una imagen");
-        setSelectedImage(null);
-        setImageFileName("");
-      } else {
-        setImageError("");
-        setSelectedImage(file);
-        setImageFileName(file.name);
-      }
-    }
-  };
-
-  const removeImage = () => {
-    setSelectedImage(null);
-    setImageFileName("");
-    setImageError("");
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -401,14 +371,14 @@ const uploadBirthdayVideo = async (
       }
 
       let videoUrl = "";
-let videoPath = "";
+      let videoPath = "";
 
-if (selectedVideo) {
-  videoPath = `calendar/videos/${user.uid}/${Date.now()}_${selectedVideo.name}`;
-  const videoRef = storageRef(storage, videoPath);
-  await uploadBytes(videoRef, selectedVideo);
-  videoUrl = await getDownloadURL(videoRef);
-}
+      if (selectedVideo) {
+        videoPath = `calendar/videos/${user.uid}/${Date.now()}_${selectedVideo.name}`;
+        const videoRef = storageRef(storage, videoPath);
+        await uploadBytes(videoRef, selectedVideo);
+        videoUrl = await getDownloadURL(videoRef);
+      }
       
       await addDoc(collection(db, 'calendar'), {
         title: newEvent.title,
@@ -423,16 +393,21 @@ if (selectedVideo) {
       });
       
       setIsModalOpen(false);
+      
+      // ✅ FIX: Add video: null here too
       setNewEvent({
         title: "",
         date: "",
         time: "",
         description: "",
         type: "general",
-        image: null
+        image: null,
+        video: null // ✅ Added this line
       });
       setSelectedImage(null);
       setImageFileName("");
+      setSelectedVideo(null); // ✅ Reset selected video
+      setVideoError(""); // ✅ Reset video error
       
       fetchEvents();
       
