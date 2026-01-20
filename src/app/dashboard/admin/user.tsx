@@ -275,7 +275,6 @@ const Users: React.FC = () => {
           'Número Cuenta': rawExtra['Número Cuenta']?.toString() || '',
           'Tipo Cuenta': rawExtra['Tipo Cuenta']?.toString() || '',
           'Tipo de Documento': rawExtra['Tipo de Documento']?.toString() || '',
-          'nombre': nombre,
           'posicion': rawExtra['posicion']?.toString() || '',
           'fechaNacimiento': birthday,
           'rol': (rawExtra['rol'] as 'user' | 'admin') || 'user',
@@ -374,12 +373,18 @@ const Users: React.FC = () => {
     }
   };
 
-  const handleInputChange = (field: string, value: string | number | boolean): void => {
-    setFormData(prev => ({
-      ...prev,
-      extra: { ...prev.extra, [field]: value }
-    }));
-  };
+  const handleInputChange = <K extends keyof UserExtra>(
+  field: K,
+  value: UserExtra[K]
+): void => {
+  setFormData(prev => ({
+    ...prev,
+    extra: {
+      ...prev.extra,
+      [field]: value
+    }
+  }));
+};
 
   const startEdit = (user: User) => {
   setEditingUser(user);
@@ -484,7 +489,9 @@ const Users: React.FC = () => {
                     type="text"
                     placeholder="Nombre y apellidos"
                     value={formData.nombre}
-                    onChange={e => handleInputChange('nombre', e.target.value)}
+                    onChange={e =>
+    setFormData(prev => ({ ...prev, nombre: e.target.value }))
+  }
                     className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     required
                   />
@@ -565,10 +572,12 @@ const Users: React.FC = () => {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Rol del Sistema</label>
                   <select
-                    value={formData.extra.rol}
-                    onChange={e => handleInputChange('rol', e.target.value)}
-                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
+  value={formData.extra.rol}
+  onChange={e =>
+    handleInputChange('rol', e.target.value as 'user' | 'admin')
+  }
+  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+>
                     <option value="user">Usuario</option>
                     <option value="admin">Administrador</option>
                   </select>
