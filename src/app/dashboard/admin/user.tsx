@@ -83,9 +83,13 @@ const Users: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
 
-  const initialFormData = {
+  const initialFormData: {
+  cedula: string;
+  nombre: string;
+  extra: UserExtra;
+} = {
   cedula: '',
-  nombre: '', // ✅ TOP-LEVEL
+  nombre: '',
   extra: {
     'Dpto Donde Labora': '',
     'ARL': '',
