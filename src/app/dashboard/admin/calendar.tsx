@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect } from "react";
@@ -318,12 +319,11 @@ const uploadBirthdayVideo = async (
   };
 
   // Modal functions
-  const openModal = () => {
+   const openModal = () => {
     const today = new Date();
     const displayDate = addOneDayForDisplay(today);
     const formattedDate = formatDateForInput(displayDate);
     
-    // ✅ FIX: Add video: null here too
     setNewEvent({
       title: "",
       date: formattedDate,
@@ -331,14 +331,51 @@ const uploadBirthdayVideo = async (
       description: "",
       type: "general",
       image: null,
-      video: null // ✅ Added this line
+      video: null
     });
     setSelectedImage(null);
     setImageFileName("");
     setImageError("");
-    setSelectedVideo(null); // ✅ Also reset selectedVideo
-    setVideoError(""); // ✅ Reset video error
+    setSelectedVideo(null);
+    setVideoError("");
     setIsModalOpen(true);
+  };
+
+  const closeModal = () => {
+    setIsModalOpen(false);
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setNewEvent({
+      ...newEvent,
+      [name]: value,
+    });
+  };
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] ?? null;
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        setImageError("La imagen no debe superar los 5MB");
+        setSelectedImage(null);
+        setImageFileName("");
+      } else if (!file.type.startsWith('image/')) {
+        setImageError("El archivo debe ser una imagen");
+        setSelectedImage(null);
+        setImageFileName("");
+      } else {
+        setImageError("");
+        setSelectedImage(file);
+        setImageFileName(file.name);
+      }
+    }
+  };
+
+  const removeImage = () => {
+    setSelectedImage(null);
+    setImageFileName("");
+    setImageError("");
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
