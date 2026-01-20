@@ -57,6 +57,7 @@ interface User {
 
 interface FirestoreUserData {
   cedula?: string;
+  nombre?: string;
   email?: string;
   password?: string;
   createdAt?: Timestamp | Date;
