@@ -141,7 +141,7 @@ const VacacionesForm = () => {
       await addDoc(collection(db, 'solicitudes'), solicitudData);
 
 // Send email notification
-await sendEmailNotification(formData);
+await sendEmailNotification(nombre || 'Usuario');
 
 setSubmitted(true);
 
