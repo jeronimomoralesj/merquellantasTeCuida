@@ -15,6 +15,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Merque te cuida",
   description: "Tu plataforma para manejar tus datos",
+  icons: {
+    icon: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTTlnfOhWyqFEZm8cTwn0UAFkzj3gxUVwC8ww&s",
+  },
 };
 
 export default function RootLayout({

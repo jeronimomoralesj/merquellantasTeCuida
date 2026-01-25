@@ -199,7 +199,8 @@ videoPath: eventData.videoPath || ''
 
 const uploadBirthdayVideo = async (
   eventId: string,
-  userId: string
+  userId: string,
+  oldVideoPath?: string
 ) => {
   const input = document.createElement("input");
   input.type = "file";
@@ -229,19 +230,32 @@ const uploadBirthdayVideo = async (
 
       // 3️⃣ Subida a Firebase
       try {
+        // Delete old video if it exists
+        if (oldVideoPath) {
+          try {
+            const oldVideoRef = storageRef(storage, oldVideoPath);
+            await deleteObject(oldVideoRef);
+            console.log("Old video deleted successfully");
+          } catch (error) {
+            console.log("Error deleting old video (may not exist):", error);
+          }
+        }
+
+        // Upload new video
         const videoPath = `calendar/videos/${userId}/${Date.now()}_${file.name}`;
         const videoRef = storageRef(storage, videoPath);
 
         await uploadBytes(videoRef, file);
         const videoUrl = await getDownloadURL(videoRef);
 
+        // Update Firestore with new video info
         await updateDoc(doc(db, "calendar", eventId), {
           videoUrl,
           videoPath,
         });
 
         fetchEvents();
-        alert("Video subido correctamente");
+        alert(oldVideoPath ? "Video actualizado correctamente" : "Video subido correctamente");
 
       } catch (error) {
         console.error("Error uploading video:", error);
@@ -258,8 +272,6 @@ const uploadBirthdayVideo = async (
 
   input.click();
 };
-
-
   // Calendar generation functions
   const getDaysInMonth = (year: number, month: number): number => {
     return new Date(year, month + 1, 0).getDate();
@@ -625,14 +637,23 @@ const uploadBirthdayVideo = async (
                       {event.type === "birthday" && (
   <>
     {event.videoUrl ? (
-      <a
-        href={event.videoUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="text-xs text-blue-600 underline mt-1 inline-block"
-      >
-        Ver video actual
-      </a>
+      <div className="flex items-center gap-2 mt-1">
+        <a
+          href={event.videoUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-xs text-blue-600 underline inline-block"
+        >
+          Ver video actual
+        </a>
+        <span className="text-gray-300">|</span>
+        <button
+          onClick={() => uploadBirthdayVideo(event.id, event.userId, event.videoPath)}
+          className="text-xs text-blue-600 underline inline-block hover:text-blue-800"
+        >
+          Cambiar video
+        </button>
+      </div>
     ) : (
       <button
         onClick={() => uploadBirthdayVideo(event.id, event.userId)}
@@ -646,8 +667,8 @@ const uploadBirthdayVideo = async (
 
                     </div>
                     <button
-                      onClick={() => deleteEvent(event.id, event.image)}
-                      disabled={deletingEventId === event.id}
+  onClick={() => deleteEvent(event.id, event.image, event.videoPath)}
+  disabled={deletingEventId === event.id}
                       className="ml-2 p-1.5 text-red-500 hover:bg-red-50 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
                       title="Eliminar evento"
                     >
