@@ -5,7 +5,8 @@ import DashboardNavbar from './navbar';
 import { useRouter } from 'next/navigation';
 import { 
   Calendar, DollarSign, Briefcase, ChevronRight, Clock, MessageSquare, FileText, Activity, User, CheckCircle,
-  PersonStanding
+  PersonStanding,
+  ChevronLeft
 } from 'lucide-react';
 import Solicitudes from "./components/solicitudes";
 import AdminPage from './admin/page';
@@ -13,8 +14,6 @@ import { onAuthStateChanged } from 'firebase/auth'
 import { doc, getDoc, collection, query, where, orderBy, limit, getDocs, Timestamp } from 'firebase/firestore'
 import { auth, db } from '../../firebase'
 import GeminiChat from './components/chat';
-
-// Type definitions
 interface CalendarEvent {
   title: string;
   description: string;
@@ -23,8 +22,9 @@ interface CalendarEvent {
   type?: string;
   videoUrl?: string;
   videoPath?: string;
-
-  _originalDate?: Date; // ✅ ADD THIS
+  _originalDate?: Date;
+  _displayDate?: Date;
+  _comparisonDate?: Date;
 }
 
 interface PendingRequest {
@@ -66,7 +66,7 @@ const Dashboard = () => {
   const [userRole, setUserRole] = useState<string>("user");
   const [loadingEvent, setLoadingEvent] = useState(true);
   const [nextEvent, setNextEvent] = useState<CalendarEvent | null>(null);
-
+const [currentEventIndex, setCurrentEventIndex] = useState(0);
   // Pending requests state
   const [pendingRequests, setPendingRequests] = useState<PendingRequest[]>([]);
   const [loadingRequests, setLoadingRequests] = useState(true);
@@ -80,6 +80,13 @@ const Dashboard = () => {
 
 const [todayEventsCount, setTodayEventsCount] = useState(0);
 const [additionalTodayEvents, setAdditionalTodayEvents] = useState<CalendarEvent[]>([]);
+
+// Helper function to add one day to a date
+const addOneDay = (date: Date) => {
+  const newDate = new Date(date);
+  newDate.setDate(newDate.getDate() + 1);
+  return newDate;
+};
 
 // Helper function to convert Excel date number to JavaScript Date
 const convertExcelDateToJSDate = (excelDate: number | string): Date => {
@@ -118,34 +125,40 @@ const calculateYearsOfService = (startDate: Date): number => {
   return Math.floor(diffYears);
 };
 
-// Helper function to add one day to a date
-const addOneDay = (date: Date) => {
-  const newDate = new Date(date);
-  newDate.setDate(newDate.getDate() + 1);
-  return newDate;
-};
-
 // Helper function to determine if an event is happening today (after adding one day)
 const isEventToday = (eventDate: Date) => {
-  const adjustedDate = addOneDay(eventDate);
+  const adjustedDate = eventDate;
   const today = new Date();
   return adjustedDate.toDateString() === today.toDateString();
 };
 
-// Helper function to determine event status (with date adjustment)
-const getEventStatus = (eventDate: Date) => {
-  const adjustedDate = addOneDay(eventDate);
+const getEventStatus = (event: CalendarEvent) => {
+  const eventDate = event._comparisonDate || event.date.toDate();
   const now = new Date();
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   
-  const eventDateOnly = new Date(adjustedDate);
+  const eventDateOnly = new Date(eventDate);
   eventDateOnly.setHours(0, 0, 0, 0);
   
+  // For birthdays, check if it's today based on month and day
+  if (event.type === 'cumpleaños' || event.type === 'birthday' || event.title.toLowerCase().includes('cumpleaños')) {
+    const isBirthdayToday = 
+      eventDate.getDate() === today.getDate() && 
+      eventDate.getMonth() === today.getMonth();
+    
+    if (isBirthdayToday) {
+      return { status: 'today', label: 'Hoy', color: 'bg-green-500' };
+    } else if (eventDateOnly > today) {
+      return { status: 'upcoming', label: 'Próximo', color: 'bg-[#ff9900]' };
+    }
+  }
+  
+  // For regular events
   if (eventDateOnly.getTime() === today.getTime()) {
-    // Check if it's an all-day event or if the time has passed
-    const isAllDay = eventDate.getHours() === 0 && eventDate.getMinutes() === 0 && eventDate.getSeconds() === 0;
-    if (isAllDay || adjustedDate > now) {
+    const originalDate = event.date.toDate();
+    const isAllDay = originalDate.getHours() === 0 && originalDate.getMinutes() === 0 && originalDate.getSeconds() === 0;
+    if (isAllDay || eventDate > now) {
       return { status: 'today', label: 'Hoy', color: 'bg-green-500' };
     } else {
       return { status: 'happening', label: 'En curso', color: 'bg-blue-500' };
@@ -250,17 +263,21 @@ const normalizeBirthdayDate = (originalDate: Date): Date => {
   return birthdayThisYear;
 };
 
-// Determina si HOY es cumpleaños (ignorando año)
 const isBirthdayToday = (originalDate: Date): boolean => {
   const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  const checkDate = new Date(originalDate);
+  checkDate.setHours(0, 0, 0, 0);
+  
   return (
-    today.getDate() === originalDate.getDate() &&
-    today.getMonth() === originalDate.getMonth()
+    today.getDate() === checkDate.getDate() &&
+    today.getMonth() === checkDate.getMonth()
   );
 };
 
 useEffect(() => {
-  async function fetchNextEvent() {
+  async function fetchNextEvents() {
     try {
       setLoadingEvent(true);
 
@@ -271,7 +288,6 @@ useEffect(() => {
       );
 
       const snap = await getDocs(q);
-
       const now = new Date();
       now.setHours(0, 0, 0, 0);
 
@@ -280,54 +296,60 @@ useEffect(() => {
           const data = doc.data() as CalendarEvent;
           const storedDate = data.date.toDate();
           
-          // Apply +1 day to the stored date (matching calendar behavior)
-          const adjustedDate = addOneDay(storedDate);
+          const displayDate = addOneDay(storedDate);
           
-          let comparisonDate = new Date(adjustedDate);
+          let comparisonDate: Date;
 
-          // For birthdays, normalize to next occurrence (using the already adjusted date)
           if (
             data.type === 'cumpleaños' ||
+            data.type === 'birthday' ||
             data.title.toLowerCase().includes('cumpleaños')
           ) {
-            comparisonDate = normalizeBirthdayDate(adjustedDate);
+            comparisonDate = normalizeBirthdayDate(displayDate);
+          } else {
+            comparisonDate = new Date(displayDate);
           }
 
-          // Set to start of day for comparison
           comparisonDate.setHours(0, 0, 0, 0);
 
           return {
             ...data,
-            date: data.date, // Keep original Timestamp
-            _originalDate: storedDate, // Store the original date from DB
-            _adjustedDate: adjustedDate, // Store the +1 adjusted date
-            _comparisonDate: comparisonDate, // Store the final comparison date
+            date: Timestamp.fromDate(displayDate),
+            _originalDate: storedDate,
+            _displayDate: displayDate,
+            _comparisonDate: comparisonDate,
           };
         })
-        // Keep only future or today events
-        .filter(evt => {
-          const eventDate = new Date(evt._comparisonDate!);
-          eventDate.setHours(0, 0, 0, 0);
-          const today = new Date();
-          today.setHours(0, 0, 0, 0);
-          return eventDate >= today;
-        })
-        // Sort by closest date
-        .sort(
-          (a, b) =>
-            a._comparisonDate!.getTime() - b._comparisonDate!.getTime()
-        );
+        .filter(evt => evt._comparisonDate! >= now)
+        .sort((a, b) => a._comparisonDate!.getTime() - b._comparisonDate!.getTime())
+        .slice(0, 3); // Take only the 3 closest events
+
+      const todayEvents = events.filter(evt => {
+        const evtDate = new Date(evt._comparisonDate!);
+        evtDate.setHours(0, 0, 0, 0);
+        return evtDate.getTime() === now.getTime();
+      });
+
+      setTodayEventsCount(todayEvents.length);
+      
+      if (todayEvents.length > 1) {
+        setAdditionalTodayEvents(todayEvents.slice(1));
+      } else {
+        setAdditionalTodayEvents([]);
+      }
 
       setNextEvent(events.length > 0 ? events[0] : null);
+      setUpcomingEvents(events); // This will now contain up to 3 events
     } catch (error) {
-      console.error('Error fetching next event:', error);
+      console.error('Error fetching next events:', error);
       setNextEvent(null);
+      setUpcomingEvents([]);
     } finally {
       setLoadingEvent(false);
     }
   }
 
-  fetchNextEvent();
+  fetchNextEvents();
 }, []);
 
   // Load user profile with date conversion and antiguedad calculation
@@ -391,45 +413,56 @@ useEffect(() => {
     return () => unsub();
   }, []);
 
-  // Load upcoming events
-  useEffect(() => {
+useEffect(() => {
   async function fetchUpcoming() {
     try {
+      setLoadingEvents(true);
+      
       const q = query(
         collection(db, 'calendar'),
         orderBy('date', 'asc'),
-        limit(50) // traemos más para cumpleaños antiguos
+        limit(100)
       );
 
       const snap = await getDocs(q);
-
       const now = new Date();
       now.setHours(0, 0, 0, 0);
 
       const events = snap.docs
         .map(doc => {
           const data = doc.data() as CalendarEvent;
-          const originalDate = data.date.toDate();
+          const storedDate = data.date.toDate();
+          
+          // Add +1 day to match what was subtracted during storage
+          const displayDate = addOneDay(storedDate);
+          
+          let comparisonDate: Date;
 
-          let effectiveDate = originalDate;
-
+          // For birthdays, normalize to next occurrence
           if (
             data.type === 'cumpleaños' ||
+            data.type === 'birthday' ||
             data.title.toLowerCase().includes('cumpleaños')
           ) {
-            effectiveDate = normalizeBirthdayDate(originalDate);
+            comparisonDate = normalizeBirthdayDate(displayDate);
+          } else {
+            comparisonDate = new Date(displayDate);
           }
+
+          comparisonDate.setHours(0, 0, 0, 0);
 
           return {
             ...data,
-            date: Timestamp.fromDate(effectiveDate),
+            date: Timestamp.fromDate(comparisonDate),
+            _originalDate: storedDate,
+            _displayDate: displayDate,
           };
         })
-        // 🔽 FILTRAMOS DESPUÉS DE NORMALIZAR
+        // Filter: keep only future or today events
         .filter(evt => evt.date.toDate() >= now)
-        // 🔽 ORDEN FINAL
+        // Sort by closest date
         .sort((a, b) => a.date.toMillis() - b.date.toMillis())
-        // 🔽 SOLO LOS 3 PRÓXIMOS
+        // Take only the 3 closest events
         .slice(0, 3);
 
       setUpcomingEvents(events);
@@ -442,7 +475,6 @@ useEffect(() => {
 
   fetchUpcoming();
 }, []);
-
 
   // If flagged, render the solicitudes screen instead of the dashboard
   if (showSolicitudes) {
@@ -478,14 +510,6 @@ useEffect(() => {
       color: "bg-purple-100 text-purple-600",
       bgHover: "hover:bg-gradient-to-br from-purple-50 to-purple-100",
       href: "https://portal.heinsohn.com.co/"
-    },
-    { 
-      id: 3, 
-      title: "Certificado de cuenta", 
-      icon: <Clock className="h-5 w-5" />, 
-      color: "bg-blue-100 text-blue-600",
-      bgHover: "hover:bg-gradient-to-br from-blue-50 to-blue-100",
-      href: "/dashboard/certificado"
     },
     { 
       id: 4, 
@@ -559,270 +583,348 @@ useEffect(() => {
                 {/* Welcome banner with gradient */}
                 <div className="bg-white rounded-2xl shadow-sm overflow-hidden border border-gray-100 hover:shadow-md transition-shadow duration-300">
   {(() => {
-    const isBirthday =
-  nextEvent &&
-  (
-    nextEvent.type === 'cumpleaños' ||
-    nextEvent.title.toLowerCase().includes('cumpleaños')
-  ) &&
-  isBirthdayToday(nextEvent._originalDate ?? nextEvent.date.toDate());
-
-    
-    // Birthday messages array
-    const birthdayMessages = [
-      "Eres un integrante muy importante de todo el equipo y esperamos que tengas un hermoso día junto a tu familia, compañeros y demás. ¡Que este nuevo año de vida esté lleno de éxitos y alegrías!",
-      "Hoy celebramos tu día especial y queremos que sepas lo importante que eres para nuestro equipo. Que este cumpleaños sea el inicio de un año lleno de bendiciones, logros y momentos inolvidables.",
-      "Tu dedicación y compromiso hacen de este equipo un lugar mejor cada día. Esperamos que celebres este día rodeado de las personas que más quieres y que recibas todo el amor que mereces. ¡Feliz cumpleaños!",
-      "En este día tan especial, queremos reconocer todo lo que aportas a nuestro equipo. Tu presencia marca la diferencia y tu energía nos inspira. Que tu cumpleaños esté lleno de sorpresas maravillosas y momentos de felicidad.",
-      "Hoy es un día para celebrarte a ti y todo lo que representas para nosotros. Eres una pieza fundamental de esta familia laboral. Deseamos que este nuevo año de vida te traiga prosperidad, salud y muchos motivos para sonreír."
-    ];
-    
-    // Get random message (using event title as seed for consistency during the day)
-    const randomMessage = nextEvent ? birthdayMessages[nextEvent.title.length % birthdayMessages.length] : birthdayMessages[0];
-    
-    if (isBirthday) {
+    if (loadingEvent) {
       return (
         <div className="relative p-6 md:p-8">
-          {/* Animated confetti background */}
+          <div className="h-48 bg-gray-100 animate-pulse rounded-xl"></div>
+        </div>
+      );
+    }
+
+    if (!upcomingEvents || upcomingEvents.length === 0) {
+      return (
+        <div className="relative p-6 md:p-8">
+          <p className="text-gray-500">No hay eventos próximos</p>
+        </div>
+      );
+    }
+
+    const currentEvent = upcomingEvents[currentEventIndex];
+    const isBirthday = currentEvent && (
+      currentEvent.type === 'cumpleaños' ||
+      currentEvent.type === 'birthday' ||
+      currentEvent.title.toLowerCase().includes('cumpleaños')
+    );
+    const isCurrentBirthdayToday = isBirthday && currentEvent._originalDate && isBirthdayToday(currentEvent._originalDate);
+
+    if (isCurrentBirthdayToday) {
+      // Birthday messages array
+      const birthdayMessages = [
+        "Eres un integrante muy importante de todo el equipo y esperamos que tengas un hermoso día junto a tu familia, compañeros y demás. ¡Que este nuevo año de vida esté lleno de éxitos y alegrías!",
+        "Hoy celebramos tu día especial y queremos que sepas lo importante que eres para nuestro equipo. Que este cumpleaños sea el inicio de un año lleno de bendiciones, logros y momentos inolvidables.",
+        "Tu dedicación y compromiso hacen de este equipo un lugar mejor cada día. Esperamos que celebres este día rodeado de las personas que más quieres y que recibas todo el amor que mereces. ¡Feliz cumpleaños!",
+        "En este día tan especial, queremos reconocer todo lo que aportas a nuestro equipo. Tu presencia marca la diferencia y tu energía nos inspira. Que tu cumpleaños esté lleno de sorpresas maravillosas y momentos de felicidad.",
+        "Hoy es un día para celebrarte a ti y todo lo que representas para nosotros. Eres una pieza fundamental de esta familia laboral. Deseamos que este nuevo año de vida te traiga prosperidad, salud y muchos motivos para sonreír."
+      ];
+      
+      const randomMessage = birthdayMessages[currentEvent.title.length % birthdayMessages.length];
+      
+      return (
+        <div className="relative p-6 md:p-8">
+          {/* Birthday decorations with orange theme */}
           <div className="absolute inset-0 overflow-hidden">
-            <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-pink-400 via-purple-400 via-blue-400 via-green-400 via-yellow-400 to-red-400"></div>
-            {/* Decorative elements */}
-            <div className="absolute top-4 left-4 text-yellow-400 text-2xl animate-pulse">🎈</div>
-            <div className="absolute top-8 right-8 text-pink-400 text-2xl animate-bounce" style={{ animationDelay: '0.2s' }}>🎉</div>
-            <div className="absolute bottom-8 left-12 text-purple-400 text-xl animate-pulse" style={{ animationDelay: '0.4s' }}>✨</div>
-            <div className="absolute bottom-12 right-16 text-blue-400 text-xl animate-bounce" style={{ animationDelay: '0.6s' }}>🎊</div>
+            <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-[#ff9900] via-[#ffb347] to-[#ffd700]"></div>
+            <div className="absolute top-4 left-4 text-[#ff9900] text-2xl animate-pulse">🎈</div>
+            <div className="absolute top-8 right-8 text-[#ffb347] text-2xl animate-bounce" style={{ animationDelay: '0.2s' }}>🎉</div>
+            <div className="absolute bottom-8 left-12 text-[#ffd700] text-xl animate-pulse" style={{ animationDelay: '0.4s' }}>✨</div>
+            <div className="absolute bottom-12 right-16 text-[#ff9900] text-xl animate-bounce" style={{ animationDelay: '0.6s' }}>🎊</div>
           </div>
 
           <div className="relative flex flex-col md:flex-row items-center gap-6">
-            {/* Left side - Birthday message */}
+            {/* Carousel navigation - Left */}
+            {upcomingEvents.length > 1 && (
+              <button
+                onClick={() => setCurrentEventIndex((prev) => (prev === 0 ? upcomingEvents.length - 1 : prev - 1))}
+                className="absolute left-2 top-1/2 -translate-y-1/2 z-10 p-2 rounded-full bg-white/90 hover:bg-white shadow-lg hover:shadow-xl transition-all"
+              >
+                <ChevronLeft className="h-5 w-5 text-[#ff9900]" />
+              </button>
+            )}
+
+            {/* Birthday content */}
             <div className="md:flex-1 text-center md:text-left">
-              <div className="inline-flex items-center gap-2 mb-4 px-4 py-2 rounded-full bg-gradient-to-r from-pink-100 via-purple-100 to-blue-100">
+              <div className="inline-flex items-center gap-2 mb-4 px-4 py-2 rounded-full bg-gradient-to-r from-[#ff9900]/20 via-[#ffb347]/20 to-[#ffd700]/20">
                 <span className="text-2xl">🎂</span>
-                <span className="text-sm font-bold bg-gradient-to-r from-pink-600 via-purple-600 to-blue-600 text-transparent bg-clip-text">
+                <span className="text-sm font-bold bg-gradient-to-r from-[#ff9900] to-[#ffb347] text-transparent bg-clip-text">
                   ¡Celebración Especial!
                 </span>
               </div>
 
-              <h2 className="text-2xl md:text-3xl font-bold mb-3 bg-gradient-to-r from-pink-600 via-purple-600 to-blue-600 text-transparent bg-clip-text">
-                {nextEvent?.title}
+              <h2 className="text-2xl md:text-3xl font-bold mb-3 bg-gradient-to-r from-[#ff9900] to-[#ffb347] text-transparent bg-clip-text">
+                {currentEvent.title}
               </h2>
 
-              {/* Date */}
               {(() => {
-                const dt = nextEvent?.date.toDate();
-                if (!dt) return null;
-                const adjustedDt = addOneDay(dt);
+                const dt = currentEvent.date.toDate();
+                const adjustedDt = dt;
                 const isToday = isEventToday(dt);
 
                 return (
-                 <p className="text-sm text-gray-600 mb-4 font-medium">
-  {isToday ? '🎈 ¡Hoy es el gran día!' : `📅 ${adjustedDt.toLocaleDateString('es-ES', {
-    day: 'numeric',
-    month: 'long'
-  })}`}
-</p>
+                  <p className="text-sm text-gray-600 mb-4 font-medium">
+                    {isToday ? '🎈 ¡Hoy es el gran día!' : `📅 ${adjustedDt.toLocaleDateString('es-ES', {
+                      day: 'numeric',
+                      month: 'long'
+                    })}`}
+                  </p>
                 );
               })()}
 
-              {/* Special birthday message */}
-              <div className="bg-gradient-to-br from-pink-50 via-purple-50 to-blue-50 rounded-xl p-5 mb-5 border-2 border-purple-200">
+              <div className="bg-gradient-to-br from-[#ff9900]/10 via-[#ffb347]/10 to-[#ffd700]/10 rounded-xl p-5 mb-5 border-2 border-[#ff9900]/30">
                 <p className="text-gray-700 leading-relaxed text-sm md:text-base">
                   {randomMessage}
                 </p>
               </div>
 
-              {/* Show additional events if any */}
-              {todayEventsCount > 1 && (
-                <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                  <p className="text-sm text-blue-800 font-medium mb-2">
-                    📅 Hay {todayEventsCount} eventos hoy
-                  </p>
-                  {additionalTodayEvents.length > 0 && (
-                    <div className="space-y-1">
-                      {additionalTodayEvents.slice(0, 2).map((event, idx) => (
-                        <p key={idx} className="text-xs text-blue-700">
-                          • {event.title}
-                        </p>
-                      ))}
-                    </div>
-                  )}
+              {/* Carousel indicator dots */}
+              {upcomingEvents.length > 1 && (
+                <div className="flex justify-center md:justify-start gap-2 mb-4">
+                  {upcomingEvents.map((_, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => setCurrentEventIndex(idx)}
+                      className={`h-2 rounded-full transition-all ${
+                        idx === currentEventIndex 
+                          ? 'w-8 bg-[#ff9900]' 
+                          : 'w-2 bg-gray-300 hover:bg-gray-400'
+                      }`}
+                    />
+                  ))}
                 </div>
               )}
 
               <a href='dashboard/calendar'>
-                <button className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-pink-500 via-purple-500 to-blue-500 text-white rounded-full font-bold text-sm hover:from-pink-600 hover:via-purple-600 hover:to-blue-600 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-1 duration-200">
+                <button className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-[#ff9900] to-[#ffb347] text-white rounded-full font-bold text-sm hover:from-[#e68a00] hover:to-[#ff9900] transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-1 duration-200">
                   Ver más celebraciones
                   <ChevronRight className="ml-2 h-5 w-5" />
                 </button>
               </a>
             </div>
 
-            {/* Right side - Image with birthday decoration */}
+            {/* Right side - Image/Video */}
             <div className="flex-shrink-0 w-full md:w-auto relative">
-              {nextEvent?.videoUrl && nextEvent.videoUrl.trim() !== '' ? (
-  <div className="h-48 w-full md:w-72 rounded-2xl overflow-hidden shadow-2xl ring-4 ring-purple-200 bg-black">
-    <video
-      src={nextEvent.videoUrl}
-      controls
-      playsInline
-      preload="metadata"
-      className="h-full w-full object-contain"
-    />
-  </div>
-) : nextEvent?.image ? (
-  <img
-    src={nextEvent.image}
-    alt={nextEvent.title}
-    className="rounded-2xl shadow-2xl h-48 w-full object-cover md:w-72 ring-4 ring-purple-200"
-  />
-) : (
-  <div className="h-48 w-full md:w-72 flex items-center justify-center text-6xl rounded-2xl bg-gradient-to-br from-pink-100 via-purple-100 to-blue-100 shadow-xl">
-    🎂
-  </div>
+              {currentEvent.videoUrl && currentEvent.videoUrl.trim() !== '' ? (
+                <div className="h-48 w-full md:w-72 rounded-2xl overflow-hidden shadow-2xl ring-4 ring-[#ff9900]/30 bg-black">
+                  <video
+                    src={currentEvent.videoUrl}
+                    controls
+                    playsInline
+                    preload="metadata"
+                    className="h-full w-full object-contain"
+                  />
+                </div>
+              ) : currentEvent.image ? (
+                <img
+                  src={currentEvent.image}
+                  alt={currentEvent.title}
+                  className="rounded-2xl shadow-2xl h-48 w-full object-cover md:w-72 ring-4 ring-[#ff9900]/30"
+                />
+              ) : (
+                <div className="h-48 w-full md:w-72 flex items-center justify-center text-6xl rounded-2xl bg-gradient-to-br from-[#ff9900]/20 via-[#ffb347]/20 to-[#ffd700]/20 shadow-xl">
+                  🎂
+                </div>
               )}
             </div>
-          </div>
-        </div>
-      );
-    } else {
-      // Regular event display
-      return (
-        <div className="relative p-6 md:p-8 flex flex-col md:flex-row items-center">
-          <div className="absolute top-0 right-0 w-full h-1 bg-gradient-to-r from-[#ff9900] via-[#ffb347] to-white"></div>
 
-          <div className="md:flex-1 mb-6 md:mb-0 md:pr-6">
-            {loadingEvent ? (
-              <p className="text-gray-500">Cargando evento…</p>
-            ) : nextEvent ? (
-              <>
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="inline-block px-3 py-1 rounded-full bg-[#ff9900]/10 text-[#ff9900] text-xs font-medium">
-                    Evento destacado
-                  </div>
-                  {(() => {
-                    const eventStatus = getEventStatus(nextEvent.date.toDate());
-                    return (
-                      <div className={`inline-block px-2 py-1 rounded-full ${eventStatus.color} text-white text-xs font-medium`}>
-                        {eventStatus.label}
-                      </div>
-                    );
-                  })()}
-                </div>
-
-                <h2 className="text-xl md:text-2xl font-bold text-gray-900 mb-2">
-                  {nextEvent.title}
-                </h2>
-
-                {/* Format date/time or "All day" with +1 day adjustment */}
-                {(() => {
-  const dt = nextEvent.date.toDate();
-  const adjustedDt = addOneDay(dt);
-  const isAllDay = dt.getHours() === 0 && dt.getMinutes() === 0 && dt.getSeconds() === 0;
-  const isToday = isEventToday(dt);
-
-  if (isAllDay) {
-    return (
-      <p className="text-xs text-gray-500 mb-3">
-        {isToday ? 'Hoy' : adjustedDt.toLocaleDateString('es-ES', {
-          day: 'numeric',
-          month: 'long'
-        })} — Todo el día
-      </p>
-    );
-  } else {
-    return (
-      <p className="text-xs text-gray-500 mb-3">
-        {isToday ? 'Hoy' : adjustedDt.toLocaleDateString('es-ES', {
-          day: 'numeric',
-          month: 'long'
-        })},{' '}
-        {dt.toLocaleTimeString('es-ES', {
-          hour: '2-digit',
-          minute: '2-digit'
-        })}
-      </p>
-    );
-  }
-})()}
-
-                <p className="mb-4 text-gray-600">{nextEvent.description}</p>
-                
-                {/* Show additional events today if any */}
-                {todayEventsCount > 1 && (
-                  <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                    <p className="text-sm text-blue-800 font-medium mb-2">
-                      📅 Hay {todayEventsCount} eventos hoy
-                    </p>
-                    {additionalTodayEvents.length > 0 && (
-                      <div className="space-y-1">
-                        {additionalTodayEvents.slice(0, 2).map((event, idx) => (
-                          <p key={idx} className="text-xs text-blue-700">
-                            • {event.title}
-                            {(() => {
-                              const dt = event.date.toDate();
-                              const isAllDay = dt.getHours() === 0 && dt.getMinutes() === 0 && dt.getSeconds() === 0;
-                              return isAllDay ? '' : ` (${dt.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })})`;
-                            })()}
-                          </p>
-                        ))}
-                        {additionalTodayEvents.length > 2 && (
-                          <p className="text-xs text-blue-600">
-                            y {additionalTodayEvents.length - 2} más...
-                          </p>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
-                
-                <a href='dashboard/calendar'>
-                  <button className="inline-flex items-center px-5 py-2.5 bg-gradient-to-r from-[#ff9900] to-[#ffb347] text-white rounded-full font-medium text-sm hover:from-[#e68a00] hover:to-[#ff9900] transition-all shadow-sm hover:shadow transform hover:-translate-y-0.5 duration-200">
-                    Ver detalles
-                    <ChevronRight className="ml-1 h-4 w-4" />
-                  </button>
-                </a>
-              </>
-            ) : (
-              <p className="text-gray-500">No hay eventos próximos</p>
+            {/* Carousel navigation - Right */}
+            {upcomingEvents.length > 1 && (
+              <button
+                onClick={() => setCurrentEventIndex((prev) => (prev === upcomingEvents.length - 1 ? 0 : prev + 1))}
+                className="absolute right-2 top-1/2 -translate-y-1/2 z-10 p-2 rounded-full bg-white/90 hover:bg-white shadow-lg hover:shadow-xl transition-all"
+              >
+                <ChevronRight className="h-5 w-5 text-[#ff9900]" />
+              </button>
             )}
           </div>
-
-         <div className="flex-shrink-0 w-full md:w-auto">
-  {loadingEvent ? (
-    <div className="h-40 w-full md:w-64 bg-gray-100 rounded-xl animate-pulse" />
-  ) : nextEvent ? (
-    nextEvent.videoUrl && nextEvent.videoUrl.trim() !== '' ? (
-      <div className="h-40 w-full md:w-64 rounded-xl overflow-hidden bg-black shadow">
-        <video
-          key={nextEvent.videoUrl}
-          src={nextEvent.videoUrl}
-          controls
-          playsInline
-          preload="metadata"
-          className="h-full w-full object-contain"
-        />
-      </div>
-    ) : nextEvent.image ? (
-      <img
-        src={nextEvent.image}
-        alt={nextEvent.title}
-        className="rounded-xl shadow h-40 w-full object-cover md:w-64"
-      />
-    ) : (
-      <div className="h-40 w-full md:w-64 flex items-center justify-center text-gray-400 rounded-xl border border-gray-200">
-        No hay media
-      </div>
-    )
-  ) : (
-    <div className="h-40 w-full md:w-64 flex items-center justify-center text-gray-400 rounded-xl border border-gray-200">
-      No hay evento
-    </div>
-  )}
-</div>
-
         </div>
       );
     }
+
+    // Regular event (birthday or not, but not today)
+    return (
+      <div className="relative p-6 md:p-8 flex flex-col md:flex-row items-center">
+        <div className={`absolute top-0 ${isBirthday ? 'left' : 'right'}-0 w-full h-1 bg-gradient-to-${isBirthday ? 'r' : 'r'} from-[#ff9900] via-[#ffb347] to-white`}></div>
+
+        {/* Carousel navigation - Left */}
+        {upcomingEvents.length > 1 && (
+          <button
+            onClick={() => setCurrentEventIndex((prev) => (prev === 0 ? upcomingEvents.length - 1 : prev - 1))}
+            className="absolute left-2 top-1/2 -translate-y-1/2 z-10 p-2 rounded-full bg-white hover:bg-gray-50 shadow-md hover:shadow-lg transition-all"
+          >
+            <ChevronLeft className="h-5 w-5 text-[#ff9900]" />
+          </button>
+        )}
+
+        <div className="md:flex-1 mb-6 md:mb-0 md:pr-6">
+          <>
+            <div className="flex items-center gap-2 mb-3 flex-wrap">
+              <div className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${
+                isBirthday 
+                  ? 'bg-[#ff9900]/20 text-[#ff9900] border-2 border-[#ff9900]/30' 
+                  : 'bg-[#ff9900]/10 text-[#ff9900]'
+              }`}>
+                {isBirthday ? '🎂 Próximo cumpleaños' : 'Evento destacado'}
+              </div>
+              {(() => {
+                const eventStatus = getEventStatus(currentEvent);
+                return (
+                  <div className={`inline-block px-2 py-1 rounded-full ${eventStatus.color} text-white text-xs font-medium`}>
+                    {eventStatus.label}
+                  </div>
+                );
+              })()}
+            </div>
+
+            <h2 className={`text-xl md:text-2xl font-bold mb-2 ${
+              isBirthday 
+                ? 'bg-gradient-to-r from-[#ff9900] to-[#ffb347] text-transparent bg-clip-text' 
+                : 'text-gray-900'
+            }`}>
+              {currentEvent.title}
+            </h2>
+
+            {(() => {
+              const dt = currentEvent.date.toDate();
+              const adjustedDt = dt;
+              const isAllDay = dt.getHours() === 0 && dt.getMinutes() === 0 && dt.getSeconds() === 0;
+              const isToday = isEventToday(dt);
+
+              if (isAllDay) {
+                return (
+                  <p className="text-xs text-gray-500 mb-3">
+                    {isToday ? 'Hoy' : adjustedDt.toLocaleDateString('es-ES', {
+                      day: 'numeric',
+                      month: 'long',
+                      year: isBirthday ? undefined : 'numeric'
+                    })} — Todo el día
+                  </p>
+                );
+              } else {
+                return (
+                  <p className="text-xs text-gray-500 mb-3">
+                    {isToday ? 'Hoy' : adjustedDt.toLocaleDateString('es-ES', {
+                      day: 'numeric',
+                      month: 'long',
+                      year: isBirthday ? undefined : 'numeric'
+                    })},{' '}
+                    {dt.toLocaleTimeString('es-ES', {
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
+                  </p>
+                );
+              }
+            })()}
+
+            {(() => {
+  if (isBirthday) {
+    const birthdayMessages = [
+     "¡Feliz cumpleaños! En Merquellantas nos sentimos orgullosos de contar con tu talento. Que este nuevo año de vida venga cargado de kilómetros de éxitos y alegrías. ¡Disfruta tu día!",
+  "Hoy celebramos la vida de una pieza fundamental de nuestra familia. De parte de todo el equipo de Merquellantas, te deseamos un cumpleaños extraordinario. ¡Gracias por rodar con nosotros!",
+  "¡Felicidades en tu día! Para Merquellantas es un honor tenerte en el equipo. Esperamos que este día esté lleno de sonrisas, buena compañía y el reconocimiento que mereces.",
+  "¡Llegó el momento de celebrar! En Merquellantas nos unimos a tu alegría y te deseamos un año lleno de prosperidad y momentos inolvidables. ¡Que pases un muy feliz cumpleaños!",
+  "Hoy los aplausos son para ti. En Merquellantas celebramos no solo un año más de tu vida, sino tu valiosa contribución a nuestra empresa. ¡Que sea un día memorable!",
+  "¡Es momento de hacer una parada para celebrar! En Merquellantas te deseamos un feliz cumpleaños lleno de buena energía y que este año sigas avanzando con paso firme hacia tus metas.",
+  "¡Felicidades! Que este nuevo año sea como un camino libre de obstáculos y lleno de grandes destinos. Gracias por poner todo tu esfuerzo y pasión en el equipo de Merquellantas.",
+  "En Merquellantas celebramos tu vida y tu talento. Deseamos que este día sea el inicio de una vuelta más al sol llena de salud, éxito y momentos especiales junto a los que más quieres.",
+  "¡Feliz cumpleaños! Eres parte del engranaje que hace que Merquellantas llegue cada día más lejos. Esperamos que disfrutes de un día extraordinario y muy merecido.",
+  "¡Hoy celebramos que eres parte de Merquellantas! Que la alegría de este día te acompañe durante todo el año y que sigamos compartiendo muchos éxitos más en el camino."
+];
+    
+    const randomMessage = birthdayMessages[currentEvent.title.length % birthdayMessages.length];
+    
+    return (
+      <div className="mb-4 p-4 bg-gradient-to-br from-[#ff9900]/10 to-[#ffb347]/10 rounded-lg border-l-4 border-[#ff9900]">
+        <p className="text-gray-700 leading-relaxed text-sm md:text-base">
+          {randomMessage}
+        </p>
+      </div>
+    );
+  } else {
+    return <p className="mb-4 text-gray-600">{currentEvent.description}</p>;
+  }
+})()}
+
+            {isBirthday && currentEvent.videoUrl && (
+              <div className="mb-4 p-3 bg-[#ff9900]/10 rounded-lg border border-[#ff9900]/30">
+                <p className="text-sm text-[#ff9900] font-medium flex items-center">
+                  <span className="mr-2">🎬</span> Este cumpleaños tiene un video especial
+                </p>
+              </div>
+            )}
+
+            {/* Carousel indicator dots */}
+            {upcomingEvents.length > 1 && (
+              <div className="flex gap-2 mb-4">
+                {upcomingEvents.map((_, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => setCurrentEventIndex(idx)}
+                    className={`h-2 rounded-full transition-all ${
+                      idx === currentEventIndex 
+                        ? 'w-8 bg-[#ff9900]' 
+                        : 'w-2 bg-gray-300 hover:bg-gray-400'
+                    }`}
+                  />
+                ))}
+              </div>
+            )}
+
+            <a href='dashboard/calendar'>
+              <button className="inline-flex items-center px-5 py-2.5 bg-gradient-to-r from-[#ff9900] to-[#ffb347] text-white rounded-full font-medium text-sm hover:from-[#e68a00] hover:to-[#ff9900] transition-all shadow-sm hover:shadow transform hover:-translate-y-0.5 duration-200">
+                Ver detalles
+                <ChevronRight className="ml-1 h-4 w-4" />
+              </button>
+            </a>
+          </>
+        </div>
+
+        <div className="flex-shrink-0 w-full md:w-auto">
+          {currentEvent.videoUrl && currentEvent.videoUrl.trim() !== '' ? (
+            <div className={`h-40 w-full md:w-64 rounded-xl overflow-hidden bg-black shadow ${
+              isBirthday ? 'ring-4 ring-[#ff9900]/30' : ''
+            }`}>
+              <video
+                key={currentEvent.videoUrl}
+                src={currentEvent.videoUrl}
+                controls
+                playsInline
+                preload="metadata"
+                className="h-full w-full object-contain"
+              />
+            </div>
+          ) : currentEvent.image || isBirthday ? (
+            <img
+              src={isBirthday 
+                ? "https://thumbs.dreamstime.com/b/imprimir-parte-corporativa-cumplea%C3%B1os-de-empleados-la-gente-desea-un-feliz-ilustraci%C3%B3n-vectorial-plana-bolas-torta-crackers-184335154.jpg"
+                : currentEvent.image
+              }
+              alt={currentEvent.title}
+              className={`rounded-xl shadow h-40 w-full object-cover md:w-64 ${
+                isBirthday ? 'ring-4 ring-[#ff9900]/30' : ''
+              }`}
+            />
+          ) : (
+            <div className={`h-40 w-full md:w-64 flex items-center justify-center rounded-xl border border-gray-200 ${
+              isBirthday 
+                ? 'text-6xl bg-gradient-to-br from-[#ff9900]/20 to-[#ffb347]/20' 
+                : 'text-gray-400'
+            }`}>
+              {isBirthday ? '🎂' : 'No hay media'}
+            </div>
+          )}
+        </div>
+
+        {/* Carousel navigation - Right */}
+        {upcomingEvents.length > 1 && (
+          <button
+            onClick={() => setCurrentEventIndex((prev) => (prev === upcomingEvents.length - 1 ? 0 : prev + 1))}
+            className="absolute right-2 top-1/2 -translate-y-1/2 z-10 p-2 rounded-full bg-white hover:bg-gray-50 shadow-md hover:shadow-lg transition-all"
+          >
+            <ChevronRight className="h-5 w-5 text-[#ff9900]" />
+          </button>
+        )}
+      </div>
+    );
   })()}
 </div>
 
@@ -866,39 +968,64 @@ useEffect(() => {
                   </div>
 
                   <div className="space-y-3">
-                    {loadingEvents ? (
-                      // loading skeletons
-                      [1,2,3].map(i => (
-                        <div key={i} className="h-16 rounded-xl bg-gray-100 animate-pulse" />
-                      ))
-                    ) : upcomingEvents.length > 0 ? (
-                      upcomingEvents.map((evt, idx) => {
-                        const dt = evt.date.toDate();
-                        const adjustedDt = addOneDay(dt); // Add one day for display
-                        const isAllDay = dt.getHours()===0 && dt.getMinutes()===0 && dt.getSeconds()===0;
-                        const dateLabel = isAllDay
-                          ? `${adjustedDt.toLocaleDateString('es-ES',{ day: 'numeric', month: 'long', year: 'numeric' })} — Todo el día`
-                          : `${adjustedDt.toLocaleDateString('es-ES',{ day: 'numeric', month: 'long', year: 'numeric' })}, ${dt.toLocaleTimeString('es-ES',{ hour:'2-digit',minute:'2-digit' })}`;
+  {loadingEvents ? (
+    // loading skeletons
+    [1,2,3].map(i => (
+      <div key={i} className="h-16 rounded-xl bg-gray-100 animate-pulse" />
+    ))
+  ) : upcomingEvents.length > 0 ? (
+    upcomingEvents.map((evt, idx) => {
+      const dt = evt.date.toDate();
+      const adjustedDt = dt; 
+      const isAllDay = dt.getHours()===0 && dt.getMinutes()===0 && dt.getSeconds()===0;
+      const isBirthday = evt.type === 'cumpleaños' || evt.type === 'birthday' || evt.title.toLowerCase().includes('cumpleaños');
+      
+      const dateLabel = isAllDay
+        ? `${adjustedDt.toLocaleDateString('es-ES',{ day: 'numeric', month: 'long', year: 'numeric' })} — Todo el día`
+        : `${adjustedDt.toLocaleDateString('es-ES',{ day: 'numeric', month: 'long', year: 'numeric' })}, ${dt.toLocaleTimeString('es-ES',{ hour:'2-digit',minute:'2-digit' })}`;
 
-                        return (
-                          <div
-                            key={idx}
-                            className="flex items-start p-4 rounded-xl hover:bg-gray-50 transition-colors border border-gray-100 hover:border-[#ff9900]/30 hover:shadow-sm"
-                          >
-                            <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-[#ff9900]/10 flex items-center justify-center mr-4">
-                              <Activity className="h-6 w-6 text-[#ff9900]" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <h3 className="font-medium text-gray-900 truncate">{evt.title}</h3>
-                              <p className="text-xs text-gray-500 mt-1">{dateLabel}</p>
-                            </div>
-                          </div>
-                        );
-                      })
-                    ) : (
-                      <p className="text-gray-500">No hay próximas actividades</p>
-                    )}
-                  </div>
+      return (
+        <div
+          key={idx}
+          className={`flex items-start p-4 rounded-xl transition-colors border hover:shadow-sm ${
+            isBirthday 
+              ? 'bg-gradient-to-br from-pink-50 via-purple-50 to-blue-50 border-pink-200 hover:border-pink-300' 
+              : 'hover:bg-gray-50 border-gray-100 hover:border-[#ff9900]/30'
+          }`}
+        >
+          <div className={`flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center mr-4 ${
+            isBirthday 
+              ? 'bg-gradient-to-br from-pink-400 to-purple-400' 
+              : 'bg-[#ff9900]/10'
+          }`}>
+            {isBirthday ? (
+              <span className="text-2xl">🎂</span>
+            ) : (
+              <Activity className="h-6 w-6 text-[#ff9900]" />
+            )}
+          </div>
+          <div className="flex-1 min-w-0">
+            <h3 className={`font-medium truncate ${
+              isBirthday ? 'bg-gradient-to-r from-pink-600 to-purple-600 text-transparent bg-clip-text' : 'text-gray-900'
+            }`}>
+              {evt.title}
+            </h3>
+            <p className={`text-xs mt-1 ${isBirthday ? 'text-purple-600' : 'text-gray-500'}`}>
+              {dateLabel}
+            </p>
+            {isBirthday && evt.videoUrl && (
+              <p className="text-xs text-pink-600 mt-1 flex items-center">
+                <span className="mr-1">🎬</span> Con video
+              </p>
+            )}
+          </div>
+        </div>
+      );
+    })
+  ) : (
+    <p className="text-gray-500">No hay próximas actividades</p>
+  )}
+</div>
                 </div>
               </div>
               
