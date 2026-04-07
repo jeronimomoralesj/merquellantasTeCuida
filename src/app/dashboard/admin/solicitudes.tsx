@@ -377,9 +377,16 @@ export default function SolicitudesCard() {
     loadAll();
   }, []);
 
-  // Filter requests
+  // Filter requests — search hits name, cédula, type, and description
   const filteredRequests = requests.filter(req => {
-    const matchesSearch = req.employee.toLowerCase().includes(searchTerm.toLowerCase());
+    const term = searchTerm.toLowerCase().trim();
+    const cedula = (req.rawData as BaseDocumentData | undefined)?.cedula || "";
+    const matchesSearch = !term ||
+      req.employee.toLowerCase().includes(term) ||
+      cedula.toLowerCase().includes(term) ||
+      req.type.toLowerCase().includes(term) ||
+      (req.description?.toLowerCase().includes(term) ?? false) ||
+      (req.motivoRespuesta?.toLowerCase().includes(term) ?? false);
     const matchesStatus = filterStatus === "all" || req.status === filterStatus;
     const matchesType = filterType === "all" || req.type === filterType;
     return matchesSearch && matchesStatus && matchesType;
@@ -623,7 +630,7 @@ export default function SolicitudesCard() {
     return true;
   });
 
-  const shown = tabFiltered.slice(0, 4);
+  const shown = tabFiltered.slice(0, 3);
 
   return (
     <div className="space-y-4 text-black">
@@ -721,7 +728,7 @@ export default function SolicitudesCard() {
         </div>
       )}
 
-      {!loading && tabFiltered.length > 4 && (
+      {!loading && tabFiltered.length > 3 && (
         <div className="text-center mt-2">
           <button
             onClick={() => setShowAll(true)}
@@ -757,10 +764,10 @@ export default function SolicitudesCard() {
                 </div>
                 <input
                   type="text"
-                  placeholder="Buscar por nombre del empleado..."
+                  placeholder="Buscar por nombre, cédula, tipo, descripción..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                  className="pl-10 w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ff9900] focus:border-[#ff9900] outline-none text-black placeholder:text-gray-400"
                 />
               </div>
               
