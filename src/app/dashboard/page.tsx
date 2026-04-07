@@ -4,10 +4,12 @@ import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 import DashboardNavbar from './navbar';
 import { useRouter } from 'next/navigation';
-import { 
+import {
   Calendar, DollarSign, Briefcase, ChevronRight, Clock, MessageSquare, FileText, Activity, User, CheckCircle,
   PersonStanding,
-  ChevronLeft
+  ChevronLeft,
+  LayoutDashboard,
+  UserCircle2
 } from 'lucide-react';
 import Solicitudes from "./components/solicitudes";
 import AdminPage from './admin/page';
@@ -75,6 +77,7 @@ interface UserData {
 const Dashboard = () => {
   const [showSolicitudes, setShowSolicitudes] = useState(false);
   const [userRole, setUserRole] = useState<string>("user");
+  const [adminView, setAdminView] = useState<boolean>(true);
   const [loadingEvent, setLoadingEvent] = useState(true);
   const [nextEvent, setNextEvent] = useState<CalendarEvent | null>(null);
 const [currentEventIndex, setCurrentEventIndex] = useState(0);
@@ -539,13 +542,38 @@ useEffect(() => {
       <div className="min-h-screen bg-gray-50">
         <DashboardNavbar />
         <GeminiChat />
-        {/* Admin content appears first if the user is admin */}
-    {userRole === "admin" && (
-      <div className="border-b border-gray-200">
-        <AdminPage />
-      </div>
-    )}
-        {/* Main content */}
+
+        {/* Floating view-switcher (admins only) */}
+        {userRole === "admin" && (
+          <button
+            type="button"
+            onClick={() => setAdminView(v => !v)}
+            className="fixed bottom-6 right-6 z-40 inline-flex items-center gap-2 px-4 py-3 rounded-full bg-black text-white shadow-2xl ring-2 ring-[#ff9900] hover:bg-[#ff9900] hover:text-black active:scale-95 transition-all"
+            title={adminView ? "Cambiar a vista de usuario" : "Cambiar a vista de admin"}
+          >
+            {adminView ? (
+              <>
+                <UserCircle2 className="h-5 w-5" />
+                <span className="text-sm font-bold hidden sm:inline">Vista usuario</span>
+              </>
+            ) : (
+              <>
+                <LayoutDashboard className="h-5 w-5" />
+                <span className="text-sm font-bold hidden sm:inline">Vista admin</span>
+              </>
+            )}
+          </button>
+        )}
+
+        {/* Admin view (only if admin AND adminView toggled on) */}
+        {userRole === "admin" && adminView && (
+          <main className="pt-20 sm:pt-24">
+            <AdminPage embedded />
+          </main>
+        )}
+
+        {/* Main user content (hidden when admin is in admin view) */}
+        {!(userRole === "admin" && adminView) && (
         <main className="pb-16 px-4 sm:px-6 lg:px-8 pt-20 sm:pt-24">
           <div className="max-w-7xl mx-auto">
             {/* HERO — Merquito welcome */}
@@ -1188,6 +1216,7 @@ useEffect(() => {
           </div>
         </div>
       </main>
+        )}
     </div>
   );
 };

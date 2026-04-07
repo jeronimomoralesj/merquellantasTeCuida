@@ -2,8 +2,13 @@
 
 import {
   FileText,
+  LayoutDashboard,
+  Users as UsersIcon,
+  Calendar as CalendarIcon,
+  Zap,
+  Heart,
+  MessageSquare,
 } from "lucide-react";
-import DashboardNavbar from "../navbar";
 import StatsCard from "./stats";
 import TristesCard from "./tristes";
 import SolicitudesCard from "./solicitudes";
@@ -12,63 +17,126 @@ import PQRSFCard from "./pqrsf";
 import Users from "./user";
 import QuickActionsAdmin from "./quickActionsAdmin";
 
+interface AdminPageProps {
+  /** When true, the parent already renders the navbar so we shouldn't add another one. */
+  embedded?: boolean;
+}
 
-export default function AdminPage() {
-
+export default function AdminPage({ embedded = false }: AdminPageProps) {
   return (
-    <div className="min-h-screen bg-gray-50">
-      <DashboardNavbar />
-      {/* Main content */}
-      <div className="pt-20 px-4 sm:px-6 lg:px-8 pb-8">
+    <div className={embedded ? "" : "min-h-screen bg-gray-50"}>
+      <div className={`${embedded ? "" : "pt-20"} px-4 sm:px-6 lg:px-8 pb-12`}>
         <div className="max-w-7xl mx-auto">
-          {/* Page header */}
-          <div className="mb-8">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between">
+          {/* HERO header — black/yellow */}
+          <section className="relative mb-8 overflow-hidden rounded-3xl bg-black text-white shadow-xl">
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-0 opacity-40"
+              style={{
+                backgroundImage:
+                  "radial-gradient(circle at 12% 20%, #ff9900 0, transparent 45%), radial-gradient(circle at 88% 90%, #ff9900 0, transparent 35%)",
+              }}
+            />
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-0 opacity-[0.06]"
+              style={{
+                backgroundImage:
+                  "linear-gradient(#ffffff 1px, transparent 1px), linear-gradient(90deg, #ffffff 1px, transparent 1px)",
+                backgroundSize: "36px 36px",
+              }}
+            />
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-[#ff9900] to-transparent" />
+
+            <div className="relative p-6 sm:p-8 lg:p-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">Panel de Administración</h1>
-                <p className="mt-1 text-sm text-gray-500">
-                  Bienvenido de nuevo. Aquí está el resumen del día.
+                <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#ff9900]/15 text-[#ff9900] text-xs font-semibold uppercase tracking-wider border border-[#ff9900]/30">
+                  <LayoutDashboard className="h-3.5 w-3.5" /> Panel de Administración
+                </span>
+                <h1 className="mt-3 text-2xl sm:text-3xl lg:text-4xl font-extrabold leading-tight">
+                  Centro de <span className="text-[#ff9900]">control</span>
+                </h1>
+                <p className="mt-2 text-sm sm:text-base text-white/70">
+                  Gestiona usuarios, solicitudes, eventos y más desde un solo lugar.
                 </p>
               </div>
-        
+
+              {/* Quick KPIs / shortcut chips */}
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { icon: FileText, label: "Solicitudes" },
+                  { icon: UsersIcon, label: "Usuarios" },
+                  { icon: CalendarIcon, label: "Calendario" },
+                  { icon: Zap, label: "Accesos" },
+                ].map((c) => (
+                  <span
+                    key={c.label}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-xs font-semibold text-white/80"
+                  >
+                    <c.icon className="h-3.5 w-3.5 text-[#ff9900]" />
+                    {c.label}
+                  </span>
+                ))}
+              </div>
             </div>
-          </div>
+          </section>
 
           {/* Main content grid */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Left column - Solicitudes */}
-            <div className="lg:col-span-2">
-              <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100 hover:shadow-md transition-shadow duration-300 relative overflow-hidden">
-                <div className="absolute top-0 left-0 w-1 h-full bg-[#ff9900]"></div>
-                <div className="flex justify-between items-center mb-5">
-                  <h2 className="text-lg font-bold text-gray-900 flex items-center">
-                    <FileText className="h-5 w-5 mr-2 text-[#ff9900]" />
-                    Solicitudes
-                  </h2>
-                </div>
-
+            {/* Left column */}
+            <div className="lg:col-span-2 space-y-6">
+              <SectionCard icon={<FileText className="h-5 w-5" />} title="Solicitudes">
                 <SolicitudesCard />
-              </div>
-              <br />
+              </SectionCard>
 
-<CalendarCard />
-<Users />
-<QuickActionsAdmin />
-              <br />
-              
+              <CalendarCard />
+
+              <Users />
+
+              <QuickActionsAdmin />
             </div>
 
-            {/* Right column - Cards */}
+            {/* Right column */}
             <div className="space-y-6">
-              {/* Notificaciones */}
-              <StatsCard />
+              <SectionCard icon={<MessageSquare className="h-5 w-5" />} title="Estadísticas">
+                <StatsCard />
+              </SectionCard>
 
-              {/* Trabajadores tristes card */}
-              <TristesCard />
-              <PQRSFCard />
+              <SectionCard icon={<Heart className="h-5 w-5" />} title="Bienestar del equipo">
+                <TristesCard />
+              </SectionCard>
+
+              <SectionCard icon={<MessageSquare className="h-5 w-5" />} title="PQRSF">
+                <PQRSFCard />
+              </SectionCard>
             </div>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function SectionCard({
+  icon,
+  title,
+  children,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow duration-300 relative overflow-hidden">
+      <div className="absolute top-0 left-0 w-1 h-full bg-[#ff9900]" />
+      <div className="p-5 sm:p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <div className="w-9 h-9 rounded-lg bg-[#ff9900]/10 text-[#ff9900] flex items-center justify-center">
+            {icon}
+          </div>
+          <h2 className="text-base sm:text-lg font-bold text-gray-900">{title}</h2>
+        </div>
+        {children}
       </div>
     </div>
   );
