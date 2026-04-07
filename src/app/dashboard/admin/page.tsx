@@ -10,6 +10,7 @@ import SolicitudesCard from "./solicitudes";
 import CalendarCard from "./calendar";
 import PQRSFCard from "./pqrsf";
 import Users from "./user";
+import QuickActionsAdmin from "./quickActionsAdmin";
 
 
 export default function AdminPage() {
@@ -52,6 +53,7 @@ export default function AdminPage() {
 
 <CalendarCard />
 <Users />
+<QuickActionsAdmin />
               <br />
               
             </div>

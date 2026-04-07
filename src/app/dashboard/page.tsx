@@ -15,6 +15,16 @@ import { onAuthStateChanged } from 'firebase/auth'
 import { doc, getDoc, collection, query, where, orderBy, limit, getDocs, Timestamp } from 'firebase/firestore'
 import { auth, db } from '../../firebase'
 import GeminiChat from './components/chat';
+import { getIcon } from './admin/quickActionIcons';
+
+interface DynamicQuickAction {
+  id: string;
+  title: string;
+  href: string;
+  icon: string;
+  order: number;
+  active: boolean;
+}
 interface CalendarEvent {
   title: string;
   description: string;
@@ -78,6 +88,9 @@ const [currentEventIndex, setCurrentEventIndex] = useState(0);
   // Upcoming events state
   const [upcomingEvents, setUpcomingEvents] = useState<CalendarEvent[]>([]);
   const [loadingEvents, setLoadingEvents] = useState(true);
+
+  // Dynamic quick actions from Firestore
+  const [dynamicActions, setDynamicActions] = useState<DynamicQuickAction[] | null>(null);
 
 const [todayEventsCount, setTodayEventsCount] = useState(0);
 const [additionalTodayEvents, setAdditionalTodayEvents] = useState<CalendarEvent[]>([]);
@@ -474,6 +487,24 @@ useEffect(() => {
   }
 
   fetchUpcoming();
+}, []);
+
+useEffect(() => {
+  async function fetchQuickActions() {
+    try {
+      const q = query(collection(db, 'quickActions'), orderBy('order', 'asc'));
+      const snap = await getDocs(q);
+      const list: DynamicQuickAction[] = snap.docs.map(d => ({
+        id: d.id,
+        ...(d.data() as Omit<DynamicQuickAction, 'id'>),
+      }));
+      setDynamicActions(list.filter(a => a.active));
+    } catch (e) {
+      console.error('Error loading quick actions:', e);
+      setDynamicActions([]);
+    }
+  }
+  fetchQuickActions();
 }, []);
 
   // If flagged, render the solicitudes screen instead of the dashboard
@@ -977,7 +1008,15 @@ useEffect(() => {
                       Acciones rápidas
                     </h2>
                     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-                      {quickActions.map(action => (
+                      {(dynamicActions && dynamicActions.length > 0
+                        ? dynamicActions.map(a => ({
+                            id: a.id,
+                            title: a.title,
+                            href: a.href,
+                            icon: React.createElement(getIcon(a.icon), { className: 'h-5 w-5' }),
+                          }))
+                        : quickActions
+                      ).map(action => (
                         <a
                           key={action.id}
                           href={action.href}
