@@ -667,7 +667,11 @@ useEffect(() => {
         "Hoy es un día para celebrarte a ti y todo lo que representas para nosotros. Eres una pieza fundamental de esta familia laboral. Deseamos que este nuevo año de vida te traiga prosperidad, salud y muchos motivos para sonreír."
       ];
       
-      const randomMessage = birthdayMessages[currentEvent.title.length % birthdayMessages.length];
+      // djb2 hash so different names spread across messages instead of colliding by length
+      const hash = (currentEvent.title || '')
+        .split('')
+        .reduce((acc, ch) => ((acc << 5) + acc + ch.charCodeAt(0)) >>> 0, 5381);
+      const randomMessage = birthdayMessages[hash % birthdayMessages.length];
       
       return (
         <div className="relative p-6 md:p-8">
@@ -1102,63 +1106,52 @@ useEffect(() => {
               
               {/* Right column */}
               <div className="space-y-6">
-                {/* Personal summary with shadow on hover */}
-                <div className="bg-white rounded-2xl shadow-sm p-6 border border-gray-100 hover:shadow-md transition-shadow duration-300 relative overflow-hidden">
-                  <div className="absolute top-0 right-0 w-full h-1 bg-gradient-to-l from-[#ff9900] via-[#ffb347] to-white"></div>
-                  <div className="flex items-center mb-6">
-                    <div className="w-14 h-14 rounded-full bg-gradient-to-br from-[#ff9900]/20 to-[#ff9900]/40 flex items-center justify-center">
-                      <User className="h-8 w-8 text-[#ff9900]" />
+                {/* Personal summary — only renders fields with values */}
+                {(() => {
+                  const fields: { label: string; value: string | null }[] = [
+                    { label: 'Área', value: profile?.posicion?.trim() || null },
+                    {
+                      label: 'Antigüedad',
+                      value: profile && profile.antiguedad
+                        ? `${profile.antiguedad} ${profile.antiguedad === 1 ? 'año' : 'años'}`
+                        : null,
+                    },
+                    { label: 'EPS', value: profile?.eps?.trim() || null },
+                    { label: 'Banco', value: profile?.banco?.trim() || null },
+                    { label: 'Pensión', value: profile?.pensiones?.trim() || null },
+                    { label: 'ARL', value: profile?.arl?.trim() || null },
+                  ].filter(f => !!f.value);
+
+                  return (
+                    <div className="bg-white rounded-2xl shadow-sm p-6 border border-gray-100 hover:shadow-md transition-shadow duration-300 relative overflow-hidden">
+                      <div className="absolute top-0 right-0 w-full h-1 bg-gradient-to-l from-[#ff9900] via-[#ffb347] to-white" />
+                      <div className="flex items-center mb-5">
+                        <div className="w-14 h-14 rounded-full bg-gradient-to-br from-[#ff9900]/20 to-[#ff9900]/40 flex items-center justify-center">
+                          <User className="h-8 w-8 text-[#ff9900]" />
+                        </div>
+                        <div className="ml-4 min-w-0">
+                          <h2 className="font-bold text-gray-900 truncate">
+                            {profile?.nombre ?? 'Cargando...'}
+                          </h2>
+                          {profile?.dpto && (
+                            <p className="text-sm text-gray-600 truncate">{profile.dpto}</p>
+                          )}
+                        </div>
+                      </div>
+
+                      {fields.length > 0 && (
+                        <div className="border-t border-gray-100 pt-4 grid grid-cols-2 gap-4">
+                          {fields.map(f => (
+                            <div key={f.label}>
+                              <p className="text-xs text-gray-500">{f.label}</p>
+                              <p className="font-medium text-gray-900 text-sm">{f.value}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                    <div className="ml-4">
-                      <h2 className="font-bold text-gray-900">
-                        {profile?.nombre ?? 'Cargando...'}
-                      </h2>
-                      <p className="text-sm text-gray-600 text-black">
-                        {profile?.dpto ?? '—'}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="border-t border-gray-100 pt-4 mt-2">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <p className="text-sm text-gray-500">Area</p>
-                        <p className="font-medium text-gray-900">{profile?.posicion ?? '—'}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-500">Antigüedad</p>
-                        <p className="font-medium text-gray-900">
-                          {profile
-                             ? `${profile.antiguedad} ${profile.antiguedad === 1 ? 'año' : 'años'}`
-                             : '—'}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="border-t border-gray-100 pt-4 mt-2">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <p className="text-sm text-gray-500">EPS</p>
-                        <p className="font-medium text-gray-900">{profile?.eps ?? '—'}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-500">Banco</p>
-                       <p className="font-medium text-gray-900">{profile?.banco ?? '—'}</p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="border-t border-gray-100 pt-4 mt-2">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <p className="text-sm text-gray-500">Pension</p>
-                        <p className="font-medium text-gray-900">{profile?.pensiones ?? '—'}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-500">ARL</p>
-                        <p className="font-medium text-gray-900">{profile?.arl ?? '—'}</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                  );
+                })()}
 
                 {/* User requests with Activas / Respondidas tabs */}
                 {(() => {
