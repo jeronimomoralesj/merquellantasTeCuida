@@ -588,8 +588,7 @@ useEffect(() => {
                     <CheckCircle className="h-3.5 w-3.5" /> Hoy es un buen día
                   </span>
                   <h1 className="mt-3 text-2xl sm:text-3xl lg:text-4xl font-extrabold leading-tight">
-                    Bienvenid@{profile?.nombre ? ` ${profile.nombre.split(' ')[0]}` : ''}! 👋{' '}
-                    <span className="block sm:inline text-[#ff9900]">¡Nuestra Gente!</span>
+                    Bienvenid@{profile?.nombre ? ` ${profile.nombre.split(' ')[0]}` : ''}! 👋
                   </h1>
                   <p className="mt-2 text-sm sm:text-base text-white/70">{capitalizedDate}</p>
                 </div>
