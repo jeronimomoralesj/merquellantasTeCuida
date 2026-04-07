@@ -1,444 +1,458 @@
-import { useState, useEffect, useRef } from 'react';
-import { MessageCircle, X, Send, Loader2, AlertCircle } from 'lucide-react';
-import { onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc, setDoc, Timestamp } from 'firebase/firestore';
-import { auth, db } from '../../../firebase'; // Adjust path as needed
+"use client";
 
-export default function GeminiChat() {
+import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
+import { MessageCircle, X, Send, MessageSquare } from "lucide-react";
+import { onAuthStateChanged } from "firebase/auth";
+import { doc, getDoc, setDoc, Timestamp } from "firebase/firestore";
+import { auth, db } from "../../../firebase";
+
+type Mood = "feliz" | "neutral" | "triste";
+type Role = "user" | "bot";
+
+interface ChatMessage {
+  role: Role;
+  content: string;
+}
+
+interface FlowOption {
+  label: string;
+  next: string; // next node id, or "end"
+}
+
+interface FlowNode {
+  id: string;
+  bot: string; // text the bot says when arriving at this node
+  options?: FlowOption[]; // quick replies
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Conversation flows by mood. Keeping these in code (not Firestore)
+// keeps the chat instant and zero-cost.
+// ────────────────────────────────────────────────────────────────────
+const FLOWS: Record<Mood, Record<string, FlowNode>> = {
+  feliz: {
+    start: {
+      id: "start",
+      bot: "¡Qué bueno escucharlo! 😊 ¿Qué te tiene tan bien hoy?",
+      options: [
+        { label: "Mi equipo de trabajo", next: "equipo" },
+        { label: "Mi familia", next: "familia" },
+        { label: "Logré una meta", next: "meta" },
+        { label: "Otra razón", next: "otra" },
+      ],
+    },
+    equipo: {
+      id: "equipo",
+      bot: "Trabajar con buenos compañeros hace la diferencia 💪. ¡Sigue contagiando esa energía al equipo Merquellantas!",
+      options: [{ label: "Gracias 🙌", next: "end" }],
+    },
+    familia: {
+      id: "familia",
+      bot: "La familia es lo más importante ❤️. Disfrútala y aprovecha cada momento.",
+      options: [{ label: "Así lo haré", next: "end" }],
+    },
+    meta: {
+      id: "meta",
+      bot: "¡Felicidades! Eso merece celebrarse 🎉 Cada logro suma para tu camino.",
+      options: [{ label: "Gracias", next: "end" }],
+    },
+    otra: {
+      id: "otra",
+      bot: "Cuéntame más en el cuadro de texto, o sigue cuando quieras.",
+      options: [{ label: "Continuar", next: "end" }],
+    },
+  },
+  neutral: {
+    start: {
+      id: "start",
+      bot: "Entendido 🙂. ¿Hay algo en lo que te podamos ayudar hoy?",
+      options: [
+        { label: "Solicitar un permiso", next: "permiso" },
+        { label: "Ver mis cesantías", next: "cesantias" },
+        { label: "Solo es un día normal", next: "normal" },
+      ],
+    },
+    permiso: {
+      id: "permiso",
+      bot: "Puedes solicitar tu permiso desde Acciones rápidas → \"Solicitar vacaciones/permisos\".",
+      options: [{ label: "Listo", next: "end" }],
+    },
+    cesantias: {
+      id: "cesantias",
+      bot: "Encuentra todo lo de cesantías en el menú \"Cesantías\" del dashboard.",
+      options: [{ label: "Listo", next: "end" }],
+    },
+    normal: {
+      id: "normal",
+      bot: "¡Que tengas un excelente día 👋!",
+      options: [{ label: "Gracias", next: "end" }],
+    },
+  },
+  triste: {
+    start: {
+      id: "start",
+      bot: "Lamento que te sientas así 💛. Ya notificamos a Talento Humano para acompañarte. ¿Qué es lo que te tiene así hoy?",
+      options: [
+        { label: "Tema de trabajo", next: "trabajo" },
+        { label: "Tema personal", next: "personal" },
+        { label: "Tema de salud", next: "salud" },
+        { label: "Prefiero no decir", next: "privado" },
+      ],
+    },
+    trabajo: {
+      id: "trabajo",
+      bot: "Tu bienestar es prioridad. Un compañero de Talento Humano se comunicará contigo pronto. Si necesitas un permiso, puedes solicitarlo desde el dashboard.",
+      options: [{ label: "Gracias", next: "end" }],
+    },
+    personal: {
+      id: "personal",
+      bot: "No estás solo. Si lo necesitas, puedes pedir un permiso o hablar con Talento Humano de forma confidencial.",
+      options: [{ label: "Gracias", next: "end" }],
+    },
+    salud: {
+      id: "salud",
+      bot: "Cuídate. Recuerda que tienes EPS y puedes solicitar una incapacidad si la necesitas.",
+      options: [{ label: "Gracias", next: "end" }],
+    },
+    privado: {
+      id: "privado",
+      bot: "Está bien, respetamos tu espacio. Estamos aquí cuando lo necesites 💛.",
+      options: [{ label: "Gracias", next: "end" }],
+    },
+  },
+};
+
+export default function BienestarChat() {
+  const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
-const [messages, setMessages] = useState<Array<{role: string, content: string}>>([]);
-  const [input, setInput] = useState('');
-  const [loading, setLoading] = useState(false);
-const [, setMood] = useState<string|null>(null);
-  const [showMoodSelector, setShowMoodSelector] = useState(false);
-  const [wordCount, setWordCount] = useState(0);
-  const [limitReached, setLimitReached] = useState(false);
-  const [userName, setUserName] = useState('');
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [input, setInput] = useState("");
+  const [showMoodSelector, setShowMoodSelector] = useState(true);
+  const [mood, setMood] = useState<Mood | null>(null);
+  const [currentNodeId, setCurrentNodeId] = useState<string>("start");
+  const [finished, setFinished] = useState(false);
+  const [userName, setUserName] = useState("");
   const [userId, setUserId] = useState<string | null>(null);
-const messagesEndRef = useRef<HTMLDivElement>(null);
-const inputRef = useRef<HTMLTextAreaElement>(null);  
-const maxChars = 120;
-  const maxWords = 2000; // Maximum word limit for the entire conversation
 
-  // Calculate word count for a string
-const countWords = (text: string) => {
-    return text.trim().split(/\s+/).filter(word => word.length > 0).length;
-  };
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const maxChars = 240;
 
-  // Calculate total word count in the conversation
-const calculateTotalWordCount = (messageList: Array<{role: string, content: string}>) => {    return messageList.reduce((total, msg) => {
-      if (msg.role !== 'system') {
-        return total + countWords(msg.content);
-      }
-      return total;
-    }, 0);
-  };
-
-  // Check if mood needs to be asked (older than today)
-const shouldAskMood = (lastMoodDate: {toDate: () => Date} | null) => {
+  const shouldAskMood = (lastMoodDate: { toDate: () => Date } | null) => {
     if (!lastMoodDate) return true;
-    
-    const today = new Date();
-    const lastDate = lastMoodDate.toDate();
-    
-    // Check if it's a different day
-    return today.toDateString() !== lastDate.toDateString();
+    return new Date().toDateString() !== lastMoodDate.toDate().toDateString();
   };
 
-  // Get user data and check mood status
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (!user) {
-        setUserName('');
+        setUserName("");
         setUserId(null);
         return;
       }
-
       setUserId(user.uid);
-
       try {
-        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        const userDoc = await getDoc(doc(db, "users", user.uid));
         if (userDoc.exists()) {
           const userData = userDoc.data();
-          setUserName(userData.nombre || 'Usuario');
-
-          // Check if we need to show mood selector
-          const moodData = userData.mood;
-          if (moodData && moodData.date && !shouldAskMood(moodData.date)) {
-            // Mood was set today, don't show selector
+          setUserName(userData.nombre || "Usuario");
+          if (userData.mood && userData.mood.date && !shouldAskMood(userData.mood.date)) {
             setShowMoodSelector(false);
-            setMood(moodData.mood);
-          } else {
-            // Need to ask for mood
-            setShowMoodSelector(true);
           }
         }
-      } catch (error) {
-        console.error('Error fetching user data:', error);
-        setUserName('Usuario');
+      } catch (e) {
+        console.error("Error fetching user data:", e);
+        setUserName("Usuario");
       }
     });
-
     return () => unsubscribe();
-}, [setMood]);
-
-  // Load messages from memory storage on mount (removed localStorage)
-  useEffect(() => {
-    // Initialize with empty state since we can't use localStorage
-    setMessages([]);
-    setWordCount(0);
-    setLimitReached(false);
   }, []);
 
-  // Update word count when messages change
   useEffect(() => {
-    if (messages.length > 0) {
-      const newWordCount = calculateTotalWordCount(messages);
-      setWordCount(newWordCount);
-      setLimitReached(newWordCount >= maxWords);
-    }
-}, [messages, calculateTotalWordCount]);
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, finished]);
 
-  // Scroll to bottom when messages change
   useEffect(() => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [messages]);
-
-  // Focus input when chat opens
-  useEffect(() => {
-    if (isOpen && inputRef.current && !showMoodSelector) {
-      inputRef.current.focus();
-    }
+    if (isOpen && inputRef.current && !showMoodSelector) inputRef.current.focus();
   }, [isOpen, showMoodSelector]);
 
-  const toggleChat = () => {
-    setIsOpen(!isOpen);
-  };
-
-  // Store mood in Firebase
-const storeMoodInFirebase = async (selectedMood: string) => {
+  const storeMoodInFirebase = async (selectedMood: Mood) => {
     if (!userId) return;
-
     try {
-      const userRef = doc(db, 'users', userId);
-      await setDoc(userRef, {
-        mood: {
-          mood: selectedMood,
-          date: Timestamp.now()
-        }
-      }, { merge: true });
-    } catch (error) {
-      console.error('Error storing mood in Firebase:', error);
+      await setDoc(
+        doc(db, "users", userId),
+        { mood: { mood: selectedMood, date: Timestamp.now() } },
+        { merge: true }
+      );
+    } catch (e) {
+      console.error("Error storing mood:", e);
     }
   };
 
-  // Send email alert for sad mood
-const sendSadMoodAlert = async () => {
-  try {
-    const formData = new FormData();
-    formData.append('email', 'saludocupacional@merquellantas.com, dptodelagente@merquellantas.com');
-    formData.append('subject', 'Alert: New Request - Merquellantas Bienestar');
-    formData.append('message', `Hay un nuevo permiso esperandote...
+  const sendSadMoodAlert = async () => {
+    try {
+      const formData = new FormData();
+      formData.append(
+        "email",
+        "saludocupacional@merquellantas.com, dptodelagente@merquellantas.com"
+      );
+      formData.append("subject", "Alert: Bienestar - usuario triste");
+      formData.append(
+        "message",
+        `Usuario: ${userName}\nEstado de ánimo: Triste\nFecha: ${new Date().toLocaleString(
+          "es-CO"
+        )}\n\nSistema de Bienestar - Merquellantas`
+      );
+      await fetch("https://formsubmit.co/ajax/marcelagonzalez@merquellantas.com", {
+        method: "POST",
+        body: formData,
+      });
+    } catch (e) {
+      console.error("Error sending email alert:", e);
+    }
+  };
 
-Usuario: ${userName}
-Estado de ánimo: Triste
-Fecha: ${new Date().toLocaleString('es-CO')}
-
-Sistema de Bienestar - Merquellantas`);
-
-    await fetch('https://formsubmit.co/ajax/marcelagonzalez@merquellantas.com', {
-      method: 'POST',
-      body: formData
-    });
-  } catch (error) {
-    console.error('Error sending email alert:', error);
-  }
-};
-
-const selectMood = async (selectedMood: string) => {
+  const startFlow = async (selectedMood: Mood) => {
     setMood(selectedMood);
     setShowMoodSelector(false);
-    setLoading(true);
-
-    // Store mood in Firebase
+    setFinished(false);
+    setCurrentNodeId("start");
     await storeMoodInFirebase(selectedMood);
+    if (selectedMood === "triste") await sendSadMoodAlert();
 
-    // Send email alert if user is sad
-    if (selectedMood === 'triste') {
-      await sendSadMoodAlert();
-    }
-    // Add initial system message
-    const initialMessage = {
-      role: 'system',
-      content: `Hola ${userName}, cuéntame como te sientes el dia de hoy`
-    };
-  
-    // Add user's mood response
-    const moodResponse = {
-      role: 'user',
-      content: `Me siento un poco ${selectedMood}`
-    };
-  
-    // Add these messages to the chat
-    setMessages([initialMessage, moodResponse]);
-  
-    try {
-      // Send the initial request to Gemini via our API route
-      const systemPrompt = {
-        role: 'system',
-        content: `El usuario ${userName} se siente en un mood ${selectedMood}. Por favor acompañalo y hazlo una pregunta amigable para guiarlo a estar mas feliz siempre! hazlo corto pero no seco. y Recuerda estas siendo un chatbot para los trabajadores de la empresa Merquellantas la mejor empresa de llantas en Colombia!`
-      };
-      
-      const response = await fetchGeminiResponse([systemPrompt, moodResponse]);
-      
-      // Add Gemini's response to the chat
-      setMessages(prev => [...prev, { role: 'assistant', content: response }]);
-    } catch (error) {
-      console.error('Error fetching from Gemini:', error);
-      setMessages(prev => [...prev, { 
-        role: 'assistant', 
-        content: 'Lo siento, tuve problemas conectando. Por favor intenta de nuevo más tarde.' 
-      }]);
-    } finally {
-      setLoading(false);
-    }
+    const startNode = FLOWS[selectedMood].start;
+    setMessages([
+      { role: "bot", content: `Hola ${userName || "Usuario"} 👋` },
+      { role: "user", content: `Me siento ${selectedMood}` },
+      { role: "bot", content: startNode.bot },
+    ]);
   };
 
-  // Updated fetchGeminiResponse function
-const fetchGeminiResponse = async (messageHistory: Array<{role: string, content: string}>) => {
-    try {
-      console.log('Sending messages to API:', messageHistory);
-      
-      // Add conversation length constraint to the system message
-      const remainingWords = maxWords - wordCount;
-      const systemMessage = {
-        role: 'system',
-        content: `Please keep your response concise. The conversation has a ${maxWords} word limit and has already used ${wordCount} words. You have roughly ${remainingWords} words remaining for your response.`
-      };
-      
-      const augmentedHistory = [systemMessage, ...messageHistory];
-      
-      const response = await fetch('/api/gemini', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: augmentedHistory })
-      });
-  
-      const data = await response.json();
-      
-      if (!response.ok) {
-        console.error('API error response:', data);
-        throw new Error(data.error || 'API request failed');
-      }
-  
-      return data.message;
-    } catch (error) {
-      console.error('Error calling API:', error);
-      throw error;
+  const pickOption = (option: FlowOption) => {
+    if (!mood) return;
+    setMessages((prev) => [...prev, { role: "user", content: option.label }]);
+    if (option.next === "end") {
+      setFinished(true);
+      return;
     }
-  };
-  
-  // The handleSendMessage function with word limit check
-  const handleSendMessage = async () => {
-    if (!input.trim() || loading || limitReached) return;
-    
-    const userMessage = { role: 'user', content: input };
-    
-    // Check if adding this message would exceed the word limit
-    const newWordCount = wordCount + countWords(input);
-    if (newWordCount >= maxWords) {
-      setLimitReached(true);
+    const nextNode = FLOWS[mood][option.next];
+    if (!nextNode) {
+      setFinished(true);
+      return;
     }
-    
-    setMessages(prev => [...prev, userMessage]);
-    setInput('');
-    setLoading(true);
-  
-    try {
-      // Format all previous messages for context
-      const messageHistory = messages.concat(userMessage);
-      
-      console.log('Mandando:', messageHistory);
-      const response = await fetchGeminiResponse(messageHistory);
-      
-      // Add assistant's response
-      setMessages(prev => [...prev, { role: 'assistant', content: response }]);
-      
-      // Check if the conversation is now over the limit
-      const finalWordCount = calculateTotalWordCount([...messageHistory, { role: 'assistant', content: response }]);
-      if (finalWordCount >= maxWords) {
-        setLimitReached(true);
-      }
-    } catch (error) {
-      console.error('Error fetching from Gemini:', error);
-      setMessages(prev => [...prev, { 
-        role: 'assistant', 
-        content: `Lo siento, tuve problemas conectando. Error: ${error instanceof Error ? error.message : 'Unknown error'}`
-      }]);
-    } finally {
-      setLoading(false);
-    }
+    setCurrentNodeId(nextNode.id);
+    setTimeout(() => {
+      setMessages((prev) => [...prev, { role: "bot", content: nextNode.bot }]);
+    }, 250);
   };
 
-const handleKeyDown = (e: React.KeyboardEvent) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
+  const sendFreeText = () => {
+    const text = input.trim();
+    if (!text) return;
+    setMessages((prev) => [
+      ...prev,
+      { role: "user", content: text },
+      {
+        role: "bot",
+        content:
+          "Gracias por compartirlo 💛. Lo tenemos en cuenta. Si quieres, sigue con una de las opciones de abajo.",
+      },
+    ]);
+    setInput("");
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      handleSendMessage();
+      sendFreeText();
     }
   };
+
+  const restart = () => {
+    setMessages([]);
+    setMood(null);
+    setCurrentNodeId("start");
+    setFinished(false);
+    setShowMoodSelector(true);
+  };
+
+  const goToPqrsf = () => {
+    setIsOpen(false);
+    router.push("/dashboard/pqrsf");
+  };
+
+  const currentNode = mood ? FLOWS[mood][currentNodeId] : null;
 
   return (
     <div className="fixed bottom-6 right-6 z-50">
-      {/* Chat Button */}
+      {/* Toggle button */}
       <button
-        onClick={toggleChat}
-        className="flex items-center justify-center w-14 h-14 rounded-full bg-[#f90] text-white shadow-lg hover:bg-[#e80] transition-all duration-300"
-        aria-label="Toggle chat"
+        onClick={() => setIsOpen(!isOpen)}
+        className="flex items-center justify-center w-14 h-14 rounded-full bg-[#ff9900] text-black shadow-2xl ring-2 ring-black hover:bg-[#ffae33] active:scale-95 transition-all"
+        aria-label="Abrir chat de bienestar"
       >
         {isOpen ? <X size={24} /> : <MessageCircle size={24} />}
       </button>
 
-      {/* Chat Container */}
+      {/* Chat container */}
       {isOpen && (
-        <div className="absolute bottom-20 right-0 w-80 sm:w-96 h-96 bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-gray-200">
-          {/* Chat Header */}
-          <div className="p-4 bg-[#f90] text-white flex justify-between items-center">
-            <div>
-              <h3 className="font-bold">Chat Bienestar</h3>
-              <div className="text-xs mt-1">
-                Palabras: {wordCount}/{maxWords}
+        <div className="absolute bottom-20 right-0 w-[22rem] sm:w-96 h-[32rem] bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-gray-200">
+          {/* Header */}
+          <div className="relative p-4 bg-black text-white">
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-0 opacity-30"
+              style={{
+                backgroundImage:
+                  "radial-gradient(circle at 90% 30%, #ff9900 0, transparent 50%)",
+              }}
+            />
+            <div className="relative flex justify-between items-center">
+              <div>
+                <h3 className="font-extrabold text-lg">Chat Bienestar</h3>
+                <p className="text-xs text-white/70">Estamos aquí para ti</p>
               </div>
-            </div>
-            <div className="flex items-center">
-              <button 
-                onClick={toggleChat} 
-                className="text-white hover:text-gray-200"
-                aria-label="Close chat"
+              <button
+                onClick={() => setIsOpen(false)}
+                className="text-white/80 hover:text-white"
+                aria-label="Cerrar chat"
               >
                 <X size={20} />
               </button>
             </div>
           </div>
 
-          {/* Mood Selector */}
+          {/* Mood selector */}
           {showMoodSelector ? (
             <div className="flex-1 flex flex-col items-center justify-center p-6 bg-gray-50">
-              <p className="text-center mb-8 text-gray-700">
-                Hola {userName || 'Usuario'}, por favor cuentanos como te sientes el dia de hoy
+              <p className="text-center mb-6 text-gray-700 font-medium">
+                Hola {userName || "Usuario"}, ¿cómo te sientes hoy?
               </p>
-              <div className="flex justify-center space-x-8">
-                <button 
-                  onClick={() => selectMood('feliz')}
-                  className="flex flex-col items-center hover:scale-110 transition-transform"
-                  aria-label="Happy mood"
-                >
-                  <div className="text-4xl mb-2">😊</div>
-                  <span className="text-sm text-gray-600">Feliz</span>
-                </button>
-                <button 
-                  onClick={() => selectMood('neutral')}
-                  className="flex flex-col items-center hover:scale-110 transition-transform"
-                  aria-label="Neutral mood"
-                >
-                  <div className="text-4xl mb-2">😐</div>
-                  <span className="text-sm text-gray-600">Neutral</span>
-                </button>
-                <button 
-                  onClick={() => selectMood('triste')}
-                  className="flex flex-col items-center hover:scale-110 transition-transform"
-                  aria-label="Sad mood"
-                >
-                  <div className="text-4xl mb-2">😢</div>
-                  <span className="text-sm text-gray-600">Triste</span>
-                </button>
+              <div className="flex justify-center gap-6">
+                {(
+                  [
+                    { mood: "feliz" as Mood, emoji: "😊", label: "Feliz" },
+                    { mood: "neutral" as Mood, emoji: "😐", label: "Neutral" },
+                    { mood: "triste" as Mood, emoji: "😢", label: "Triste" },
+                  ]
+                ).map((m) => (
+                  <button
+                    key={m.mood}
+                    onClick={() => startFlow(m.mood)}
+                    className="flex flex-col items-center hover:scale-110 active:scale-95 transition-transform"
+                  >
+                    <div className="text-5xl mb-2">{m.emoji}</div>
+                    <span className="text-sm text-gray-600 font-medium">{m.label}</span>
+                  </button>
+                ))}
               </div>
             </div>
           ) : (
             <>
-              {/* Chat Messages */}
+              {/* Messages */}
               <div className="flex-1 p-4 overflow-y-auto bg-gray-50">
-                {messages.map((message, index) => (
-                  message.role !== 'system' && (
-                    <div 
-                      key={index} 
-                      className={`mb-4 ${message.role === 'user' ? 'text-right' : 'text-left'}`}
+                {messages.map((m, i) => (
+                  <div
+                    key={i}
+                    className={`mb-3 flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
+                  >
+                    <div
+                      className={`inline-block max-w-[80%] px-4 py-2 rounded-2xl text-sm leading-relaxed ${
+                        m.role === "user"
+                          ? "bg-[#ff9900] text-black rounded-br-none font-medium"
+                          : "bg-white text-gray-800 rounded-bl-none border border-gray-200 shadow-sm"
+                      }`}
                     >
-                      <div 
-                        className={`inline-block max-w-3/4 px-4 py-2 rounded-2xl ${
-                          message.role === 'user' 
-                            ? 'bg-[#f90] text-white rounded-br-none' 
-                            : 'bg-gray-200 text-black rounded-bl-none'
-                        }`}
+                      {m.content}
+                    </div>
+                  </div>
+                ))}
+
+                {/* Quick replies for current node */}
+                {!finished && currentNode?.options && (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {currentNode.options.map((opt) => (
+                      <button
+                        key={opt.label}
+                        onClick={() => pickOption(opt)}
+                        className="px-3 py-1.5 rounded-full bg-white border border-[#ff9900] text-[#ff9900] text-xs font-semibold hover:bg-[#ff9900] hover:text-black active:scale-95 transition-all"
                       >
-                        {message.content}
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* End-of-flow CTA */}
+                {finished && (
+                  <div className="mt-4 space-y-3">
+                    <div className="p-4 rounded-2xl bg-black text-white relative overflow-hidden">
+                      <div
+                        aria-hidden
+                        className="pointer-events-none absolute inset-0 opacity-30"
+                        style={{
+                          backgroundImage:
+                            "radial-gradient(circle at 100% 0%, #ff9900 0, transparent 50%)",
+                        }}
+                      />
+                      <div className="relative">
+                        <p className="text-sm font-bold mb-1">¿Tienes quejas o ideas?</p>
+                        <p className="text-xs text-white/70 mb-3">
+                          Cuéntanos en nuestro buzón de PQRSF, lo leeremos.
+                        </p>
+                        <button
+                          onClick={goToPqrsf}
+                          className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#ff9900] text-black text-sm font-bold hover:bg-[#ffae33] active:scale-95 transition-all"
+                        >
+                          <MessageSquare size={16} /> Ir a PQRSF
+                        </button>
                       </div>
                     </div>
-                  )
-                ))}
-                {loading && (
-                  <div className="flex justify-start mb-4">
-                    <div className="inline-block px-4 py-2 rounded-2xl bg-gray-200 text-black rounded-bl-none">
-                      <Loader2 className="animate-spin" size={20} />
-                    </div>
+                    <button
+                      onClick={restart}
+                      className="w-full text-xs text-gray-500 hover:text-[#ff9900] underline"
+                    >
+                      Iniciar otra conversación
+                    </button>
                   </div>
                 )}
-                
-                {/* Word Limit Warning/Notice */}
-                {limitReached && (
-                  <div className="flex justify-center mb-4">
-                    <div className="inline-block px-4 py-2 rounded-2xl bg-red-100 text-red-600 border border-red-200 flex items-center">
-                      <AlertCircle size={16} className="mr-2" />
-                      <span>Límite alcanzado ({maxWords} palabras)</span>
-                    </div>
-                  </div>
-                )}
-                
+
                 <div ref={messagesEndRef} />
               </div>
 
-              {/* Chat Input */}
-              <div className="p-3 border-t border-gray-200 bg-white">
-                <div className="flex items-center">
-                  <textarea
-                    ref={inputRef}
-                    value={input}
-                    onChange={(e) => setInput(e.target.value.slice(0, maxChars))}
-                    onKeyDown={handleKeyDown}
-                    placeholder={limitReached ? "Límite de palabras alcanzado" : "Escribe tu mensaje..."}
-                    className="text-black flex-1 px-4 py-2 bg-gray-100 rounded-full focus:outline-none focus:ring-2 focus:ring-[#f90] resize-none max-h-20"
-                    rows={1}
-                    maxLength={maxChars}
-                    disabled={limitReached}
-                  />
-                  <button
-                    onClick={handleSendMessage}
-                    disabled={!input.trim() || loading || limitReached}
-                    className={`ml-2 p-2 rounded-full ${
-                      !input.trim() || loading || limitReached
-                        ? 'bg-gray-300 text-gray-500' 
-                        : 'bg-[#f90] text-white hover:bg-[#e80]'
-                    } transition-colors`}
-                    aria-label="Send message"
-                  >
-                    <Send size={20} />
-                  </button>
-                </div>
-                <div className="mt-1 flex justify-between text-xs text-gray-500">
-                  <div>
-                    {wordCount >= maxWords * 0.8 && !limitReached && (
-                      <span className="text-orange-500 flex items-center">
-                        <AlertCircle size={12} className="mr-1" />
-                        {maxWords - wordCount} palabras restantes
-                      </span>
-                    )}
+              {/* Free-text input */}
+              {!finished && (
+                <div className="p-3 border-t border-gray-200 bg-white">
+                  <div className="flex items-center">
+                    <textarea
+                      ref={inputRef}
+                      value={input}
+                      onChange={(e) => setInput(e.target.value.slice(0, maxChars))}
+                      onKeyDown={handleKeyDown}
+                      placeholder="Escribe lo que sientes..."
+                      className="text-black flex-1 px-4 py-2 bg-gray-100 rounded-full focus:outline-none focus:ring-2 focus:ring-[#ff9900] resize-none max-h-20 text-sm placeholder:text-gray-400"
+                      rows={1}
+                      maxLength={maxChars}
+                    />
+                    <button
+                      onClick={sendFreeText}
+                      disabled={!input.trim()}
+                      className={`ml-2 p-2 rounded-full ${
+                        !input.trim()
+                          ? "bg-gray-200 text-gray-400"
+                          : "bg-[#ff9900] text-black hover:bg-[#ffae33]"
+                      } transition-colors`}
+                      aria-label="Enviar mensaje"
+                    >
+                      <Send size={18} />
+                    </button>
                   </div>
-                  <div>
+                  <div className="mt-1 text-right text-[10px] text-gray-400">
                     {input.length}/{maxChars}
                   </div>
                 </div>
-              </div>
+              )}
             </>
           )}
         </div>
