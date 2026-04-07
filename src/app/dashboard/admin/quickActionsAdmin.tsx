@@ -10,6 +10,7 @@ import {
   doc,
   orderBy,
   query,
+  writeBatch,
 } from "firebase/firestore";
 import { db } from "../../../firebase";
 import {
@@ -39,6 +40,26 @@ const emptyForm: QuickAction = {
   active: true,
 };
 
+// Internal routes the admin can pick from a dropdown
+const INTERNAL_ROUTES: { value: string; label: string }[] = [
+  { value: "/dashboard/solicitud", label: "Solicitar vacaciones / permisos" },
+  { value: "/dashboard/cesantias", label: "Cesantías" },
+  { value: "/dashboard/calendar", label: "Calendario" },
+  { value: "/dashboard/certificado", label: "Certificados" },
+  { value: "/dashboard/documents", label: "Documentos" },
+  { value: "/dashboard/pqrsf", label: "PQRSF" },
+  { value: "/dashboard/upload", label: "Cargar archivos" },
+];
+
+// Defaults to seed the collection on first run
+const DEFAULT_ACTIONS: Omit<QuickAction, "id">[] = [
+  { title: "Solicitar vacaciones/permisos", href: "/dashboard/solicitud", icon: "calendar", order: 0, active: true },
+  { title: "Ir a Heinsohn nómina", href: "https://portal.heinsohn.com.co/", icon: "dollar", order: 1, active: true },
+  { title: "Seguridad social", href: "https://www.aportesenlinea.com/Autoservicio/CertificadoAportes.aspx", icon: "shield", order: 2, active: true },
+  { title: "Gente útil", href: "https://genteutil.net/", icon: "person", order: 3, active: true },
+  { title: "Temporales 1A", href: "https://temporalesunoa.com.co/", icon: "person", order: 4, active: true },
+];
+
 export default function QuickActionsAdmin() {
   const [items, setItems] = useState<QuickAction[]>([]);
   const [loading, setLoading] = useState(true);
@@ -46,6 +67,27 @@ export default function QuickActionsAdmin() {
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState<QuickAction>(emptyForm);
   const [saving, setSaving] = useState(false);
+  const [linkType, setLinkType] = useState<"internal" | "external">("external");
+  const [seeding, setSeeding] = useState(false);
+
+  const seedDefaults = async () => {
+    if (!confirm("¿Crear las acciones rápidas por defecto?")) return;
+    setSeeding(true);
+    try {
+      const batch = writeBatch(db);
+      DEFAULT_ACTIONS.forEach((a) => {
+        const ref = doc(collection(db, "quickActions"));
+        batch.set(ref, a);
+      });
+      await batch.commit();
+      await load();
+    } catch (e) {
+      console.error(e);
+      alert("Error creando las acciones por defecto. Revisa las reglas de Firestore.");
+    } finally {
+      setSeeding(false);
+    }
+  };
 
   const load = async () => {
     setLoading(true);
@@ -68,12 +110,14 @@ export default function QuickActionsAdmin() {
 
   const startCreate = () => {
     setForm({ ...emptyForm, order: items.length });
+    setLinkType("external");
     setCreating(true);
     setEditingId(null);
   };
 
   const startEdit = (item: QuickAction) => {
     setForm(item);
+    setLinkType(item.href.startsWith("http") ? "external" : "internal");
     setEditingId(item.id || null);
     setCreating(false);
   };
@@ -133,12 +177,23 @@ export default function QuickActionsAdmin() {
           Acciones Rápidas
         </h2>
         {!creating && !editingId && (
-          <button
-            onClick={startCreate}
-            className="inline-flex items-center px-3 py-2 rounded-lg bg-[#ff9900] text-black text-sm font-semibold hover:bg-[#ffae33] transition"
-          >
-            <Plus className="h-4 w-4 mr-1" /> Nueva acción
-          </button>
+          <div className="flex gap-2">
+            {items.length === 0 && !loading && (
+              <button
+                onClick={seedDefaults}
+                disabled={seeding}
+                className="inline-flex items-center px-3 py-2 rounded-lg bg-black text-white text-sm font-semibold hover:bg-gray-800 transition disabled:opacity-50"
+              >
+                {seeding ? "Creando..." : "Crear acciones por defecto"}
+              </button>
+            )}
+            <button
+              onClick={startCreate}
+              className="inline-flex items-center px-3 py-2 rounded-lg bg-[#ff9900] text-black text-sm font-semibold hover:bg-[#ffae33] transition"
+            >
+              <Plus className="h-4 w-4 mr-1" /> Nueva acción
+            </button>
+          </div>
         )}
       </div>
 
@@ -152,25 +207,72 @@ export default function QuickActionsAdmin() {
                 value={form.title}
                 onChange={(e) => setForm({ ...form, title: e.target.value })}
                 placeholder="Ej. Solicitar vacaciones"
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#ff9900]"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#ff9900] text-black placeholder:text-gray-400"
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">Enlace (URL o ruta)</label>
-              <input
-                type="text"
-                value={form.href}
-                onChange={(e) => setForm({ ...form, href: e.target.value })}
-                placeholder="/dashboard/solicitud o https://..."
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#ff9900]"
-              />
+              <label className="block text-xs font-semibold text-gray-700 mb-1">Tipo de enlace</label>
+              <div className="flex gap-4 py-2">
+                <label className="flex items-center gap-2 text-sm text-black cursor-pointer">
+                  <input
+                    type="radio"
+                    name="linkType"
+                    checked={linkType === "internal"}
+                    onChange={() => {
+                      setLinkType("internal");
+                      setForm({ ...form, href: INTERNAL_ROUTES[0].value });
+                    }}
+                    className="accent-[#ff9900]"
+                  />
+                  Página interna
+                </label>
+                <label className="flex items-center gap-2 text-sm text-black cursor-pointer">
+                  <input
+                    type="radio"
+                    name="linkType"
+                    checked={linkType === "external"}
+                    onChange={() => {
+                      setLinkType("external");
+                      setForm({ ...form, href: "" });
+                    }}
+                    className="accent-[#ff9900]"
+                  />
+                  URL externa
+                </label>
+              </div>
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-xs font-semibold text-gray-700 mb-1">
+                {linkType === "internal" ? "Página del sitio" : "URL externa"}
+              </label>
+              {linkType === "internal" ? (
+                <select
+                  value={form.href}
+                  onChange={(e) => setForm({ ...form, href: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#ff9900] text-black"
+                >
+                  {INTERNAL_ROUTES.map((r) => (
+                    <option key={r.value} value={r.value}>
+                      {r.label} ({r.value})
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="url"
+                  value={form.href}
+                  onChange={(e) => setForm({ ...form, href: e.target.value })}
+                  placeholder="https://ejemplo.com"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#ff9900] text-black placeholder:text-gray-400"
+                />
+              )}
             </div>
             <div>
               <label className="block text-xs font-semibold text-gray-700 mb-1">Ícono</label>
               <select
                 value={form.icon}
                 onChange={(e) => setForm({ ...form, icon: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#ff9900]"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#ff9900] text-black"
               >
                 {ICON_OPTIONS.map((o) => (
                   <option key={o.key} value={o.key}>
@@ -185,7 +287,7 @@ export default function QuickActionsAdmin() {
                 type="number"
                 value={form.order}
                 onChange={(e) => setForm({ ...form, order: Number(e.target.value) })}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#ff9900]"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#ff9900] text-black"
               />
             </div>
             <div className="md:col-span-2 flex items-center gap-3">

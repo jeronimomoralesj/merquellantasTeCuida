@@ -525,49 +525,6 @@ useEffect(() => {
     );
   }
 
-  const quickActions = [
-    { 
-      id: 1, 
-      title: "Solicitar vacaciones/permisos", 
-      icon: <Calendar className="h-5 w-5" />, 
-      color: "bg-[#ff9900]/10 text-[#ff9900]",
-      bgHover: "hover:bg-gradient-to-br from-[#ff9900]/5 to-[#ff9900]/20",
-      href: "/dashboard/solicitud"
-    },
-    { 
-      id: 2, 
-      title: "Ir a Heinsohn nómina", 
-      icon: <DollarSign className="h-5 w-5" />, 
-      color: "bg-purple-100 text-purple-600",
-      bgHover: "hover:bg-gradient-to-br from-purple-50 to-purple-100",
-      href: "https://portal.heinsohn.com.co/"
-    },
-    { 
-      id: 4, 
-      title: "Seguridad social", 
-      icon: <MessageSquare className="h-5 w-5" />, 
-      color: "bg-green-100 text-green-600",
-      bgHover: "hover:bg-gradient-to-br from-green-50 to-green-100",
-      href: "https://www.aportesenlinea.com/Autoservicio/CertificadoAportes.aspx"
-    },
-    { 
-      id: 5, 
-      title: "Gente útil", 
-      icon: <PersonStanding className="h-5 w-5" />, 
-      color: "bg-red-100 text-red-600",
-      bgHover: "hover:bg-gradient-to-br from-red-50 to-red-100",
-      href: "https://genteutil.net/"
-    },
-    { 
-      id: 6, 
-      title: "Temporales 1A", 
-      icon: <PersonStanding className="h-5 w-5" />, 
-      color: "bg-gray-100 text-gray-600",
-      bgHover: "hover:bg-gradient-to-br from-gray-50 to-gray-100",
-      href: "https://temporalesunoa.com.co/"
-    }
-  ];
-
   // Format current date in Spanish
   const formattedDate = new Date().toLocaleDateString('es-ES', {
     weekday: 'long',
@@ -1007,32 +964,34 @@ useEffect(() => {
                       <Briefcase className="h-5 w-5 mr-2 text-[#ff9900]" />
                       Acciones rápidas
                     </h2>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-                      {(dynamicActions && dynamicActions.length > 0
-                        ? dynamicActions.map(a => ({
-                            id: a.id,
-                            title: a.title,
-                            href: a.href,
-                            icon: React.createElement(getIcon(a.icon), { className: 'h-5 w-5' }),
-                          }))
-                        : quickActions
-                      ).map(action => (
-                        <a
-                          key={action.id}
-                          href={action.href}
-                          className="group flex flex-col items-center justify-center p-4 rounded-xl bg-white/5 border border-white/10 hover:bg-[#ff9900] hover:border-[#ff9900] active:scale-95 transition-all"
-                          target={action.href.startsWith('http') ? "_blank" : "_self"}
-                          rel={action.href.startsWith('http') ? "noopener noreferrer" : ""}
-                        >
-                          <div className="w-11 h-11 rounded-full bg-[#ff9900]/20 group-hover:bg-black/20 flex items-center justify-center mb-2 text-[#ff9900] group-hover:text-black transition-colors">
-                            {action.icon}
-                          </div>
-                          <span className="text-xs font-semibold text-white/90 group-hover:text-black text-center leading-tight">
-                            {action.title}
-                          </span>
-                        </a>
-                      ))}
-                    </div>
+                    {dynamicActions === null ? (
+                      <p className="text-sm text-white/60">Cargando...</p>
+                    ) : dynamicActions.length === 0 ? (
+                      <p className="text-sm text-white/60">No hay acciones rápidas configuradas.</p>
+                    ) : (
+                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                        {dynamicActions.map(action => {
+                          const Icon = getIcon(action.icon);
+                          const isExternal = action.href.startsWith('http');
+                          return (
+                            <a
+                              key={action.id}
+                              href={action.href}
+                              className="group flex flex-col items-center justify-center p-4 rounded-xl bg-white/5 border border-white/10 hover:bg-[#ff9900] hover:border-[#ff9900] active:scale-95 transition-all"
+                              target={isExternal ? "_blank" : "_self"}
+                              rel={isExternal ? "noopener noreferrer" : ""}
+                            >
+                              <div className="w-11 h-11 rounded-full bg-[#ff9900]/20 group-hover:bg-black/20 flex items-center justify-center mb-2 text-[#ff9900] group-hover:text-black transition-colors">
+                                <Icon className="h-5 w-5" />
+                              </div>
+                              <span className="text-xs font-semibold text-white/90 group-hover:text-black text-center leading-tight">
+                                {action.title}
+                              </span>
+                            </a>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 </div>
 
