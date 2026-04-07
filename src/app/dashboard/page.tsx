@@ -548,7 +548,7 @@ useEffect(() => {
           <button
             type="button"
             onClick={() => setAdminView(v => !v)}
-            className="fixed bottom-6 right-6 z-40 inline-flex items-center gap-2 px-4 py-3 rounded-full bg-black text-white shadow-2xl ring-2 ring-[#ff9900] hover:bg-[#ff9900] hover:text-black active:scale-95 transition-all"
+            className="fixed bottom-6 left-6 z-40 inline-flex items-center gap-2 px-4 py-3 rounded-full bg-black text-white shadow-2xl ring-2 ring-[#ff9900] hover:bg-[#ff9900] hover:text-black active:scale-95 transition-all"
             title={adminView ? "Cambiar a vista de usuario" : "Cambiar a vista de admin"}
           >
             {adminView ? (

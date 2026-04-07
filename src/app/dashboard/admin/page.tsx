@@ -6,8 +6,6 @@ import {
   Users as UsersIcon,
   Calendar as CalendarIcon,
   Zap,
-  Heart,
-  MessageSquare,
 } from "lucide-react";
 import StatsCard from "./stats";
 import TristesCard from "./tristes";
@@ -98,17 +96,9 @@ export default function AdminPage({ embedded = false }: AdminPageProps) {
 
             {/* Right column */}
             <div className="space-y-6">
-              <SectionCard icon={<MessageSquare className="h-5 w-5" />} title="Estadísticas">
-                <StatsCard />
-              </SectionCard>
-
-              <SectionCard icon={<Heart className="h-5 w-5" />} title="Bienestar del equipo">
-                <TristesCard />
-              </SectionCard>
-
-              <SectionCard icon={<MessageSquare className="h-5 w-5" />} title="PQRSF">
-                <PQRSFCard />
-              </SectionCard>
+              <StatsCard />
+              <TristesCard />
+              <PQRSFCard />
             </div>
           </div>
         </div>
