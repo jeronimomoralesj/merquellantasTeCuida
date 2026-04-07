@@ -200,51 +200,63 @@ export default function SolicitudesCard() {
     setTimeout(() => setNotification(null), 4000);
   };
 
-  // Handle approval/rejection - FIXED VERSION
-  const handleStatusUpdate = async (requestId: string, newStatus: string, collectionName: string) => {
+  // Reason modal state
+  const [reasonModal, setReasonModal] = useState<{
+    open: boolean;
+    requestId: string;
+    collectionName: string;
+    newStatus: string;
+  } | null>(null);
+  const [reasonText, setReasonText] = useState("");
+
+  const openReasonModal = (requestId: string, newStatus: string, collectionName: string) => {
+    setReasonText("");
+    setReasonModal({ open: true, requestId, collectionName, newStatus });
+  };
+
+  // Handle approval/rejection
+  const handleStatusUpdate = async (
+    requestId: string,
+    newStatus: string,
+    collectionName: string,
+    motivo: string
+  ) => {
     if (!requestId) {
       showNotification("ID de solicitud no válido", "error");
       return;
     }
-
     if (!collectionName) {
       showNotification("Colección no identificada", "error");
       return;
     }
-    
+
     try {
       setProcessingId(requestId);
-      
-      console.log(`Updating document ${requestId} in collection ${collectionName} to status ${newStatus}`);
-      
-      // Create reference to the document
       const requestRef = doc(db, collectionName, requestId);
-      
-      // Update the document in Firebase
       await updateDoc(requestRef, {
         estado: newStatus,
-        updatedAt: Timestamp.now()
+        motivoRespuesta: motivo,
+        updatedAt: Timestamp.now(),
       });
 
-      console.log("Document updated successfully in Firebase");
-      
-      // Update local state
-      setRequests(prevRequests => 
-        prevRequests.map(req => 
-          req.id === requestId 
-            ? {...req, status: newStatus, statusColor: statusColor(newStatus)} 
+      setRequests(prevRequests =>
+        prevRequests.map(req =>
+          req.id === requestId
+            ? { ...req, status: newStatus, statusColor: statusColor(newStatus) }
             : req
         )
       );
-      
-      // Update selected item if viewing details
+
       if (showDetails && selected?.id === requestId) {
-        setSelected(prev => prev ? {...prev, status: newStatus, statusColor: statusColor(newStatus)} : null);
+        setSelected(prev =>
+          prev ? { ...prev, status: newStatus, statusColor: statusColor(newStatus) } : null
+        );
       }
-      
+
       const actionText = newStatus === "aprobado" ? "aprobada" : "rechazada";
       showNotification(`✓ Solicitud ${actionText} exitosamente`, "success");
-      
+      setReasonModal(null);
+      setReasonText("");
     } catch (error) {
       console.error("Error updating request:", error);
       const actionText = newStatus === "aprobado" ? "aprobar" : "rechazar";
@@ -433,7 +445,7 @@ export default function SolicitudesCard() {
           {s.status === "pendiente" && (
             <>
               <button
-                onClick={() => handleStatusUpdate(s.id, "aprobado", s.collectionName)}
+                onClick={() => openReasonModal(s.id, "aprobado", s.collectionName)}
                 disabled={processingId === s.id}
                 className="text-xs font-semibold px-3 py-2 bg-green-500 text-white rounded-lg flex items-center hover:bg-green-600 disabled:opacity-50 transition-colors"
               >
@@ -445,7 +457,7 @@ export default function SolicitudesCard() {
                 Aprobar
               </button>
               <button
-                onClick={() => handleStatusUpdate(s.id, "rechazado", s.collectionName)}
+                onClick={() => openReasonModal(s.id, "rechazado", s.collectionName)}
                 disabled={processingId === s.id}
                 className="text-xs font-semibold px-3 py-2 bg-red-500 text-white rounded-lg flex items-center hover:bg-red-600 disabled:opacity-50 transition-colors"
               >
@@ -884,9 +896,9 @@ export default function SolicitudesCard() {
               
               {selected.status === "pendiente" && (
                 <>
-                  <button 
+                  <button
                     onClick={() => {
-                      handleStatusUpdate(selected.id, "aprobado", selected.collectionName);
+                      openReasonModal(selected.id, "aprobado", selected.collectionName);
                       setShowDetails(false);
                     }}
                     disabled={processingId === selected.id}
@@ -900,9 +912,9 @@ export default function SolicitudesCard() {
                     Aprobar solicitud
                   </button>
                   
-                  <button 
+                  <button
                     onClick={() => {
-                      handleStatusUpdate(selected.id, "rechazado", selected.collectionName);
+                      openReasonModal(selected.id, "rechazado", selected.collectionName);
                       setShowDetails(false);
                     }}
                     disabled={processingId === selected.id}
@@ -918,6 +930,94 @@ export default function SolicitudesCard() {
                 </>
               )}
             </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reason modal */}
+      {reasonModal?.open && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[60]">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
+            <div className="relative p-5 bg-black text-white">
+              <div
+                aria-hidden
+                className="pointer-events-none absolute inset-0 opacity-30"
+                style={{
+                  backgroundImage:
+                    "radial-gradient(circle at 90% 30%, #ff9900 0, transparent 50%)",
+                }}
+              />
+              <div className="relative flex justify-between items-start">
+                <div>
+                  <h3 className="text-lg font-extrabold">
+                    {reasonModal.newStatus === "aprobado" ? "Aprobar solicitud" : "Rechazar solicitud"}
+                  </h3>
+                  <p className="text-xs text-white/60 mt-0.5">
+                    {reasonModal.newStatus === "aprobado"
+                      ? "Agrega un comentario opcional para el empleado"
+                      : "Cuéntale al empleado por qué se rechaza"}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setReasonModal(null)}
+                  className="p-1.5 rounded-full text-white/70 hover:text-white hover:bg-white/10"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <textarea
+                value={reasonText}
+                onChange={(e) => setReasonText(e.target.value)}
+                placeholder={
+                  reasonModal.newStatus === "aprobado"
+                    ? "Comentario opcional..."
+                    : "Motivo del rechazo..."
+                }
+                rows={4}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#ff9900] text-black placeholder:text-gray-400 text-sm resize-none"
+              />
+
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => setReasonModal(null)}
+                  className="px-4 py-2 rounded-lg bg-gray-100 text-gray-700 text-sm font-semibold hover:bg-gray-200 transition"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => {
+                    if (reasonModal.newStatus === "rechazado" && !reasonText.trim()) {
+                      showNotification("Por favor escribe un motivo de rechazo", "error");
+                      return;
+                    }
+                    handleStatusUpdate(
+                      reasonModal.requestId,
+                      reasonModal.newStatus,
+                      reasonModal.collectionName,
+                      reasonText.trim()
+                    );
+                  }}
+                  disabled={processingId === reasonModal.requestId}
+                  className={`px-4 py-2 rounded-lg text-sm font-semibold text-white flex items-center transition disabled:opacity-50 ${
+                    reasonModal.newStatus === "aprobado"
+                      ? "bg-green-500 hover:bg-green-600"
+                      : "bg-red-500 hover:bg-red-600"
+                  }`}
+                >
+                  {processingId === reasonModal.requestId ? (
+                    <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                  ) : reasonModal.newStatus === "aprobado" ? (
+                    <CheckCircle className="mr-1.5 h-4 w-4" />
+                  ) : (
+                    <XCircle className="mr-1.5 h-4 w-4" />
+                  )}
+                  Confirmar
+                </button>
+              </div>
             </div>
           </div>
         </div>

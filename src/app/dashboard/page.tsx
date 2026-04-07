@@ -45,6 +45,7 @@ interface PendingRequest {
   tipo: 'cesantias' | 'enfermedad' | 'permiso';
   createdAt: Timestamp;
   estado: string;
+  motivoRespuesta?: string;
 }
 
 interface UserProfile {
@@ -78,6 +79,7 @@ const Dashboard = () => {
   const [showSolicitudes, setShowSolicitudes] = useState(false);
   const [userRole, setUserRole] = useState<string>("user");
   const [adminView, setAdminView] = useState<boolean>(true);
+  const [requestsTab, setRequestsTab] = useState<'activas' | 'respondidas'>('activas');
   const [loadingEvent, setLoadingEvent] = useState(true);
   const [nextEvent, setNextEvent] = useState<CalendarEvent | null>(null);
 const [currentEventIndex, setCurrentEventIndex] = useState(0);
@@ -210,17 +212,15 @@ const getEventStatus = (event: CalendarEvent) => {
       }
 
       try {
-        // Build both queries in parallel
+        // Build both queries in parallel — fetch ALL user requests, split client-side
         const qCes = query(
           collection(db, 'cesantias'),
           where('userId', '==', user.uid),
-          where('estado', '==', 'pendiente'),
           orderBy('createdAt', 'desc')
         );
         const qSol = query(
           collection(db, 'solicitudes'),
           where('userId', '==', user.uid),
-          where('estado', '==', 'pendiente'),
           orderBy('createdAt', 'desc')
         );
 
@@ -235,12 +235,14 @@ const getEventStatus = (event: CalendarEvent) => {
           tipo: 'cesantias' as const,
           createdAt: d.data().createdAt as Timestamp,
           estado: d.data().estado as string,
+          motivoRespuesta: d.data().motivoRespuesta as string | undefined,
         }));
         const sol = solSnap.docs.map(d => ({
           id: d.id,
           tipo: d.data().tipo as 'enfermedad' | 'permiso',
           createdAt: d.data().createdAt as Timestamp,
           estado: d.data().estado as string,
+          motivoRespuesta: d.data().motivoRespuesta as string | undefined,
         }));
 
         // Merge & sort by timestamp desc
@@ -1159,57 +1161,115 @@ useEffect(() => {
                   </div>
                 </div>
 
-                {/* Pending requests (cesantías + incapacidades/permiso) */}
-                <div className="bg-white rounded-2xl shadow-sm p-6 border border-gray-100 hover:shadow-md transition-shadow duration-300 relative overflow-hidden">
-                  <div className="absolute top-0 right-0 w-full h-1 bg-gradient-to-l from-blue-500 via-blue-400 to-white"></div>
-                  <div className="flex justify-between items-center mb-5">
-                    <h2 className="text-lg font-bold text-gray-900 flex items-center">
-                      <FileText className="h-5 w-5 mr-2 text-[#ff9900]" />
-                      Solicitudes pendientes
-                    </h2>
-                    <span className="inline-flex items-center justify-center px-2.5 py-0.5 rounded-full bg-[#ff9900]/10 text-[#ff9900] text-xs font-medium">
-                      {loadingRequests ? '…' : pendingRequests.length}
-                    </span>
-                  </div>
+                {/* User requests with Activas / Respondidas tabs */}
+                {(() => {
+                  const activas = pendingRequests.filter(r => r.estado === 'pendiente');
+                  const respondidas = pendingRequests.filter(r => r.estado !== 'pendiente');
+                  const list = requestsTab === 'activas' ? activas : respondidas;
+                  return (
+                    <div className="bg-white rounded-2xl shadow-sm p-6 border border-gray-100 hover:shadow-md transition-shadow duration-300 relative overflow-hidden">
+                      <div className="absolute top-0 left-0 w-1 h-full bg-[#ff9900]" />
+                      <div className="flex justify-between items-center mb-4">
+                        <h2 className="text-lg font-bold text-gray-900 flex items-center">
+                          <FileText className="h-5 w-5 mr-2 text-[#ff9900]" />
+                          Mis Solicitudes
+                        </h2>
+                      </div>
 
-                  <div className="space-y-3">
-                    {loadingRequests ? (
-                      // skeleton loaders
-                      [1,2].map(i => (
-                        <div key={i} className="h-14 rounded-xl bg-gray-100 animate-pulse" />
-                      ))
-                    ) : pendingRequests.length > 0 ? (
-                      pendingRequests.map(req => {
-                        const dt = req.createdAt.toDate();
-                        // pick the correct title
-                        const title = req.tipo === 'cesantias'
-                          ? 'Solicitud de Cesantías'
-                          : req.tipo === 'enfermedad'
-                            ? 'Solicitud de Incapacidad'
-                            : 'Solicitud de Permiso';
+                      {/* Tabs */}
+                      <div className="flex gap-2 mb-4">
+                        <button
+                          onClick={() => setRequestsTab('activas')}
+                          className={`flex-1 px-3 py-2 rounded-lg text-xs font-bold transition-all ${
+                            requestsTab === 'activas'
+                              ? 'bg-black text-white'
+                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                          }`}
+                        >
+                          Activas ({activas.length})
+                        </button>
+                        <button
+                          onClick={() => setRequestsTab('respondidas')}
+                          className={`flex-1 px-3 py-2 rounded-lg text-xs font-bold transition-all ${
+                            requestsTab === 'respondidas'
+                              ? 'bg-black text-white'
+                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                          }`}
+                        >
+                          Respondidas ({respondidas.length})
+                        </button>
+                      </div>
 
-                        return (
-                          <div
-                            key={req.id}
-                            className="border border-gray-100 rounded-xl p-4 hover:border-[#ff9900]/30 hover:shadow-sm transition-all hover:bg-gray-50 flex justify-between items-start"
-                          >
-                            <div>
-                              <h3 className="font-medium text-gray-900">{title}</h3>
-                              <p className="text-xs text-gray-500 mt-1">
-                                {dt.toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}
-                              </p>
-                            </div>
-                            <span className="inline-block px-3 py-1 text-xs font-medium bg-yellow-100 text-yellow-700 rounded-full">
-                              {req.estado}
-                            </span>
-                          </div>
-                        );
-                      })
-                    ) : (
-                      <p className="text-gray-500">No tienes solicitudes pendientes.</p>
-                    )}
-                  </div>
-                </div>
+                      <div className="space-y-3">
+                        {loadingRequests ? (
+                          [1, 2].map(i => (
+                            <div key={i} className="h-14 rounded-xl bg-gray-100 animate-pulse" />
+                          ))
+                        ) : list.length > 0 ? (
+                          list.map(req => {
+                            const dt = req.createdAt.toDate();
+                            const title = req.tipo === 'cesantias'
+                              ? 'Solicitud de Cesantías'
+                              : req.tipo === 'enfermedad'
+                                ? 'Solicitud de Incapacidad'
+                                : 'Solicitud de Permiso';
+
+                            const isApproved = req.estado === 'aprobado';
+                            const isRejected = req.estado === 'rechazado';
+                            const badgeClass = isApproved
+                              ? 'bg-green-100 text-green-700'
+                              : isRejected
+                                ? 'bg-red-100 text-red-700'
+                                : 'bg-yellow-100 text-yellow-700';
+                            const accentClass = isApproved
+                              ? 'border-l-green-500'
+                              : isRejected
+                                ? 'border-l-red-500'
+                                : 'border-l-[#ff9900]';
+
+                            return (
+                              <div
+                                key={req.id}
+                                className={`border border-gray-100 border-l-4 ${accentClass} rounded-xl p-4 hover:shadow-sm transition-all`}
+                              >
+                                <div className="flex justify-between items-start gap-3">
+                                  <div className="min-w-0">
+                                    <h3 className="font-semibold text-gray-900 text-sm">{title}</h3>
+                                    <p className="text-xs text-gray-500 mt-0.5">
+                                      {dt.toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}
+                                    </p>
+                                  </div>
+                                  <span className={`inline-block px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide rounded-full ${badgeClass}`}>
+                                    {req.estado}
+                                  </span>
+                                </div>
+
+                                {req.motivoRespuesta && (
+                                  <div className={`mt-3 p-3 rounded-lg text-xs ${
+                                    isRejected
+                                      ? 'bg-red-50 text-red-700 border border-red-100'
+                                      : 'bg-green-50 text-green-700 border border-green-100'
+                                  }`}>
+                                    <p className="font-bold mb-0.5">
+                                      {isRejected ? 'Motivo del rechazo:' : 'Comentario:'}
+                                    </p>
+                                    <p>{req.motivoRespuesta}</p>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })
+                        ) : (
+                          <p className="text-sm text-gray-500 text-center py-6">
+                            {requestsTab === 'activas'
+                              ? 'No tienes solicitudes activas.'
+                              : 'Aún no tienes solicitudes respondidas.'}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* Salario emocional section */}
             </div>
