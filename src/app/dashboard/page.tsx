@@ -400,7 +400,7 @@ useEffect(() => {
         setProfile({
           nombre: data.nombre,
           rol: data.rol,
-          posicion: data.posicion,
+          posicion: data.extra?.posicion || data.posicion,
           dpto: dpto,
           eps: eps,
           banco: banco,
