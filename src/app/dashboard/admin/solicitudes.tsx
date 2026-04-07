@@ -102,6 +102,8 @@ interface CesantiasData extends BaseDocumentData {
   fileUrl?: string;
 }
 
+type TabKey = "pendiente" | "gestionada" | "todas";
+
 export default function SolicitudesCard() {
   const [requests, setRequests] = useState<RequestData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -113,6 +115,7 @@ export default function SolicitudesCard() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterType, setFilterType] = useState<string>("all");
+  const [tab, setTab] = useState<TabKey>("pendiente");
 
   // Helper: format date
   const formatDate = (d: Timestamp | Date | string | undefined): string => {
@@ -379,73 +382,83 @@ export default function SolicitudesCard() {
     );
   };
 
+  // Status accent helpers
+  const accentBar = (st: string) => {
+    switch (st?.toLowerCase()) {
+      case "pendiente": return "bg-[#ff9900]";
+      case "aprobado": return "bg-green-500";
+      case "rechazado": return "bg-red-500";
+      default: return "bg-gray-300";
+    }
+  };
+
   // Request card component
   const RequestCard: React.FC<{ s: RequestData; isInModal?: boolean }> = ({ s, isInModal = false }) => (
     <div
-      className={`border border-gray-200 rounded-xl p-5 hover:shadow-md transition-all duration-200 bg-white ${
+      className={`relative bg-white border border-gray-200 rounded-xl overflow-hidden hover:shadow-md hover:border-gray-300 transition-all duration-200 ${
         processingId === s.id ? "opacity-70 pointer-events-none" : ""
       }`}
     >
-      <div className="flex justify-between items-start">
-        <div className="flex items-start">
-          <div
-            className={`w-12 h-12 rounded-lg ${s.avatarColor} flex items-center justify-center mr-4 shadow-sm`}
-          >
-            {typeIcon(s.type)}
+      <div className={`absolute top-0 left-0 w-1 h-full ${accentBar(s.status)}`} />
+      <div className="p-4 sm:p-5 pl-5 sm:pl-6">
+        <div className="flex justify-between items-start gap-3">
+          <div className="flex items-start min-w-0 flex-1">
+            <div className={`w-11 h-11 rounded-xl ${s.avatarColor} flex items-center justify-center mr-3 flex-shrink-0`}>
+              {typeIcon(s.type)}
+            </div>
+            <div className="min-w-0">
+              <h3 className="font-bold text-gray-900 truncate">{s.title}</h3>
+              <p className="text-sm text-gray-700 font-medium truncate">{s.employee}</p>
+              <p className="text-xs text-gray-500 flex items-center mt-1">
+                <Calendar className="h-3.5 w-3.5 mr-1" />
+                {formatDate(s.date)}
+              </p>
+            </div>
           </div>
-          <div>
-            <h3 className="font-semibold text-lg text-gray-800">{s.title}</h3>
-            <p className="text-gray-700 font-medium">{s.employee}</p>
-            <p className="text-sm text-gray-500 flex items-center mt-1">
-              <Calendar className="h-4 w-4 mr-1" />
-              {formatDate(s.date)}
-            </p>
-          </div>
+          <StatusTag status={s.status} />
         </div>
-        <StatusTag status={s.status} />
-      </div>
-      
-      <div className="mt-4 flex space-x-2 justify-end">
-        <button
-          onClick={() => {
-            setSelected(s);
-            setShowDetails(true);
-            if (isInModal) setShowAll(false);
-          }}
-          className="text-sm px-3 py-1.5 bg-gray-100 rounded-lg hover:bg-gray-200 flex items-center transition-colors duration-200"
-        >
-          <Eye className="mr-1.5 h-4 w-4" /> Ver detalles
-        </button>
-        
-        {s.status === "pendiente" && (
-          <>
-            <button 
-              onClick={() => handleStatusUpdate(s.id, "aprobado", s.collectionName)}
-              disabled={processingId === s.id}
-              className="text-sm px-3 py-1.5 bg-green-500 text-white rounded-lg flex items-center hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
-            >
-              {processingId === s.id ? (
-                <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-              ) : (
-                <CheckCircle className="mr-1.5 h-4 w-4" />
-              )}
-              Aprobar
-            </button>
-            
-            <button 
-              onClick={() => handleStatusUpdate(s.id, "rechazado", s.collectionName)}
-              disabled={processingId === s.id}
-              className="text-sm px-3 py-1.5 bg-red-500 text-white rounded-lg flex items-center hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
-            >
-              {processingId === s.id ? (
-                <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-              ) : (
-                <XCircle className="mr-1.5 h-4 w-4" />
-              )}
-              Rechazar
-            </button>
-          </>
-        )}
+
+        <div className="mt-4 flex flex-wrap gap-2 justify-end">
+          <button
+            onClick={() => {
+              setSelected(s);
+              setShowDetails(true);
+              if (isInModal) setShowAll(false);
+            }}
+            className="text-xs font-semibold px-3 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 flex items-center transition-colors"
+          >
+            <Eye className="mr-1.5 h-4 w-4" /> Ver detalles
+          </button>
+
+          {s.status === "pendiente" && (
+            <>
+              <button
+                onClick={() => handleStatusUpdate(s.id, "aprobado", s.collectionName)}
+                disabled={processingId === s.id}
+                className="text-xs font-semibold px-3 py-2 bg-green-500 text-white rounded-lg flex items-center hover:bg-green-600 disabled:opacity-50 transition-colors"
+              >
+                {processingId === s.id ? (
+                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                ) : (
+                  <CheckCircle className="mr-1.5 h-4 w-4" />
+                )}
+                Aprobar
+              </button>
+              <button
+                onClick={() => handleStatusUpdate(s.id, "rechazado", s.collectionName)}
+                disabled={processingId === s.id}
+                className="text-xs font-semibold px-3 py-2 bg-red-500 text-white rounded-lg flex items-center hover:bg-red-600 disabled:opacity-50 transition-colors"
+              >
+                {processingId === s.id ? (
+                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                ) : (
+                  <XCircle className="mr-1.5 h-4 w-4" />
+                )}
+                Rechazar
+              </button>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -570,8 +583,18 @@ export default function SolicitudesCard() {
     </div>
   );
 
-  const shown = filteredRequests.slice(0, 3);
   const pendingCount = requests.filter(r => r.status === "pendiente").length;
+  const approvedCount = requests.filter(r => r.status === "aprobado").length;
+  const rejectedCount = requests.filter(r => r.status === "rechazado").length;
+  const handledCount = approvedCount + rejectedCount;
+
+  const tabFiltered = requests.filter(r => {
+    if (tab === "pendiente") return r.status === "pendiente";
+    if (tab === "gestionada") return r.status === "aprobado" || r.status === "rechazado";
+    return true;
+  });
+
+  const shown = tabFiltered.slice(0, 4);
 
   return (
     <div className="space-y-4 text-black">
@@ -588,57 +611,95 @@ export default function SolicitudesCard() {
         </div>
       )}
 
-      {/* Header with stats */}
-      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-xl border border-blue-100">
-        <div className="flex justify-between items-center">
-          <div>
-            <h2 className="text-xl font-bold text-gray-800">Solicitudes de RRHH</h2>
-            <p className="text-sm text-gray-600 mt-1">
-              {pendingCount > 0 ? (
-                <span className="text-orange-600 font-medium">
-                  {pendingCount} solicitud{pendingCount !== 1 ? 'es' : ''} pendiente{pendingCount !== 1 ? 's' : ''}
-                </span>
-              ) : (
-                <span className="text-green-600 font-medium">Sin solicitudes pendientes</span>
-              )}
-            </p>
-          </div>
-          <button
-            onClick={() => window.location.reload()}
-            className="p-2 bg-white rounded-lg hover:bg-gray-50 transition-colors border border-gray-200"
-            title="Recargar solicitudes"
-          >
-            <RefreshCw className="h-5 w-5 text-gray-600" />
-          </button>
-        </div>
+      {/* Stat counters */}
+      <div className="grid grid-cols-3 gap-3">
+        <button
+          onClick={() => setTab("pendiente")}
+          className={`text-left p-4 rounded-xl border transition-all ${
+            tab === "pendiente"
+              ? "bg-black text-white border-[#ff9900] shadow-md"
+              : "bg-white border-gray-200 hover:border-[#ff9900]/50"
+          }`}
+        >
+          <p className={`text-xs font-semibold uppercase tracking-wider ${tab === "pendiente" ? "text-[#ff9900]" : "text-gray-500"}`}>
+            Pendientes
+          </p>
+          <p className="text-2xl font-extrabold mt-1">{pendingCount}</p>
+        </button>
+        <button
+          onClick={() => setTab("gestionada")}
+          className={`text-left p-4 rounded-xl border transition-all ${
+            tab === "gestionada"
+              ? "bg-black text-white border-[#ff9900] shadow-md"
+              : "bg-white border-gray-200 hover:border-[#ff9900]/50"
+          }`}
+        >
+          <p className={`text-xs font-semibold uppercase tracking-wider ${tab === "gestionada" ? "text-[#ff9900]" : "text-gray-500"}`}>
+            Gestionadas
+          </p>
+          <p className="text-2xl font-extrabold mt-1">{handledCount}</p>
+          <p className={`text-[10px] mt-0.5 ${tab === "gestionada" ? "text-white/60" : "text-gray-400"}`}>
+            ✓ {approvedCount} · ✗ {rejectedCount}
+          </p>
+        </button>
+        <button
+          onClick={() => setTab("todas")}
+          className={`text-left p-4 rounded-xl border transition-all ${
+            tab === "todas"
+              ? "bg-black text-white border-[#ff9900] shadow-md"
+              : "bg-white border-gray-200 hover:border-[#ff9900]/50"
+          }`}
+        >
+          <p className={`text-xs font-semibold uppercase tracking-wider ${tab === "todas" ? "text-[#ff9900]" : "text-gray-500"}`}>
+            Todas
+          </p>
+          <p className="text-2xl font-extrabold mt-1">{requests.length}</p>
+        </button>
+      </div>
+
+      {/* Reload row */}
+      <div className="flex justify-end">
+        <button
+          onClick={() => window.location.reload()}
+          className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-600 hover:text-[#ff9900] transition"
+          title="Recargar solicitudes"
+        >
+          <RefreshCw className="h-3.5 w-3.5" /> Recargar
+        </button>
       </div>
 
       {loading ? (
-        <div className="w-full flex justify-center items-center py-12 border rounded-xl bg-gray-50">
-          <Loader2 className="h-8 w-8 text-blue-500 animate-spin" />
-          <span className="ml-2 text-gray-600">Cargando solicitudes...</span>
+        <div className="w-full flex justify-center items-center py-12 border border-gray-100 rounded-xl bg-gray-50">
+          <Loader2 className="h-6 w-6 text-[#ff9900] animate-spin" />
+          <span className="ml-2 text-gray-600 text-sm">Cargando solicitudes...</span>
         </div>
-      ) : requests.length === 0 ? (
-        <div className="text-center py-10 border rounded-xl bg-gray-50">
-          <AlertCircle className="h-12 w-12 text-gray-400 mx-auto mb-2" />
-          <p className="text-gray-500">No hay solicitudes disponibles</p>
+      ) : tabFiltered.length === 0 ? (
+        <div className="text-center py-10 border border-dashed border-gray-200 rounded-xl bg-gray-50">
+          <AlertCircle className="h-10 w-10 text-gray-300 mx-auto mb-2" />
+          <p className="text-sm text-gray-500">
+            {tab === "pendiente"
+              ? "No hay solicitudes pendientes"
+              : tab === "gestionada"
+              ? "Aún no hay solicitudes gestionadas"
+              : "No hay solicitudes"}
+          </p>
         </div>
       ) : (
-        <div className="grid gap-4">
+        <div className="grid gap-3">
           {shown.map((s) => (
             <RequestCard key={s.id} s={s} />
           ))}
         </div>
       )}
 
-      {!loading && requests.length > 3 && (
-        <div className="text-center mt-4">
+      {!loading && tabFiltered.length > 4 && (
+        <div className="text-center mt-2">
           <button
             onClick={() => setShowAll(true)}
-            className="px-4 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors duration-200 font-medium flex items-center justify-center mx-auto"
+            className="inline-flex items-center px-4 py-2 bg-black text-white rounded-full hover:bg-[#ff9900] hover:text-black transition-colors text-sm font-semibold"
           >
             <List className="mr-2 h-4 w-4" />
-            Ver todas las solicitudes ({requests.length})
+            Ver todas ({tabFiltered.length})
           </button>
         </div>
       )}
@@ -739,33 +800,45 @@ export default function SolicitudesCard() {
 
       {/* Details Modal */}
       {showDetails && selected && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-4">
-              <div className="flex items-center">
-                <div className={`w-10 h-10 rounded-lg ${selected.avatarColor} flex items-center justify-center mr-3`}>
-                  {typeIcon(selected.type)}
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl">
+            {/* Modal header — black hero */}
+            <div className="relative p-5 sm:p-6 bg-black text-white">
+              <div
+                aria-hidden
+                className="pointer-events-none absolute inset-0 opacity-30"
+                style={{
+                  backgroundImage:
+                    "radial-gradient(circle at 90% 30%, #ff9900 0, transparent 50%)",
+                }}
+              />
+              <div className="relative flex justify-between items-start gap-3">
+                <div className="flex items-center min-w-0">
+                  <div className="w-12 h-12 rounded-xl bg-[#ff9900]/20 text-[#ff9900] flex items-center justify-center mr-3 flex-shrink-0">
+                    {typeIcon(selected.type)}
+                  </div>
+                  <div className="min-w-0">
+                    <h2 className="text-lg sm:text-xl font-extrabold truncate">{selected.title}</h2>
+                    <p className="text-xs text-white/60 truncate">{selected.employee} · {selected.type}</p>
+                  </div>
                 </div>
-                <div>
-                  <h2 className="text-xl font-bold text-gray-800">{selected.title}</h2>
-                  <p className="text-sm text-gray-500">{selected.type}</p>
+                <div className="flex items-center gap-2">
+                  <StatusTag status={selected.status} />
+                  <button
+                    onClick={() => setShowDetails(false)}
+                    className="p-1.5 rounded-full text-white/70 hover:text-white hover:bg-white/10 transition"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
                 </div>
               </div>
-              <button 
-                onClick={() => setShowDetails(false)}
-                className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-              >
-                <X className="h-6 w-6" />
-              </button>
             </div>
-            
-            <div className="bg-gray-50 p-4 rounded-lg mb-6">
-              <div className="flex justify-between items-center mb-2">
-                <p className="text-gray-700 font-medium text-lg">{selected.employee}</p>
-                <StatusTag status={selected.status} />
-              </div>
-              <p className="text-sm text-gray-600 flex items-center">
-                <Calendar className="h-4 w-4 mr-1" />
+
+            {/* Modal body */}
+            <div className="overflow-y-auto p-5 sm:p-6">
+            <div className="bg-gray-50 p-4 rounded-lg mb-6 border border-gray-100">
+              <p className="text-xs text-gray-500 flex items-center">
+                <Calendar className="h-3.5 w-3.5 mr-1 text-[#ff9900]" />
                 Enviada el {formatDate(selected.date)}
               </p>
             </div>
@@ -844,6 +917,7 @@ export default function SolicitudesCard() {
                   </button>
                 </>
               )}
+            </div>
             </div>
           </div>
         </div>
