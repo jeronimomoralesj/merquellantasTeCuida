@@ -400,7 +400,7 @@ useEffect(() => {
         setProfile({
           nombre: data.nombre,
           rol: data.rol,
-          posicion: (data.extra as Record<string, string> | undefined)?.posicion || data.posicion,
+          posicion: (data.extra as Record<string, string> | undefined)?.posicion || '',
           dpto: dpto,
           eps: eps,
           banco: banco,
@@ -961,28 +961,39 @@ useEffect(() => {
   })()}
 </div>
 
-                {/* Quick actions with improved design */}
-                <div className="bg-white rounded-2xl shadow-sm p-6 border border-gray-100 hover:shadow-md transition-shadow duration-300 relative overflow-hidden">
-                  <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-[#ff9900] to-white"></div>
-                  <h2 className="text-lg font-bold mb-5 text-gray-900 flex items-center">
-                    <Briefcase className="h-5 w-5 mr-2 text-[#ff9900]" />
-                    Acciones rápidas
-                  </h2>
-                  <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-4 gap-4">
-                    {quickActions.map(action => (
-                      <a 
-                        key={action.id} 
-                        href={action.href}
-                        className={`flex flex-col items-center justify-center p-4 rounded-xl bg-white border border-gray-100 hover:border-opacity-0 hover:shadow-md transition-all group ${action.bgHover}`}
-                        target={action.href.startsWith('http') ? "_blank" : "_self"}
-                        rel={action.href.startsWith('http') ? "noopener noreferrer" : ""}
-                      >
-                        <div className={`w-12 h-12 rounded-full ${action.color} flex items-center justify-center mb-3 group-hover:scale-110 transition-transform`}>
-                          {action.icon}
-                        </div>
-                        <span className="text-sm font-medium text-gray-700 text-center group-hover:text-[#ff9900]">{action.title}</span>
-                      </a>
-                    ))}
+                {/* Quick actions — black/yellow speed grid */}
+                <div className="bg-black rounded-2xl shadow-xl p-6 relative overflow-hidden text-white">
+                  <div
+                    aria-hidden
+                    className="pointer-events-none absolute inset-0 opacity-30"
+                    style={{
+                      backgroundImage:
+                        'radial-gradient(circle at 90% 10%, #ff9900 0, transparent 40%)',
+                    }}
+                  />
+                  <div className="relative">
+                    <h2 className="text-lg font-bold mb-5 flex items-center">
+                      <Briefcase className="h-5 w-5 mr-2 text-[#ff9900]" />
+                      Acciones rápidas
+                    </h2>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                      {quickActions.map(action => (
+                        <a
+                          key={action.id}
+                          href={action.href}
+                          className="group flex flex-col items-center justify-center p-4 rounded-xl bg-white/5 border border-white/10 hover:bg-[#ff9900] hover:border-[#ff9900] active:scale-95 transition-all"
+                          target={action.href.startsWith('http') ? "_blank" : "_self"}
+                          rel={action.href.startsWith('http') ? "noopener noreferrer" : ""}
+                        >
+                          <div className="w-11 h-11 rounded-full bg-[#ff9900]/20 group-hover:bg-black/20 flex items-center justify-center mb-2 text-[#ff9900] group-hover:text-black transition-colors">
+                            {action.icon}
+                          </div>
+                          <span className="text-xs font-semibold text-white/90 group-hover:text-black text-center leading-tight">
+                            {action.title}
+                          </span>
+                        </a>
+                      ))}
+                    </div>
                   </div>
                 </div>
 

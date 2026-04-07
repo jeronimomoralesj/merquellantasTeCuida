@@ -735,9 +735,9 @@ const Users: React.FC = () => {
                           </div>
                         </td>
                         <td className="px-6 py-4">
-                          <div className="text-sm text-gray-900">{user.extra?.['Cargo Empleado'] || 'Sin cargo'}</div>
-                          <div className="text-sm text-gray-500">{user.extra?.posicion || ''}</div>
-                          <div className="text-sm text-gray-500">{user.extra?.['Dpto Donde Labora'] || ''}</div>
+                          <div className="text-sm text-gray-900"><span className="text-gray-400 text-xs">Cargo:</span> {user.extra?.['Cargo Empleado'] || '—'}</div>
+                          <div className="text-sm text-gray-700"><span className="text-gray-400 text-xs">Área:</span> <span className="font-semibold text-[#ff9900]">{user.extra?.posicion || '—'}</span></div>
+                          <div className="text-sm text-gray-500"><span className="text-gray-400 text-xs">Depto:</span> {user.extra?.['Dpto Donde Labora'] || '—'}</div>
                         </td>
                         <td className="px-6 py-4">
                           <div className="text-sm text-gray-900">{user.extra?.Banco || 'Sin banco'}</div>
