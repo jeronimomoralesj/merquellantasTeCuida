@@ -43,6 +43,7 @@ interface BaseDocumentData {
   description?: string;
   documentUrl?: string;
   documentName?: string;
+  motivoRespuesta?: string;
 }
 
 interface RequestData {
@@ -57,6 +58,7 @@ interface RequestData {
   avatarText: string;
   description?: string;
   attachment?: string;
+  motivoRespuesta?: string;
   isPermiso: boolean;
   collectionName: string; // Added to track which collection this belongs to
   rawData?: BaseDocumentData | IncapacidadData | VacacionesData | PermisoData | CesantiasData;
@@ -242,14 +244,14 @@ export default function SolicitudesCard() {
       setRequests(prevRequests =>
         prevRequests.map(req =>
           req.id === requestId
-            ? { ...req, status: newStatus, statusColor: statusColor(newStatus) }
+            ? { ...req, status: newStatus, statusColor: statusColor(newStatus), motivoRespuesta: motivo }
             : req
         )
       );
 
       if (showDetails && selected?.id === requestId) {
         setSelected(prev =>
-          prev ? { ...prev, status: newStatus, statusColor: statusColor(newStatus) } : null
+          prev ? { ...prev, status: newStatus, statusColor: statusColor(newStatus), motivoRespuesta: motivo } : null
         );
       }
 
@@ -308,6 +310,7 @@ export default function SolicitudesCard() {
             avatarText: initials(data.nombre),
             description: data.motivoSolicitud,
             attachment: data.fileUrl,
+            motivoRespuesta: data.motivoRespuesta,
             isPermiso: false,
             collectionName: "cesantias", // Store the collection name
             rawData: data,
@@ -344,6 +347,7 @@ export default function SolicitudesCard() {
             avatarText: initials(data.nombre),
             description: data.description,
             attachment: data.documentUrl,
+            motivoRespuesta: data.motivoRespuesta,
             isPermiso: typ === "Permiso",
             collectionName: collectionName, // Store the collection name
             rawData: data,
@@ -429,6 +433,19 @@ export default function SolicitudesCard() {
           </div>
           <StatusTag status={s.status} />
         </div>
+
+        {s.motivoRespuesta && (
+          <div className={`mt-3 p-3 rounded-lg text-xs border ${
+            s.status === "rechazado"
+              ? "bg-red-50 border-red-100 text-red-700"
+              : "bg-green-50 border-green-100 text-green-700"
+          }`}>
+            <p className="font-bold mb-0.5">
+              {s.status === "rechazado" ? "Motivo del rechazo:" : "Comentario:"}
+            </p>
+            <p>{s.motivoRespuesta}</p>
+          </div>
+        )}
 
         <div className="mt-4 flex flex-wrap gap-2 justify-end">
           <button
@@ -854,6 +871,19 @@ export default function SolicitudesCard() {
                 Enviada el {formatDate(selected.date)}
               </p>
             </div>
+
+            {selected.motivoRespuesta && (
+              <div className={`p-4 rounded-lg mb-6 border ${
+                selected.status === "rechazado"
+                  ? "bg-red-50 border-red-200 text-red-800"
+                  : "bg-green-50 border-green-200 text-green-800"
+              }`}>
+                <p className="text-xs font-bold uppercase tracking-wide mb-1">
+                  {selected.status === "rechazado" ? "Motivo del rechazo" : "Comentario del admin"}
+                </p>
+                <p className="text-sm">{selected.motivoRespuesta}</p>
+              </div>
+            )}
             
             {isIncapacidadData(selected.rawData) ? (
               <EnfermedadDetails data={selected.rawData} />
