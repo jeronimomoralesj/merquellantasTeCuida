@@ -245,6 +245,7 @@ const getEventStatus = (event: CalendarEvent) => {
 // Normaliza una fecha de cumpleaños al próximo cumpleaños válido
 const normalizeBirthdayDate = (originalDate: Date): Date => {
   const today = new Date();
+  today.setHours(0, 0, 0, 0);
   const currentYear = today.getFullYear();
 
   const birthdayThisYear = new Date(
@@ -255,8 +256,8 @@ const normalizeBirthdayDate = (originalDate: Date): Date => {
 
   birthdayThisYear.setHours(0, 0, 0, 0);
 
-  // Si ya pasó este año, usar el siguiente
-  if (birthdayThisYear < today) {
+  // Si ya pasó este año (estrictamente), usar el siguiente. Hoy se mantiene.
+  if (birthdayThisYear.getTime() < today.getTime()) {
     birthdayThisYear.setFullYear(currentYear + 1);
   }
 
@@ -283,8 +284,7 @@ useEffect(() => {
 
       const q = query(
         collection(db, 'calendar'),
-        orderBy('date', 'asc'),
-        limit(100)
+        orderBy('date', 'asc')
       );
 
       const snap = await getDocs(q);
@@ -295,7 +295,7 @@ useEffect(() => {
         .map(doc => {
           const data = doc.data() as CalendarEvent;
           const storedDate = data.date.toDate();
-          
+
           const displayDate = addOneDay(storedDate);
           
           let comparisonDate: Date;
@@ -420,8 +420,7 @@ useEffect(() => {
       
       const q = query(
         collection(db, 'calendar'),
-        orderBy('date', 'asc'),
-        limit(100)
+        orderBy('date', 'asc')
       );
 
       const snap = await getDocs(q);
