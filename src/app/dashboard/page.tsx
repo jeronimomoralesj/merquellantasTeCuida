@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
+import Image from 'next/image';
 import DashboardNavbar from './navbar';
 import { useRouter } from 'next/navigation';
 import { 
@@ -557,23 +558,57 @@ useEffect(() => {
       </div>
     )}
         {/* Main content */}
-        <main className="pb-16 px-4 sm:px-6 lg:px-8">
-          <br />
-          <br />
-          <br />
+        <main className="pb-16 px-4 sm:px-6 lg:px-8 pt-20 sm:pt-24">
           <div className="max-w-7xl mx-auto">
-            {/* Header with welcome message */}
-            <div className="mb-8 mt-4">
-              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1 flex items-center">
-                <span className="bg-gradient-to-r from-[#ff9900] to-[#ffb347] text-transparent bg-clip-text">
-                  ¡Bienvenido a Nuestra Gente!
-                </span>
-                <div className="ml-3 hidden sm:flex items-center h-8 px-3 text-xs font-medium rounded-full bg-[#ff9900]/10 text-[#ff9900]">
-                  <CheckCircle className="h-3.5 w-3.5 mr-1" /> Hoy es un buen día
+            {/* HERO — Merquito welcome */}
+            <section className="relative mb-8 overflow-hidden rounded-3xl bg-black text-white shadow-xl">
+              {/* decorative glows */}
+              <div
+                aria-hidden
+                className="pointer-events-none absolute inset-0 opacity-40"
+                style={{
+                  backgroundImage:
+                    'radial-gradient(circle at 15% 20%, #ff9900 0, transparent 45%), radial-gradient(circle at 85% 90%, #ff9900 0, transparent 35%)',
+                }}
+              />
+              <div
+                aria-hidden
+                className="pointer-events-none absolute inset-0 opacity-[0.06]"
+                style={{
+                  backgroundImage:
+                    'linear-gradient(#ffffff 1px, transparent 1px), linear-gradient(90deg, #ffffff 1px, transparent 1px)',
+                  backgroundSize: '36px 36px',
+                }}
+              />
+              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-[#ff9900] to-transparent" />
+
+              <div className="relative flex flex-col-reverse sm:flex-row items-center gap-6 p-6 sm:p-8 lg:p-10">
+                <div className="flex-1 text-center sm:text-left">
+                  <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#ff9900]/15 text-[#ff9900] text-xs font-semibold uppercase tracking-wider border border-[#ff9900]/30">
+                    <CheckCircle className="h-3.5 w-3.5" /> Hoy es un buen día
+                  </span>
+                  <h1 className="mt-3 text-2xl sm:text-3xl lg:text-4xl font-extrabold leading-tight">
+                    Hola{profile?.nombre ? `, ${profile.nombre.split(' ')[0]}` : ''} 👋{' '}
+                    <span className="block sm:inline text-[#ff9900]">¡Bienvenido a Nuestra Gente!</span>
+                  </h1>
+                  <p className="mt-2 text-sm sm:text-base text-white/70">{capitalizedDate}</p>
                 </div>
-              </h1>
-              <p className="text-gray-500 text-sm">{capitalizedDate}</p>
-            </div>
+
+                <div className="relative flex-shrink-0">
+                  <div className="absolute -inset-4 rounded-full bg-[#ff9900] blur-2xl opacity-40" />
+                  <div className="absolute inset-0 rounded-2xl border-2 border-[#ff9900]/40 rotate-3" />
+                  <Image
+                    src="/merquito.jpeg"
+                    alt="Merquito - Mascota Merquellantas"
+                    width={160}
+                    height={160}
+                    priority
+                    sizes="(max-width: 640px) 120px, 160px"
+                    className="relative rounded-2xl ring-4 ring-[#ff9900] shadow-2xl object-cover w-28 h-28 sm:w-36 sm:h-36 lg:w-40 lg:h-40"
+                  />
+                </div>
+              </div>
+            </section>
 
             {/* Main section */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
