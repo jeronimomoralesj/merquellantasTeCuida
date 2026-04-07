@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useEffect, useState } from 'react'
+import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import {
   signInWithEmailAndPassword,
@@ -9,7 +10,7 @@ import {
 } from 'firebase/auth'
 import { doc, getDoc } from 'firebase/firestore'
 import { auth, db } from '../../../firebase'
-import { Eye, EyeOff, User, Lock, ArrowRight } from 'lucide-react'
+import { Eye, EyeOff, User, Lock, ArrowRight, ShieldCheck, Sparkles } from 'lucide-react'
 
 export default function MerqeuBienestarLogin() {
   const router = useRouter()
@@ -22,9 +23,7 @@ export default function MerqeuBienestarLogin() {
 
   useEffect(() => {
     const unsub = auth.onAuthStateChanged(u => {
-      if (u) {
-        router.replace('/dashboard')
-      }
+      if (u) router.replace('/dashboard')
     })
     return unsub
   }, [router])
@@ -47,20 +46,13 @@ export default function MerqeuBienestarLogin() {
         await setPersistence(auth, browserLocalPersistence)
       }
 
-      const userCred = await signInWithEmailAndPassword(
-        auth,
-        fakeEmail,
-        firebasePassword
-      )
+      const userCred = await signInWithEmailAndPassword(auth, fakeEmail, firebasePassword)
 
-      // Fetch user profile
       const userSnap = await getDoc(doc(db, 'users', userCred.user.uid))
       if (!userSnap.exists()) {
         throw new Error('Perfil de usuario no encontrado')
       }
-      const profile = userSnap.data()
-      console.log('Perfil:', profile)
-      
+
       router.push('/dashboard')
     } catch (err: unknown) {
       console.error('Login error:', err)
@@ -71,117 +63,200 @@ export default function MerqeuBienestarLogin() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-white to-gray-50 flex flex-col justify-center items-center px-4 py-12 text-black">
-      {/* Logo & Title */}
-      <div className="mb-8 flex flex-col items-center">
-        <div className="w-52 bg-gray rounded-full flex items-center justify-center mb-3">
-          <img src="https://www.merquellantas.com/assets/images/logo/Logo-Merquellantas.png" alt="Merquellantas" />
-        </div>
-        <h1 className="text-2xl font-bold text-black">¡Nuestra Gente!</h1>
-      </div>
+    <div className="min-h-screen w-full bg-black text-white relative overflow-hidden">
+      {/* Decorative background */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 opacity-[0.18]"
+        style={{
+          backgroundImage:
+            'radial-gradient(circle at 20% 10%, #ff9900 0, transparent 40%), radial-gradient(circle at 80% 90%, #ff9900 0, transparent 35%)',
+        }}
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 opacity-[0.05]"
+        style={{
+          backgroundImage:
+            'linear-gradient(#ffffff 1px, transparent 1px), linear-gradient(90deg, #ffffff 1px, transparent 1px)',
+          backgroundSize: '40px 40px',
+        }}
+      />
 
-      {/* Login Card */}
-      <div className="w-full max-w-md">
-        <div className="relative">
-          <div className="absolute inset-0 bg-gradient-to-r from-[#ff9900]/20 to-black/5 rounded-3xl transform rotate-2" />
-          <div className="relative bg-white rounded-3xl shadow-xl p-8 md:p-10">
-            <h2 className="text-3xl font-bold mb-2 text-black text-center">Bienvenido</h2>
-            <p className="text-gray-600 text-center mb-8">Accede a tu cuenta para continuar</p>
+      <div className="relative z-10 min-h-screen grid grid-cols-1 lg:grid-cols-2">
+        {/* LEFT — Mascot / brand panel */}
+        <section className="hidden lg:flex flex-col justify-between p-10 xl:p-14">
+          <div className="flex items-center gap-3">
+            <div className="bg-[#ff9900] rounded-xl p-2">
+              <Sparkles className="h-5 w-5 text-black" />
+            </div>
+            <span className="font-bold tracking-wide text-lg">Merquellantas · Nuestra Gente</span>
+          </div>
 
-            <form onSubmit={handleSubmit}>
-              {/* Cédula */}
-              <div className="mb-6">
-                <label htmlFor="cedula" className="block text-sm font-medium text-gray-700 mb-2">
-                  Cédula
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <User className="h-5 w-5 text-gray-400" />
-                  </div>
-                  <input
-                    id="cedula"
-                    type="text"
-                    required
-                    value={cedula}
-                    onChange={e => setCedula(e.target.value)}
-                    className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#ff9900]"
-                    placeholder="123456789"
-                  />
+          <div className="relative flex-1 flex items-center justify-center">
+            <div className="absolute w-[420px] h-[420px] xl:w-[520px] xl:h-[520px] rounded-full bg-[#ff9900] blur-3xl opacity-30" />
+            <div className="absolute w-[360px] h-[360px] xl:w-[460px] xl:h-[460px] rounded-full border-2 border-[#ff9900]/40" />
+            <div className="absolute w-[280px] h-[280px] xl:w-[360px] xl:h-[360px] rounded-full border border-white/10" />
+            <Image
+              src="/merquito.jpeg"
+              alt="Merquito - Mascota Merquellantas"
+              width={420}
+              height={420}
+              priority
+              className="relative rounded-3xl shadow-2xl ring-4 ring-[#ff9900]/60 object-cover"
+            />
+          </div>
+
+          <div className="max-w-md">
+            <h2 className="text-3xl xl:text-4xl font-extrabold leading-tight">
+              Bienvenido a <span className="text-[#ff9900]">Nuestra Gente</span>
+            </h2>
+            <p className="mt-3 text-white/70">
+              Tu portal de bienestar, beneficios y comunicación con el equipo Merquellantas.
+            </p>
+          </div>
+        </section>
+
+        {/* RIGHT — Login form */}
+        <section className="flex flex-col justify-center items-center px-5 sm:px-8 py-10 sm:py-14">
+          {/* Mobile mascot header */}
+          <div className="lg:hidden flex flex-col items-center mb-8">
+            <div className="relative">
+              <div className="absolute -inset-3 bg-[#ff9900] rounded-full blur-2xl opacity-40" />
+              <Image
+                src="/merquito.jpeg"
+                alt="Merquito - Mascota Merquellantas"
+                width={140}
+                height={140}
+                priority
+                className="relative rounded-2xl ring-4 ring-[#ff9900] object-cover"
+              />
+            </div>
+            <h1 className="mt-4 text-2xl font-extrabold text-white text-center">
+              Nuestra <span className="text-[#ff9900]">Gente</span>
+            </h1>
+            <p className="text-white/60 text-sm mt-1">Merquellantas</p>
+          </div>
+
+          <div className="w-full max-w-md">
+            <div className="relative">
+              <div className="absolute -inset-1 bg-gradient-to-br from-[#ff9900] via-[#ff9900]/40 to-transparent rounded-3xl blur-xl opacity-60" />
+              <div className="relative bg-white rounded-3xl shadow-2xl p-6 sm:p-8 md:p-10 text-black">
+                <div className="flex items-center gap-2 mb-1">
+                  <div className="h-1 w-10 rounded-full bg-[#ff9900]" />
+                  <span className="text-xs font-semibold uppercase tracking-wider text-[#ff9900]">
+                    Acceso seguro
+                  </span>
                 </div>
-              </div>
+                <h2 className="text-2xl sm:text-3xl font-extrabold mt-2">Inicia sesión</h2>
+                <p className="text-gray-500 text-sm mt-1 mb-6">
+                  Ingresa con tu cédula y tu PIN de 4 dígitos.
+                </p>
 
-              {/* PIN */}
-              <div className="mb-6">
-                <label htmlFor="pin" className="block text-sm font-medium text-gray-700 mb-2">
-                  PIN de 4 dígitos
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Lock className="h-5 w-5 text-gray-400" />
+                <form onSubmit={handleSubmit} noValidate>
+                  {/* Cédula */}
+                  <div className="mb-4">
+                    <label htmlFor="cedula" className="block text-xs font-semibold text-gray-700 mb-1.5 uppercase tracking-wide">
+                      Cédula
+                    </label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <User className="h-5 w-5 text-gray-400" />
+                      </div>
+                      <input
+                        id="cedula"
+                        type="tel"
+                        inputMode="numeric"
+                        autoComplete="username"
+                        required
+                        value={cedula}
+                        onChange={e => setCedula(e.target.value.replace(/\D/g, ''))}
+                        className="block w-full pl-10 pr-3 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#ff9900] focus:border-transparent transition"
+                        placeholder="Ej. 1023456789"
+                      />
+                    </div>
                   </div>
-                  <input
-                    id="pin"
-                    type={showPin ? 'text' : 'password'}
-                    required
-                    maxLength={4}
-                    value={pin}
-                    onChange={e => setPin(e.target.value)}
-                    className="block w-full pl-10 pr-10 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#ff9900]"
-                    placeholder="••••"
-                  />
+
+                  {/* PIN */}
+                  <div className="mb-4">
+                    <label htmlFor="pin" className="block text-xs font-semibold text-gray-700 mb-1.5 uppercase tracking-wide">
+                      PIN de 4 dígitos
+                    </label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <Lock className="h-5 w-5 text-gray-400" />
+                      </div>
+                      <input
+                        id="pin"
+                        type={showPin ? 'text' : 'password'}
+                        inputMode="numeric"
+                        autoComplete="current-password"
+                        required
+                        maxLength={4}
+                        value={pin}
+                        onChange={e => setPin(e.target.value.replace(/\D/g, ''))}
+                        className="block w-full pl-10 pr-12 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#ff9900] focus:border-transparent transition tracking-[0.5em] font-semibold"
+                        placeholder="••••"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPin(!showPin)}
+                        aria-label={showPin ? 'Ocultar PIN' : 'Mostrar PIN'}
+                        className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-[#ff9900] transition"
+                      >
+                        {showPin ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between mb-5">
+                    <label className="flex items-center text-sm text-gray-700 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={rememberMe}
+                        onChange={e => setRememberMe(e.target.checked)}
+                        className="h-4 w-4 accent-[#ff9900] border-gray-300 rounded focus:ring-[#ff9900]"
+                      />
+                      <span className="ml-2">Recordarme</span>
+                    </label>
+                    <span className="flex items-center text-xs text-gray-500">
+                      <ShieldCheck className="h-4 w-4 mr-1 text-[#ff9900]" />
+                      Conexión segura
+                    </span>
+                  </div>
+
+                  {error && (
+                    <div
+                      role="alert"
+                      className="mb-4 px-4 py-3 rounded-xl bg-red-50 border border-red-200 text-red-600 text-sm"
+                    >
+                      {error}
+                    </div>
+                  )}
+
                   <button
-                    type="button"
-                    onClick={() => setShowPin(!showPin)}
-                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-500"
+                    type="submit"
+                    disabled={loading || !cedula || pin.length !== 4}
+                    className="w-full flex justify-center items-center py-3.5 rounded-xl bg-[#ff9900] text-black font-bold text-base hover:bg-[#ffae33] active:scale-[0.99] transition disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-[#ff9900]/30"
                   >
-                    {showPin ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                    {loading ? 'Ingresando...' : 'Iniciar sesión'}
+                    {!loading && <ArrowRight className="ml-2 h-5 w-5" />}
                   </button>
-                </div>
+                </form>
+
+                <p className="mt-6 text-center text-xs text-gray-500">
+                  ¿Problemas para ingresar? Contacta a Talento Humano.
+                </p>
               </div>
+            </div>
 
-              {/* Remember & Error */}
-              <div className="flex items-center justify-between mb-4">
-                <label className="flex items-center text-sm text-gray-700">
-                  <input
-                    type="checkbox"
-                    checked={rememberMe}
-                    onChange={e => setRememberMe(e.target.checked)}
-                    className="h-4 w-4 text-[#ff9900] border-gray-300 rounded focus:ring-[#ff9900]"
-                  />
-                  <span className="ml-2">Recordarme</span>
-                </label>
-                {error && <p className="text-red-500 text-sm">{error}</p>}
-              </div>
-
-              {/* Submit */}
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full flex justify-center items-center py-3 rounded-full bg-[#ff9900] text-white font-medium hover:bg-[#e68a00] transition disabled:opacity-50"
-              >
-                {loading ? 'Ingresando...' : 'Iniciar sesión'}
-                <ArrowRight className="ml-2 h-5 w-5" />
-              </button>
-            </form>
-
-            {/* Separator & Footer Link */}
-            <div className="my-8 flex items-center">
-              <div className="flex-grow border-t border-gray-200" />
-              <span className="px-4 text-sm text-gray-500">o</span>
-              <div className="flex-grow border-t border-gray-200" />
+            <div className="mt-8 text-center">
+              <p className="text-xs text-white/50">
+                © {new Date().getFullYear()} Merquellantas. Todos los derechos reservados.
+              </p>
             </div>
           </div>
-        </div>
-      </div>
-
-      {/* Global Footer */}
-      <div className="mt-12 text-center">
-        <p className="text-sm text-gray-500">© 2025 Merquellantas. Todos los derechos reservados.</p>
-        <div className="mt-2 flex justify-center space-x-4">
-          <a href="#" className="text-xs text-gray-500 hover:text-[#ff9900]">Términos y condiciones</a>
-          <a href="#" className="text-xs text-gray-500 hover:text-[#ff9900]">Política de privacidad</a>
-          <a href="#" className="text-xs text-gray-500 hover:text-[#ff9900]">Ayuda</a>
-        </div>
+        </section>
       </div>
     </div>
   )
