@@ -51,10 +51,6 @@ const PermisoForm = () => {
       setFormError('El tiempo fin es requerido');
       return false;
     }
-    if (!formData.document) {
-      setFormError('Debe adjuntar un documento');
-      return false;
-    }
     return true;
   };
 
@@ -82,6 +78,12 @@ const PermisoForm = () => {
     e.preventDefault();
     if (!validateForm()) return;
 
+    // Confirm if user is submitting without an attachment
+    if (!formData.document) {
+      const ok = window.confirm('¿Segura que no quieres agregar un adjunto?');
+      if (!ok) return;
+    }
+
     setFormError('');
     setIsSubmitting(true);
 
@@ -91,13 +93,19 @@ const PermisoForm = () => {
         setFormError('Debe iniciar sesión para enviar una solicitud');
         return;
       }
-      
-      const storage = getStorage();
-      const file = formData.document as File;
-      const path = `solicitudes/${user.uid}/${Date.now()}_${file.name}`;
-      const fileRef = storageRef(storage, path);
-      const snap = await uploadBytes(fileRef, file);
-      const url = await getDownloadURL(snap.ref);
+
+      // Upload document only if provided
+      let documentName: string | null = null;
+      let documentUrl: string | null = null;
+      if (formData.document) {
+        const storage = getStorage();
+        const file = formData.document as File;
+        const path = `solicitudes/${user.uid}/${Date.now()}_${file.name}`;
+        const fileRef = storageRef(storage, path);
+        const snap = await uploadBytes(fileRef, file);
+        documentUrl = await getDownloadURL(snap.ref);
+        documentName = file.name;
+      }
 
       const userDoc = await getDoc(doc(db, 'users', user.uid));
       const userData = userDoc.exists() ? userDoc.data() : {};
@@ -113,8 +121,8 @@ const PermisoForm = () => {
         tiempoInicio: formData.tiempoInicio,
         tiempoFin: formData.tiempoFin,
         description: formData.description,
-        documentName: file.name,
-        documentUrl: url,
+        documentName,
+        documentUrl,
         createdAt: serverTimestamp(),
       };
 
@@ -280,9 +288,9 @@ setSubmitted(true);
           <div>
             <h3 className="text-base sm:text-lg font-medium text-gray-800 flex items-center mb-4">
               <Upload className="w-5 h-5 mr-2 text-[#ff9900]" />
-              Documentación
+              Documentación <span className="ml-2 text-xs font-normal text-gray-500">(opcional)</span>
             </h3>
-            <strong><h2 className="mt-2 text-gray-600">Adjuntar formato de autorizacion con firma del jefe inmediato.</h2></strong>
+            <p className="mt-2 text-sm text-gray-600">Si lo tienes, adjunta el formato de autorización con firma del jefe inmediato.</p>
             <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
               <input
                 type="file"

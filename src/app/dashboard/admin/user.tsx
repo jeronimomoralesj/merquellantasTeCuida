@@ -430,30 +430,53 @@ const Users: React.FC = () => {
     fetchUsers();
   }, []);
 
+  const adminCount = users.filter(u => u.extra?.rol === 'admin').length;
+  const totalCount = users.length;
+
   return (
-    <div className="min-h-screen bg-gray-50 p-6 text-black">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="bg-white rounded-lg shadow p-6 mb-6">
-          <div className="flex justify-between items-center mb-4">
-            <h1 className="text-3xl font-bold flex items-center gap-2">
-              <User className="h-8 w-8 text-blue-600" /> Gestión de Usuarios
-            </h1>
+    <div className="text-black mt-6">
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        {/* Black hero header */}
+        <div className="relative p-5 sm:p-6 bg-black text-white">
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 opacity-30"
+            style={{
+              backgroundImage:
+                "radial-gradient(circle at 90% 30%, #ff9900 0, transparent 50%)",
+            }}
+          />
+          <div className="relative flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-xl bg-[#ff9900]/20 text-[#ff9900] flex items-center justify-center">
+                <User className="h-5 w-5" />
+              </div>
+              <div>
+                <h2 className="text-lg font-extrabold">Gestión de Usuarios</h2>
+                <p className="text-xs text-white/60">
+                  {totalCount} {totalCount === 1 ? 'usuario' : 'usuarios'} · {adminCount} admin{adminCount !== 1 ? 's' : ''}
+                </p>
+              </div>
+            </div>
             <button
               onClick={() => setShowCreateForm(true)}
-              className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-blue-700 transition-colors"
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#ff9900] text-black text-sm font-bold hover:bg-[#ffae33] active:scale-95 transition-all shadow-lg shadow-[#ff9900]/20"
             >
-              <Plus className="h-5 w-5" /> Nuevo Usuario
+              <Plus className="h-4 w-4" /> Nuevo Usuario
             </button>
           </div>
+        </div>
+
+        {/* Search bar */}
+        <div className="p-4 sm:p-5 border-b border-gray-100 bg-gray-50">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
             <input
               type="text"
-              placeholder="Buscar cédula, nombre o email..."
+              placeholder="Buscar por cédula, nombre o email..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="w-full pl-10 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full pl-10 pr-3 py-2.5 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#ff9900] text-sm placeholder:text-gray-400"
             />
           </div>
         </div>
@@ -702,86 +725,111 @@ const Users: React.FC = () => {
         )}
 
         {/* Users Table */}
-        <div className="bg-white rounded-lg shadow overflow-hidden">
-          <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50 sticky top-0">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Usuario</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Laboral</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Financiero</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cumpleaños</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha Ingreso</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Creado</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
+        <div className="overflow-hidden">
+          <div className="overflow-x-auto max-h-[560px] overflow-y-auto">
+            <table className="min-w-full">
+              <thead className="bg-gray-50 sticky top-0 z-10">
+                <tr className="border-b border-gray-200">
+                  <th className="px-5 py-3 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">Usuario</th>
+                  <th className="px-5 py-3 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">Laboral</th>
+                  <th className="px-5 py-3 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">Financiero</th>
+                  <th className="px-5 py-3 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">Cumpleaños</th>
+                  <th className="px-5 py-3 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">Ingreso</th>
+                  <th className="px-5 py-3 text-right text-[10px] font-bold text-gray-500 uppercase tracking-wider">Acciones</th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
+              <tbody className="divide-y divide-gray-100">
                 {loading ? (
-                  <tr><td colSpan={7} className="px-6 py-4 text-center">Cargando...</td></tr>
+                  <tr><td colSpan={6} className="px-6 py-10 text-center text-sm text-gray-500">Cargando...</td></tr>
                 ) : filteredUsers.length === 0 ? (
-                  <tr><td colSpan={7} className="px-6 py-4 text-center text-gray-500">No hay usuarios</td></tr>
+                  <tr><td colSpan={6} className="px-6 py-10 text-center text-sm text-gray-500">No hay usuarios</td></tr>
                 ) : (
                   filteredUsers.map(user => {
                     const age = calculateAge(user.extra?.['fechaNacimiento']);
+                    const isAdmin = user.extra?.rol === 'admin';
+                    const initials = (user.nombre || 'U U')
+                      .split(' ')
+                      .map(p => p[0])
+                      .filter(Boolean)
+                      .slice(0, 2)
+                      .join('')
+                      .toUpperCase();
                     return (
-                      <tr key={user.id} className="hover:bg-gray-50 transition-colors">
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm font-medium text-gray-900">{user.nombre || 'Sin nombre'}</div>
-                          <div className="text-sm text-gray-500">Cédula: {user.cedula}</div>
-                          <div className="text-sm text-gray-500">{user.email}</div>
-                          <div className="text-xs text-gray-400 mt-1">
-                            Rol: {user.extra?.rol === 'admin' ? '👑 Admin' : '👤 Usuario'}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="text-sm text-gray-900"><span className="text-gray-400 text-xs">Cargo:</span> {user.extra?.['Cargo Empleado'] || '—'}</div>
-                          <div className="text-sm text-gray-700"><span className="text-gray-400 text-xs">Área:</span> <span className="font-semibold text-[#ff9900]">{user.extra?.posicion || '—'}</span></div>
-                          <div className="text-sm text-gray-500"><span className="text-gray-400 text-xs">Depto:</span> {user.extra?.['Dpto Donde Labora'] || '—'}</div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="text-sm text-gray-900">{user.extra?.Banco || 'Sin banco'}</div>
-                          <div className="text-sm text-gray-500">
-                            {user.extra?.['Tipo Cuenta'] || ''} {user.extra?.['Número Cuenta'] ? `· ${user.extra['Número Cuenta']}` : ''}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          {user.extra?.['fechaNacimiento'] ? (
-                            <div>
-                              <div className="text-sm text-gray-900 flex items-center gap-1">
-                                <Cake className="h-3 w-3 text-pink-500" />
-                                {new Date(user.extra['fechaNacimiento']).toLocaleDateString('es-CO')}
+                      <tr key={user.id} className="hover:bg-[#ff9900]/5 transition-colors">
+                        <td className="px-5 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xs font-bold flex-shrink-0 ${
+                              isAdmin ? 'bg-black text-[#ff9900]' : 'bg-[#ff9900]/10 text-[#ff9900]'
+                            }`}>
+                              {initials}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5">
+                                <p className="text-sm font-bold text-gray-900 truncate">{user.nombre || 'Sin nombre'}</p>
+                                {isAdmin && (
+                                  <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-black text-[#ff9900] uppercase">Admin</span>
+                                )}
                               </div>
-                              {age !== null && (
-                                <div className="text-xs text-gray-500">{age} años</div>
-                              )}
+                              <p className="text-xs text-gray-500">CC {user.cedula}</p>
+                              <p className="text-[11px] text-gray-400 truncate">{user.email}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-5 py-4">
+                          <div className="text-sm text-gray-900 truncate max-w-[180px]">{user.extra?.['Cargo Empleado'] || '—'}</div>
+                          <div className="text-xs mt-0.5">
+                            <span className="font-semibold text-[#ff9900]">{user.extra?.posicion || '—'}</span>
+                            {user.extra?.['Dpto Donde Labora'] && (
+                              <span className="text-gray-400"> · {user.extra['Dpto Donde Labora']}</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-5 py-4">
+                          <div className="text-sm text-gray-900">{user.extra?.Banco || '—'}</div>
+                          <div className="text-xs text-gray-500">
+                            {user.extra?.['Tipo Cuenta'] || ''}
+                            {user.extra?.['Número Cuenta'] ? ` · ${user.extra['Número Cuenta']}` : ''}
+                          </div>
+                        </td>
+                        <td className="px-5 py-4">
+                          {user.extra?.['fechaNacimiento'] ? (
+                            <div className="flex items-center gap-1.5">
+                              <Cake className="h-3.5 w-3.5 text-pink-500 flex-shrink-0" />
+                              <div>
+                                <div className="text-sm text-gray-900">
+                                  {new Date(user.extra['fechaNacimiento']).toLocaleDateString('es-CO')}
+                                </div>
+                                {age !== null && (
+                                  <div className="text-[11px] text-gray-400">{age} años</div>
+                                )}
+                              </div>
                             </div>
                           ) : (
-                            <span className="text-sm text-gray-500">Sin fecha</span>
+                            <span className="text-xs text-gray-400">—</span>
                           )}
                         </td>
-                        <td className="px-6 py-4 text-sm text-gray-500">
-                          {user.extra?.['Fecha Ingreso'] 
+                        <td className="px-5 py-4 text-xs text-gray-600">
+                          {user.extra?.['Fecha Ingreso']
                             ? new Date(user.extra['Fecha Ingreso']).toLocaleDateString('es-CO')
-                            : 'Sin fecha'
-                          }
+                            : '—'}
                         </td>
-                        <td className="px-6 py-4 text-sm text-gray-500">
-                          {user.createdAt.toLocaleDateString('es-CO')}
-                        </td>
-                        <td className="px-6 py-4 text-right text-sm">
-                          <button 
-                            onClick={() => startEdit(user)} 
-                            className="text-blue-600 hover:text-blue-800 mr-3 transition-colors"
-                          >
-                            <Edit className="h-4 w-4" />
-                          </button>
-                          <button 
-                            onClick={() => deleteUser(user.id)} 
-                            className="text-red-600 hover:text-red-800 transition-colors"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
+                        <td className="px-5 py-4 text-right">
+                          <div className="inline-flex items-center gap-1">
+                            <button
+                              onClick={() => startEdit(user)}
+                              className="p-2 rounded-lg text-gray-500 hover:text-[#ff9900] hover:bg-[#ff9900]/10 transition"
+                              title="Editar"
+                            >
+                              <Edit className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => deleteUser(user.id)}
+                              className="p-2 rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 transition"
+                              title="Eliminar"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
