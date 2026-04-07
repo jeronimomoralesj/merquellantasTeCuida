@@ -212,16 +212,15 @@ const getEventStatus = (event: CalendarEvent) => {
       }
 
       try {
-        // Build both queries in parallel — fetch ALL user requests, split client-side
+        // Build both queries in parallel — fetch ALL user requests, sort client-side
+        // (avoid composite index requirement on userId+createdAt)
         const qCes = query(
           collection(db, 'cesantias'),
-          where('userId', '==', user.uid),
-          orderBy('createdAt', 'desc')
+          where('userId', '==', user.uid)
         );
         const qSol = query(
           collection(db, 'solicitudes'),
-          where('userId', '==', user.uid),
-          orderBy('createdAt', 'desc')
+          where('userId', '==', user.uid)
         );
 
         const [cesSnap, solSnap] = await Promise.all([
