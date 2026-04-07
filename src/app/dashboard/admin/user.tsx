@@ -534,8 +534,8 @@ const Users: React.FC = () => {
                     className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="">Seleccione un área</option>
-                    <option value="CONDUCTOR">COMERCIAL</option>
-                    <option value="AUXILIAR">OPERATIVO</option>
+                    <option value="COMERCIAL">COMERCIAL</option>
+                    <option value="OPERATIVO">OPERATIVO</option>
                     <option value="ADMINISTRATIVO">ADMINISTRATIVO</option>
                   </select>
                 </div>
