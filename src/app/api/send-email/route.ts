@@ -11,7 +11,7 @@ const transporter = nodemailer.createTransport({
 
 export async function POST(req: Request) {
   try {
-    const { emails, userName } = await req.json();
+    const { emails, userName, subject, html } = await req.json();
 
     if (!emails || !Array.isArray(emails)) {
       return NextResponse.json(
@@ -23,8 +23,8 @@ export async function POST(req: Request) {
     await transporter.sendMail({
       from: `"Sistema Incapacidades" <${process.env.GMAIL_USER}>`,
       to: emails.join(','),
-      subject: 'Nueva Solicitud de Incapacidad',
-      html: `
+      subject: subject || 'Nueva Solicitud de Incapacidad',
+      html: html || `
         <h2>Nueva solicitud de incapacidad</h2>
         <p>Se ha registrado una nueva solicitud de incapacidad.</p>
         <p><strong>Usuario:</strong> ${userName}</p>

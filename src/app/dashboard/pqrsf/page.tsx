@@ -76,6 +76,34 @@ export default function PqrsfPage() {
       // write to pqrsf collection
       await addDoc(collection(db, 'pqrsf'), payload);
 
+      // send email notification
+      try {
+        const emails = [
+          'marcelagonzalez@merquellantas.com',
+          'saludocupacional@merquellantas.com',
+          'dptodelagente@merquellantas.com',
+        ];
+        const displayName = isAnonymous ? 'Anónimo' : (payload.nombre || 'Usuario');
+        await fetch('/api/send-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            emails,
+            userName: displayName,
+            subject: `Nueva PQRSF: ${type}`,
+            html: `
+              <h2>Nueva PQRSF registrada</h2>
+              <p>Se ha registrado una nueva PQRSF en el sistema.</p>
+              <p><strong>Tipo:</strong> ${type}</p>
+              <p><strong>Usuario:</strong> ${displayName}</p>
+              <p>Por favor ingrese al sistema para revisarla.</p>
+            `,
+          }),
+        });
+      } catch (emailErr) {
+        console.error('Email notification failed:', emailErr);
+      }
+
       setSubmitted(true);
     } catch (err) {
       console.error(err);
