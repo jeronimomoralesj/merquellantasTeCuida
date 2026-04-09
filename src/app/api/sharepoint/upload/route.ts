@@ -57,8 +57,12 @@ async function resolveFolder(
     throw new Error('Missing SHAREPOINT_FOLDER_SHARE_URL env variable');
   }
 
+  // Strip tracking query params (e.g. ?e=...) — these break Graph's
+  // /shares endpoint with a 401 generalException.
+  const cleanUrl = shareUrl.split('?')[0];
+
   // Encode the sharing URL into Graph's share token format: "u!" + base64url
-  const b64 = Buffer.from(shareUrl)
+  const b64 = Buffer.from(cleanUrl)
     .toString('base64')
     .replace(/=+$/, '')
     .replace(/\//g, '_')
