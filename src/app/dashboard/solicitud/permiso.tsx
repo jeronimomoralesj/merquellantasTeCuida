@@ -9,7 +9,6 @@ import {
   Clock
 } from 'lucide-react';
 import { addDoc, collection, doc, getDoc, serverTimestamp } from 'firebase/firestore';
-import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { auth, db } from '../../../firebase';
 
 interface PermisoFormData {
@@ -94,17 +93,29 @@ const PermisoForm = () => {
         return;
       }
 
-      // Upload document only if provided
+      // Upload document to SharePoint (saludocupacional folder) if provided
       let documentName: string | null = null;
       let documentUrl: string | null = null;
       if (formData.document) {
-        const storage = getStorage();
         const file = formData.document as File;
-        const path = `solicitudes/${user.uid}/${Date.now()}_${file.name}`;
-        const fileRef = storageRef(storage, path);
-        const snap = await uploadBytes(fileRef, file);
-        documentUrl = await getDownloadURL(snap.ref);
-        documentName = file.name;
+        const fd = new FormData();
+        fd.append('file', file);
+        fd.append('filename', `${Date.now()}_${user.uid}_${file.name}`);
+
+        const uploadRes = await fetch('/api/sharepoint/upload', {
+          method: 'POST',
+          body: fd,
+        });
+
+        if (!uploadRes.ok) {
+          const errData = await uploadRes.json().catch(() => ({}));
+          console.error('SharePoint upload failed', errData);
+          throw new Error('Error al subir el documento a SharePoint');
+        }
+
+        const uploaded = await uploadRes.json();
+        documentUrl = uploaded.webUrl;
+        documentName = uploaded.name;
       }
 
       const userDoc = await getDoc(doc(db, 'users', user.uid));
