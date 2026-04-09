@@ -63,14 +63,13 @@ export default function PqrsfPage() {
         userId: user.uid
       };
 
-      // if not anonymous, grab their nombre & cedula from users/{uid}
-      if (!isAnonymous) {
-        const uSnap = await getDoc(doc(db, 'users', user.uid));
-        if (uSnap.exists()) {
-          const data = uSnap.data() as UserData;
-          payload.nombre = data.nombre;
-          payload.cedula = data.cedula;
-        }
+      // always store nombre & cedula so admins can identify the user if needed,
+      // even when the submission is marked anonymous in the UI
+      const uSnap = await getDoc(doc(db, 'users', user.uid));
+      if (uSnap.exists()) {
+        const data = uSnap.data() as UserData;
+        payload.nombre = data.nombre;
+        payload.cedula = data.cedula;
       }
 
       // write to pqrsf collection
@@ -83,7 +82,7 @@ export default function PqrsfPage() {
           'saludocupacional@merquellantas.com',
           'dptodelagente@merquellantas.com',
         ];
-        const displayName = isAnonymous ? 'Anónimo' : (payload.nombre || 'Usuario');
+        const displayName = payload.nombre || 'Usuario';
         await fetch('/api/send-email', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -95,7 +94,7 @@ export default function PqrsfPage() {
               <h2>Nueva PQRSF registrada</h2>
               <p>Se ha registrado una nueva PQRSF en el sistema.</p>
               <p><strong>Tipo:</strong> ${type}</p>
-              <p><strong>Usuario:</strong> ${displayName}</p>
+              <p><strong>Usuario:</strong> ${displayName}${isAnonymous ? ' (enviado como anónimo)' : ''}</p>
               <p>Por favor ingrese al sistema para revisarla.</p>
             `,
           }),

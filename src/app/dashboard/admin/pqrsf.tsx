@@ -258,15 +258,17 @@ export default function PQRSFCard() {
                 className="flex items-start p-4 rounded-xl hover:bg-gray-50 transition-colors border border-gray-100 hover:border-blue-200 hover:shadow-sm"
               >
                 <div className={`w-10 h-10 rounded-full overflow-hidden ${getAvatarColor(index)} flex items-center justify-center font-medium flex-shrink-0`}>
-                  {pqrsf.isAnonymous || !pqrsf.nombre ? 
-                    <User className="h-5 w-5" /> : 
-                    getAvatarInitials(pqrsf.nombre)
-                  }
+                  {pqrsf.nombre ? getAvatarInitials(pqrsf.nombre) : <User className="h-5 w-5" />}
                 </div>
                 <div className="flex-1 ml-3 min-w-0">
                   <div className="flex items-center justify-between mb-1">
-                    <h3 className="font-medium text-gray-900 truncate">
-                      {pqrsf.isAnonymous || !pqrsf.nombre ? 'Anónimo' : pqrsf.nombre}
+                    <h3 className="font-medium text-gray-900 truncate flex items-center gap-2">
+                      {pqrsf.nombre || 'Sin nombre'}
+                      {pqrsf.isAnonymous && (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-gray-200 text-gray-700">
+                          Anónimo
+                        </span>
+                      )}
                     </h3>
                     <div className={`px-2 py-1 rounded-full text-xs font-medium ${getTypeColor(pqrsf.type)}`}>
                       {pqrsf.type}
@@ -332,8 +334,13 @@ export default function PQRSFCard() {
                       </div>
                       <div className="flex-1 ml-3 min-w-0">
                         <div className="flex items-center justify-between mb-1">
-                          <h4 className="font-medium text-gray-900 truncate">
-                            {pqrsf.isAnonymous || !pqrsf.nombre ? 'Anónimo' : pqrsf.nombre}
+                          <h4 className="font-medium text-gray-900 truncate flex items-center gap-2">
+                            {pqrsf.nombre || 'Sin nombre'}
+                            {pqrsf.isAnonymous && (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-gray-200 text-gray-700">
+                                Anónimo
+                              </span>
+                            )}
                           </h4>
                           <div className={`px-2 py-1 rounded-full text-xs font-medium ${getTypeColor(pqrsf.type)}`}>
                             {pqrsf.type}
