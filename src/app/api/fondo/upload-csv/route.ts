@@ -124,6 +124,16 @@ export async function POST(req: NextRequest) {
       (h) => h === 'ACUMULADO' || h === 'TOTAL' || h === 'SALDO'
     );
     const nombreIdx = headers.findIndex((h) => h === 'NOMBRE' || h === 'NOMBRES');
+    const direccionIdx = headers.findIndex((h) => h === 'DIRECCION');
+    const ciudadIdx = headers.findIndex((h) => h === 'CIUDAD');
+    const departamentoUbicIdx = headers.findIndex((h) => h === 'DEPARTAMENTO');
+    const barrioIdx = headers.findIndex((h) => h === 'BARRIO');
+    const telefonoIdx = headers.findIndex((h) => h === 'TELEFONO');
+    const movilIdx = headers.findIndex((h) => h === 'MOVIL' || h === 'CELULAR');
+    const fechaAfilIdx = headers.findIndex((h) => h === 'FECHA AFILIACION' || h === 'FECHA AFIL');
+    const centroCostoIdx = headers.findIndex((h) => h === 'CENTRO DE COSTO' || h === 'CENTRO COSTO');
+    const divisionIdx = headers.findIndex((h) => h === 'DIVISION');
+    const pagaduriaIdx = headers.findIndex((h) => h === 'PAGADURIA');
 
     if (cedulaIdx === -1) {
       return NextResponse.json(
@@ -163,12 +173,53 @@ export async function POST(req: NextRequest) {
       const acumulado = parseAmount(cols[acumuladoIdx]);
       const nombre = nombreIdx !== -1 ? cols[nombreIdx] : '';
 
+      // Extract optional user fields from CSV
+      const direccion = direccionIdx !== -1 ? cols[direccionIdx]?.trim() : '';
+      const ciudad = ciudadIdx !== -1 ? cols[ciudadIdx]?.trim() : '';
+      const departamentoUbic = departamentoUbicIdx !== -1 ? cols[departamentoUbicIdx]?.trim() : '';
+      const barrio = barrioIdx !== -1 ? cols[barrioIdx]?.trim() : '';
+      const telefono = telefonoIdx !== -1 ? cols[telefonoIdx]?.trim() : '';
+      const movil = movilIdx !== -1 ? cols[movilIdx]?.trim() : '';
+      const centroCosto = centroCostoIdx !== -1 ? cols[centroCostoIdx]?.trim() : '';
+      const division = divisionIdx !== -1 ? cols[divisionIdx]?.trim() : '';
+      const pagaduria = pagaduriaIdx !== -1 ? cols[pagaduriaIdx]?.trim() : '';
+
+      // Parse fecha_afiliacion
+      let fechaAfiliacion: Date | null = null;
+      if (fechaAfilIdx !== -1 && cols[fechaAfilIdx]) {
+        const datePart = cols[fechaAfilIdx].split(' ')[0]; // strip time
+        // Try DD/MM/YYYY first (Colombian format), then ISO
+        const ddmmyyyy = datePart.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+        if (ddmmyyyy) {
+          fechaAfiliacion = new Date(parseInt(ddmmyyyy[3]), parseInt(ddmmyyyy[2]) - 1, parseInt(ddmmyyyy[1]));
+        } else {
+          const d = new Date(datePart);
+          if (!isNaN(d.getTime())) fechaAfiliacion = d;
+        }
+      }
+
       // Find user by cedula
       const user = await usersCol.findOne({ cedula });
       if (!user) {
         noEncontrados++;
         erroresList.push({ cedula, razon: `Usuario no encontrado${nombre ? ` (${nombre})` : ''}` });
         continue;
+      }
+
+      // Update user record with address/contact info (only fields that have values)
+      const userUpdate: Record<string, unknown> = {};
+      if (direccion) userUpdate.direccion = direccion;
+      if (ciudad) userUpdate.ciudad = ciudad;
+      if (departamentoUbic) userUpdate.departamento_ubicacion = departamentoUbic;
+      if (barrio) userUpdate.barrio = barrio;
+      if (telefono) userUpdate.telefono = telefono;
+      if (movil) userUpdate.movil = movil;
+      if (centroCosto) userUpdate.centro_costo = centroCosto;
+      if (division) userUpdate.division = division;
+      if (pagaduria) userUpdate.pagaduria = pagaduria;
+
+      if (Object.keys(userUpdate).length > 0) {
+        await usersCol.updateOne({ _id: user._id }, { $set: userUpdate });
       }
 
       const userId = user._id.toString();
@@ -179,21 +230,18 @@ export async function POST(req: NextRequest) {
       const existing = await membersCol.findOne({ user_id: userId });
 
       if (existing) {
-        await membersCol.updateOne(
-          { user_id: userId },
-          {
-            $set: {
-              saldo_permanente: permanente,
-              saldo_social: social,
-              updated_at: new Date(),
-            },
-          }
-        );
+        const updateDoc: Record<string, unknown> = {
+          saldo_permanente: permanente,
+          saldo_social: social,
+          updated_at: new Date(),
+        };
+        if (fechaAfiliacion) updateDoc.fecha_afiliacion = fechaAfiliacion;
+        await membersCol.updateOne({ user_id: userId }, { $set: updateDoc });
         actualizados++;
       } else {
         await membersCol.insertOne({
           user_id: userId,
-          fecha_afiliacion: new Date(),
+          fecha_afiliacion: fechaAfiliacion || new Date(),
           activo: true,
           frecuencia: 'quincenal',
           monto_aporte: 0,

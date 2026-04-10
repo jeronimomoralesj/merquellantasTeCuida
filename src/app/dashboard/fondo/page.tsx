@@ -68,27 +68,31 @@ interface Saldos {
 }
 
 interface AporteHistorial {
+  _id?: string;
   periodo: string;
-  aporte: number;
-  permanente: number;
-  social: number;
-  fecha: string;
+  monto_total: number;
+  monto_permanente: number;
+  monto_social: number;
+  fecha_ejecucion: string;
 }
 
 interface ActividadHistorial {
-  id: string;
-  tipo: "deposito" | "retiro";
+  _id?: string;
+  tipo: "aporte" | "retiro";
   monto: number;
-  descripcion: string;
+  descripcion?: string;
   fecha: string;
 }
 
 interface Credito {
-  id: string;
-  monto_total: number;
-  cuota_esperada: number;
-  pagos: { fecha: string; monto: number }[];
+  _id?: string;
+  credito_id?: string;
+  valor_prestamo: number;
+  saldo_total: number;
+  cuotas_pagadas: number;
+  cuotas_restantes: number;
   estado: string;
+  pagos?: { numero_cuota: number; fecha_pago: string; monto_total: number; flagged?: boolean }[];
 }
 
 interface SearchUser {
@@ -745,17 +749,21 @@ function BuscarAfiliadoTab() {
   const selectUser = async (user: SearchUser) => {
     setSelected(user);
     setLoadingProfile(true);
+    setSaldos(null);
+    setAportes([]);
+    setActividades([]);
+    setCreditos([]);
     try {
-      const [sRes, aRes, actRes, cRes] = await Promise.all([
-        fetch(`/api/fondo/saldos?user_id=${user.id}`),
-        fetch(`/api/fondo/aportes?user_id=${user.id}`),
-        fetch(`/api/fondo/actividades?user_id=${user.id}`),
-        fetch(`/api/fondo/creditos?user_id=${user.id}`),
-      ]);
-      if (sRes.ok) setSaldos(await sRes.json());
-      if (aRes.ok) setAportes(await aRes.json());
-      if (actRes.ok) setActividades(await actRes.json());
-      if (cRes.ok) setCreditos(await cRes.json());
+      // The /api/fondo/saldos endpoint returns ALL data in one response:
+      // { member, saldos, retiro, aportes, actividad, cartera }
+      const sRes = await fetch(`/api/fondo/saldos?user_id=${user.id}`);
+      if (sRes.ok) {
+        const data = await sRes.json();
+        if (data.saldos) setSaldos(data.saldos);
+        if (Array.isArray(data.aportes)) setAportes(data.aportes);
+        if (Array.isArray(data.actividad)) setActividades(data.actividad);
+        if (Array.isArray(data.cartera)) setCreditos(data.cartera);
+      }
     } finally {
       setLoadingProfile(false);
     }
@@ -912,16 +920,16 @@ function BuscarAfiliadoTab() {
                               {a.periodo}
                             </td>
                             <td className="px-3 py-2 text-right text-gray-600">
-                              {fmt(a.aporte)}
+                              {fmt(a.monto_total || 0)}
                             </td>
                             <td className="px-3 py-2 text-right text-gray-600">
-                              {fmt(a.permanente)}
+                              {fmt(a.monto_permanente || 0)}
                             </td>
                             <td className="px-3 py-2 text-right text-gray-600">
-                              {fmt(a.social)}
+                              {fmt(a.monto_social || 0)}
                             </td>
                             <td className="px-3 py-2 text-gray-500 text-xs">
-                              {new Date(a.fecha).toLocaleDateString("es-CO")}
+                              {a.fecha_ejecucion ? new Date(a.fecha_ejecucion).toLocaleDateString("es-CO") : "—"}
                             </td>
                           </tr>
                         ))}
@@ -954,32 +962,30 @@ function BuscarAfiliadoTab() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
-                        {actividades.map((a) => (
+                        {actividades.map((a, i) => (
                           <tr
-                            key={a.id}
+                            key={a._id || i}
                             className="hover:bg-gray-50 transition-colors"
                           >
                             <td className="px-3 py-2">
                               <span
                                 className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${
-                                  a.tipo === "deposito"
+                                  a.tipo === "aporte"
                                     ? "bg-green-100 text-green-700"
                                     : "bg-red-100 text-red-700"
                                 }`}
                               >
-                                {a.tipo === "deposito"
-                                  ? "Deposito"
-                                  : "Retiro"}
+                                {a.tipo === "aporte" ? "Aporte" : "Retiro"}
                               </span>
                             </td>
                             <td className="px-3 py-2 text-right font-mono text-gray-700">
-                              {fmt(a.monto)}
+                              {fmt(a.monto || 0)}
                             </td>
                             <td className="px-3 py-2 text-gray-600">
-                              {a.descripcion}
+                              {a.descripcion || "—"}
                             </td>
                             <td className="px-3 py-2 text-gray-500 text-xs">
-                              {new Date(a.fecha).toLocaleDateString("es-CO")}
+                              {a.fecha ? new Date(a.fecha).toLocaleDateString("es-CO") : "—"}
                             </td>
                           </tr>
                         ))}
@@ -1002,19 +1008,18 @@ function BuscarAfiliadoTab() {
               >
                 {creditos.length > 0 ? (
                   <div className="space-y-4">
-                    {creditos.map((cr) => (
+                    {creditos.map((cr, idx) => (
                       <div
-                        key={cr.id}
+                        key={cr._id || idx}
                         className="rounded-xl border border-gray-200 overflow-hidden"
                       >
                         <div className="px-4 py-3 bg-gray-50 flex items-center justify-between">
                           <div>
                             <span className="font-semibold text-gray-900 text-sm">
-                              Credito {cr.id}
+                              Crédito {cr.credito_id || cr._id}
                             </span>
                             <span className="ml-3 text-xs text-gray-500">
-                              Total: {fmt(cr.monto_total)} | Cuota esperada:{" "}
-                              {fmt(cr.cuota_esperada)}
+                              Total: {fmt(cr.valor_prestamo || 0)} | Saldo: {fmt(cr.saldo_total || 0)} | Cuotas: {cr.cuotas_pagadas || 0}/{(cr.cuotas_pagadas || 0) + (cr.cuotas_restantes || 0)}
                             </span>
                           </div>
                           <span
@@ -1030,47 +1035,40 @@ function BuscarAfiliadoTab() {
                         <table className="w-full text-sm">
                           <thead>
                             <tr className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                              <th className="px-4 py-2">Cuota</th>
                               <th className="px-4 py-2">Fecha</th>
                               <th className="px-4 py-2 text-right">Monto</th>
                               <th className="px-4 py-2">Estado</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-gray-100">
-                            {(cr.pagos ?? []).map((p, i) => {
-                              const differs =
-                                Math.abs(p.monto - cr.cuota_esperada) > 1;
-                              return (
-                                <tr
-                                  key={i}
-                                  className={`transition-colors ${
-                                    differs
-                                      ? "bg-yellow-50"
-                                      : "hover:bg-gray-50"
-                                  }`}
-                                >
-                                  <td className="px-4 py-2 text-gray-600">
-                                    {new Date(p.fecha).toLocaleDateString(
-                                      "es-CO"
-                                    )}
-                                  </td>
-                                  <td className="px-4 py-2 text-right font-mono text-gray-700">
-                                    {fmt(p.monto)}
-                                  </td>
-                                  <td className="px-4 py-2">
-                                    {differs ? (
-                                      <span className="inline-flex items-center gap-1 text-xs text-yellow-700 font-semibold">
-                                        <AlertCircle size={14} /> Difiere de la
-                                        cuota
-                                      </span>
-                                    ) : (
-                                      <span className="text-xs text-green-600 font-semibold">
-                                        OK
-                                      </span>
-                                    )}
-                                  </td>
-                                </tr>
-                              );
-                            })}
+                            {(cr.pagos ?? []).map((p, i) => (
+                              <tr
+                                key={i}
+                                className={`transition-colors ${
+                                  p.flagged ? "bg-yellow-50" : "hover:bg-gray-50"
+                                }`}
+                              >
+                                <td className="px-4 py-2 text-gray-700 font-medium">
+                                  #{p.numero_cuota}
+                                </td>
+                                <td className="px-4 py-2 text-gray-600">
+                                  {p.fecha_pago ? new Date(p.fecha_pago).toLocaleDateString("es-CO") : "—"}
+                                </td>
+                                <td className="px-4 py-2 text-right font-mono text-gray-700">
+                                  {fmt(p.monto_total || 0)}
+                                </td>
+                                <td className="px-4 py-2">
+                                  {p.flagged ? (
+                                    <span className="inline-flex items-center gap-1 text-xs text-yellow-700 font-semibold">
+                                      <AlertCircle size={14} /> Difiere
+                                    </span>
+                                  ) : (
+                                    <span className="text-xs text-green-600 font-semibold">OK</span>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
                           </tbody>
                         </table>
                       </div>
