@@ -650,10 +650,38 @@ export default function FondoUserView() {
       </div>
 
       {/* Solicitar Crédito Modal */}
-      {showCreditoForm && (
+      {showCreditoForm && (() => {
+        const valor = Number(creditoValor) || 0;
+        const cuotas = Math.max(1, Math.min(60, Number(creditoCuotas) || 0));
+        const tasa = cuotas <= 12 ? 1.0 : cuotas <= 24 ? 1.2 : 1.3;
+        const interesPorCuota = Math.round(valor * (tasa / 100) * 100) / 100;
+        const capitalPorCuota = cuotas > 0 ? Math.round((valor / cuotas) * 100) / 100 : 0;
+        const cuotaMensual = capitalPorCuota + interesPorCuota;
+        const totalInteres = interesPorCuota * cuotas;
+        const totalAPagar = valor + totalInteres;
+        const showSchedule = valor > 0 && cuotas > 0;
+
+        // Build payment schedule
+        const today = new Date();
+        const schedule = showSchedule
+          ? Array.from({ length: cuotas }, (_, i) => {
+              const fecha = new Date(today.getFullYear(), today.getMonth() + i + 1, today.getDate());
+              const saldoRestante = Math.max(0, totalAPagar - cuotaMensual * (i + 1));
+              return {
+                num: i + 1,
+                fecha,
+                capital: capitalPorCuota,
+                interes: interesPorCuota,
+                cuota: cuotaMensual,
+                saldo: saldoRestante,
+              };
+            })
+          : [];
+
+        return (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
-            <div className="p-6 border-b border-gray-100 flex items-center justify-between">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="p-6 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
               <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
                 <CreditCard className="w-5 h-5 text-[#ff9900]" />
                 Solicitar Crédito
@@ -665,34 +693,91 @@ export default function FondoUserView() {
                 <X className="w-5 h-5 text-gray-500" />
               </button>
             </div>
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Valor del préstamo (COP)</label>
-                <input
-                  type="number"
-                  min={1}
-                  value={creditoValor}
-                  onChange={(e) => setCreditoValor(e.target.value)}
-                  className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff9900]/40 focus:border-[#ff9900]"
-                  placeholder="Ej: 5000000"
-                />
+            <div className="p-6 space-y-4 overflow-y-auto flex-1">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Valor del préstamo (COP)</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={creditoValor}
+                    onChange={(e) => setCreditoValor(e.target.value)}
+                    className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff9900]/40 focus:border-[#ff9900]"
+                    placeholder="Ej: 5000000"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Número de cuotas (1-60)</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={60}
+                    value={creditoCuotas}
+                    onChange={(e) => setCreditoCuotas(e.target.value)}
+                    className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff9900]/40 focus:border-[#ff9900]"
+                    placeholder="Ej: 15"
+                  />
+                  <p className="text-[10px] text-gray-500 mt-1">
+                    ≤12 cuotas: 1% mensual · ≤24: 1.2% · &gt;24: 1.3%
+                  </p>
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Número de cuotas</label>
-                <select
-                  value={creditoCuotas}
-                  onChange={(e) => setCreditoCuotas(e.target.value)}
-                  className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff9900]/40 focus:border-[#ff9900] bg-white"
-                >
-                  <option value="6">6 cuotas — 1% interés mensual</option>
-                  <option value="12">12 cuotas — 1% interés mensual</option>
-                  <option value="18">18 cuotas — 1.2% interés mensual</option>
-                  <option value="24">24 cuotas — 1.2% interés mensual</option>
-                  <option value="36">36 cuotas — 1.3% interés mensual</option>
-                  <option value="48">48 cuotas — 1.3% interés mensual</option>
-                  <option value="60">60 cuotas — 1.3% interés mensual</option>
-                </select>
-              </div>
+
+              {/* Summary */}
+              {showSchedule && (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 rounded-xl bg-orange-50 border border-orange-100">
+                  <div>
+                    <p className="text-[10px] font-semibold text-orange-700 uppercase">Tasa</p>
+                    <p className="text-sm font-bold text-gray-900">{tasa}% mensual</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-semibold text-orange-700 uppercase">Cuota mensual</p>
+                    <p className="text-sm font-bold text-gray-900">{formatCurrency(cuotaMensual)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-semibold text-orange-700 uppercase">Total intereses</p>
+                    <p className="text-sm font-bold text-gray-900">{formatCurrency(totalInteres)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-semibold text-orange-700 uppercase">Total a pagar</p>
+                    <p className="text-sm font-bold text-gray-900">{formatCurrency(totalAPagar)}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Payment schedule */}
+              {showSchedule && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Tabla de pagos proyectada</label>
+                  <div className="border border-gray-200 rounded-xl overflow-hidden max-h-64 overflow-y-auto">
+                    <table className="w-full text-xs">
+                      <thead className="bg-gray-50 sticky top-0">
+                        <tr className="text-left text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
+                          <th className="px-3 py-2">#</th>
+                          <th className="px-3 py-2">Fecha aprox.</th>
+                          <th className="px-3 py-2 text-right">Capital</th>
+                          <th className="px-3 py-2 text-right">Interés</th>
+                          <th className="px-3 py-2 text-right">Cuota total</th>
+                          <th className="px-3 py-2 text-right">Saldo restante</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {schedule.map((row) => (
+                          <tr key={row.num} className="hover:bg-gray-50">
+                            <td className="px-3 py-1.5 font-medium text-gray-700">{row.num}</td>
+                            <td className="px-3 py-1.5 text-gray-600">{row.fecha.toLocaleDateString("es-CO", { day: "numeric", month: "short", year: "numeric" })}</td>
+                            <td className="px-3 py-1.5 text-right font-mono text-gray-700">{formatCurrency(row.capital)}</td>
+                            <td className="px-3 py-1.5 text-right font-mono text-gray-700">{formatCurrency(row.interes)}</td>
+                            <td className="px-3 py-1.5 text-right font-mono font-semibold text-gray-900">{formatCurrency(row.cuota)}</td>
+                            <td className="px-3 py-1.5 text-right font-mono text-gray-500">{formatCurrency(row.saldo)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Motivo (opcional)</label>
                 <textarea
@@ -753,7 +838,8 @@ export default function FondoUserView() {
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* Solicitar Retiro Modal */}
       {showRetiroForm && (
