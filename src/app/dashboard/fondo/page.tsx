@@ -139,13 +139,14 @@ const estadoBadge = (estado: string) => {
 /*  Tabs                                                               */
 /* ------------------------------------------------------------------ */
 
-type TabId = "ciclo" | "historial" | "buscar" | "nuevo";
+type TabId = "ciclo" | "historial" | "buscar" | "nuevo" | "csv";
 
 const tabs: { id: TabId; label: string; icon: React.ReactNode }[] = [
   { id: "ciclo", label: "Ciclo Actual", icon: <DollarSign size={16} /> },
   { id: "historial", label: "Historial Ciclos", icon: <History size={16} /> },
   { id: "buscar", label: "Buscar Afiliado", icon: <Search size={16} /> },
   { id: "nuevo", label: "Nuevo Afiliado", icon: <UserPlus size={16} /> },
+  { id: "csv", label: "Cargar CSV", icon: <Wallet size={16} /> },
 ];
 
 /* ================================================================== */
@@ -263,6 +264,7 @@ export default function FondoPage() {
           {activeTab === "historial" && <HistorialTab />}
           {activeTab === "buscar" && <BuscarAfiliadoTab />}
           {activeTab === "nuevo" && <NuevoAfiliadoTab />}
+          {activeTab === "csv" && <CargarCsvTab />}
         </div>
       </div>
     </div>
@@ -1335,6 +1337,181 @@ function CollapsibleSection({
         )}
       </button>
       {open && <div className="px-5 pb-5">{children}</div>}
+    </div>
+  );
+}
+
+/* ================================================================== */
+/*  CARGAR CSV TAB                                                     */
+/* ================================================================== */
+
+interface CsvUploadResult {
+  total_procesados: number;
+  actualizados: number;
+  creados: number;
+  no_encontrados: number;
+  errores: { cedula: string; razon: string }[];
+}
+
+function CargarCsvTab() {
+  const [file, setFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [result, setResult] = useState<CsvUploadResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (f) {
+      setFile(f);
+      setResult(null);
+      setError(null);
+    }
+  };
+
+  const handleUpload = async () => {
+    if (!file) return;
+    setUploading(true);
+    setError(null);
+    setResult(null);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await fetch("/api/fondo/upload-csv", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "Error al procesar el archivo");
+      } else {
+        setResult(data);
+      }
+    } catch {
+      setError("Error de conexión");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+      <div className="mb-6">
+        <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+          <Wallet className="h-5 w-5 text-[#ff9900]" />
+          Cargar Saldos desde CSV
+        </h2>
+        <p className="text-sm text-gray-500 mt-1">
+          Sube un archivo CSV con los saldos acumulados de los afiliados. Se conectará por <strong>CEDULA</strong> y se actualizará el campo <strong>ACUMULADO</strong> (90% permanente, 10% social).
+        </p>
+      </div>
+
+      {/* Format info */}
+      <div className="mb-5 bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm">
+        <p className="font-semibold text-blue-900 mb-2 flex items-center gap-1.5">
+          <AlertCircle className="h-4 w-4" />
+          Formato del archivo
+        </p>
+        <ul className="text-blue-800 space-y-1 list-disc list-inside text-xs">
+          <li>Separador: <code className="bg-white px-1.5 py-0.5 rounded">;</code> (punto y coma)</li>
+          <li>Codificación: UTF-8</li>
+          <li>Columnas requeridas: <code className="bg-white px-1.5 py-0.5 rounded">CEDULA</code>, <code className="bg-white px-1.5 py-0.5 rounded">ACUMULADO</code></li>
+          <li>Otras columnas son opcionales (NOMBRE, AHORROS, CARTERA, etc.) y serán ignoradas por ahora</li>
+          <li>Si el usuario ya está afiliado, se actualizan sus saldos. Si no, se crea su afiliación.</li>
+        </ul>
+      </div>
+
+      {/* Upload area */}
+      <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-[#ff9900] transition-colors">
+        <input
+          type="file"
+          id="csv-file"
+          accept=".csv,text/csv"
+          onChange={handleFileChange}
+          className="hidden"
+        />
+        <label htmlFor="csv-file" className="cursor-pointer flex flex-col items-center gap-3">
+          <div className="w-16 h-16 bg-[#ff9900]/10 rounded-2xl flex items-center justify-center">
+            <Wallet className="h-8 w-8 text-[#ff9900]" />
+          </div>
+          <div>
+            <p className="font-bold text-gray-900">{file ? file.name : "Selecciona un archivo CSV"}</p>
+            <p className="text-xs text-gray-500 mt-1">{file ? `${(file.size / 1024).toFixed(1)} KB` : "Click para seleccionar"}</p>
+          </div>
+        </label>
+      </div>
+
+      {/* Upload button */}
+      <button
+        onClick={handleUpload}
+        disabled={!file || uploading}
+        className="mt-5 w-full inline-flex items-center justify-center gap-2 px-6 py-3 bg-[#ff9900] text-black font-bold rounded-xl hover:bg-[#ffae33] active:scale-[0.99] transition disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-[#ff9900]/30"
+      >
+        {uploading ? (
+          <>
+            <div className="animate-spin h-5 w-5 border-2 border-black border-t-transparent rounded-full" />
+            Procesando...
+          </>
+        ) : (
+          <>
+            <Send className="h-5 w-5" />
+            Cargar y Procesar
+          </>
+        )}
+      </button>
+
+      {/* Error */}
+      {error && (
+        <div className="mt-5 p-4 bg-red-50 border border-red-200 rounded-xl flex items-start gap-3">
+          <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
+          <p className="text-red-700 text-sm">{error}</p>
+        </div>
+      )}
+
+      {/* Results */}
+      {result && (
+        <div className="mt-5 space-y-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-center">
+              <p className="text-xs text-blue-700 font-semibold uppercase">Procesados</p>
+              <p className="text-2xl font-bold text-blue-900 mt-1">{result.total_procesados}</p>
+            </div>
+            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-center">
+              <p className="text-xs text-emerald-700 font-semibold uppercase">Actualizados</p>
+              <p className="text-2xl font-bold text-emerald-900 mt-1">{result.actualizados}</p>
+            </div>
+            <div className="bg-[#ff9900]/10 border border-[#ff9900]/30 rounded-xl p-4 text-center">
+              <p className="text-xs text-[#ff9900] font-semibold uppercase">Creados</p>
+              <p className="text-2xl font-bold text-orange-900 mt-1">{result.creados}</p>
+            </div>
+            <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-center">
+              <p className="text-xs text-red-700 font-semibold uppercase">No encontrados</p>
+              <p className="text-2xl font-bold text-red-900 mt-1">{result.no_encontrados}</p>
+            </div>
+          </div>
+
+          {result.errores && result.errores.length > 0 && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+              <p className="font-semibold text-amber-900 mb-2 flex items-center gap-1.5">
+                <AlertCircle className="h-4 w-4" />
+                Cédulas no encontradas {result.errores.length >= 50 && "(primeras 50)"}
+              </p>
+              <div className="max-h-60 overflow-y-auto bg-white rounded-lg border border-amber-200">
+                <ul className="text-xs divide-y divide-amber-100">
+                  {result.errores.map((e, i) => (
+                    <li key={i} className="px-3 py-2">
+                      <span className="font-mono font-bold text-gray-700">{e.cedula}</span>
+                      <span className="text-gray-500 ml-2">— {e.razon}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
