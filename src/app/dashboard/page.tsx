@@ -9,7 +9,8 @@ import {
   PersonStanding,
   ChevronLeft,
   LayoutDashboard,
-  UserCircle2
+  UserCircle2,
+  X,
 } from 'lucide-react';
 import Solicitudes from "./components/solicitudes";
 import AdminPage from './admin/page';
@@ -95,6 +96,7 @@ const [currentEventIndex, setCurrentEventIndex] = useState(0);
   // My PQRSF state
   const [myPqrsf, setMyPqrsf] = useState<MyPqrsf[]>([]);
   const [loadingMyPqrsf, setLoadingMyPqrsf] = useState(true);
+  const [selectedPqrsf, setSelectedPqrsf] = useState<MyPqrsf | null>(null);
 
   // Profile state
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -1309,10 +1311,13 @@ useEffect(() => {
                           'Sugerencia': 'bg-green-100 text-green-700',
                           'Felicitación': 'bg-purple-100 text-purple-700',
                         };
+                        const messageIsLong = (p.message?.length || 0) > 120;
+                        const responseIsLong = (p.respuesta?.length || 0) > 180;
                         return (
-                          <div
+                          <button
                             key={p._id}
-                            className={`border border-gray-100 border-l-4 ${accentClass} rounded-xl p-4 hover:shadow-sm transition-all`}
+                            onClick={() => setSelectedPqrsf(p)}
+                            className={`text-left w-full border border-gray-100 border-l-4 ${accentClass} rounded-xl p-4 hover:shadow-md hover:bg-gray-50/50 transition-all`}
                           >
                             <div className="flex justify-between items-start gap-2 mb-1">
                               <div className="flex items-center gap-2 flex-wrap">
@@ -1343,16 +1348,23 @@ useEffect(() => {
                             <p className="text-sm text-gray-700 mt-2 line-clamp-2">{p.message}</p>
                             {hasResponse && p.respuesta && (
                               <div className="mt-3 p-3 bg-emerald-50 rounded-lg border border-emerald-100">
-                                <div className="flex items-center gap-1.5 mb-1">
-                                  <CheckCircle className="h-3 w-3 text-emerald-600" />
-                                  <span className="text-[10px] font-semibold text-emerald-800 uppercase tracking-wider">
-                                    Respuesta
-                                  </span>
+                                <div className="flex items-center justify-between gap-1.5 mb-1">
+                                  <div className="flex items-center gap-1.5">
+                                    <CheckCircle className="h-3 w-3 text-emerald-600" />
+                                    <span className="text-[10px] font-semibold text-emerald-800 uppercase tracking-wider">
+                                      Respuesta
+                                    </span>
+                                  </div>
                                 </div>
                                 <p className="text-xs text-gray-800 line-clamp-3">{p.respuesta}</p>
                               </div>
                             )}
-                          </div>
+                            {(messageIsLong || responseIsLong) && (
+                              <p className="mt-2 text-[10px] font-semibold text-amber-600 hover:text-amber-700 inline-flex items-center gap-1">
+                                Ver completo →
+                              </p>
+                            )}
+                          </button>
                         );
                       })
                     )}
@@ -1365,6 +1377,102 @@ useEffect(() => {
         </div>
       </main>
         )}
+
+        {/* Mis PQRSF detail modal */}
+        {selectedPqrsf && (() => {
+          const sp = selectedPqrsf;
+          const dt = new Date(sp.created_at);
+          const respDt = sp.respondido_at ? new Date(sp.respondido_at) : null;
+          const typeColors: Record<string, string> = {
+            'Pregunta': 'bg-blue-100 text-blue-700',
+            'Queja': 'bg-red-100 text-red-700',
+            'Reclamo': 'bg-orange-100 text-orange-700',
+            'Sugerencia': 'bg-green-100 text-green-700',
+            'Felicitación': 'bg-purple-100 text-purple-700',
+          };
+          return (
+            <div
+              className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-4 backdrop-blur-sm"
+              onClick={() => setSelectedPqrsf(null)}
+            >
+              <div
+                onClick={(e) => e.stopPropagation()}
+                className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col"
+              >
+                <div className="p-6 border-b border-gray-100 flex items-start justify-between gap-4 flex-shrink-0">
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap mb-2">
+                      <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${typeColors[sp.type] || 'bg-gray-100 text-gray-700'}`}>
+                        {sp.type}
+                      </span>
+                      {sp.is_anonymous && (
+                        <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-200">
+                          Enviado como anónimo
+                        </span>
+                      )}
+                      {sp.respuesta ? (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700 border border-emerald-200">
+                          <CheckCircle className="h-3 w-3" /> Respondido
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-600 border border-gray-200">
+                          <Clock className="h-3 w-3" /> En espera
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-500">
+                      Enviada el {dt.toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setSelectedPqrsf(null)}
+                    className="p-2 hover:bg-gray-100 rounded-full transition-colors flex-shrink-0"
+                    aria-label="Cerrar"
+                  >
+                    <X className="h-5 w-5 text-gray-500" />
+                  </button>
+                </div>
+
+                <div className="p-6 overflow-y-auto flex-1 space-y-5">
+                  <div>
+                    <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
+                      Tu mensaje
+                    </label>
+                    <div className="mt-2 p-4 bg-gray-50 rounded-xl border border-gray-200 text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
+                      {sp.message}
+                    </div>
+                  </div>
+
+                  {sp.respuesta && (
+                    <div>
+                      <label className="text-[10px] font-semibold text-emerald-700 uppercase tracking-wider flex items-center gap-1">
+                        <CheckCircle className="h-3 w-3" />
+                        Respuesta del Administrador
+                        {respDt && (
+                          <span className="text-gray-400 normal-case font-normal ml-2">
+                            ({respDt.toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })})
+                          </span>
+                        )}
+                      </label>
+                      <div className="mt-2 p-4 bg-emerald-50 rounded-xl border border-emerald-200 text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
+                        {sp.respuesta}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="p-4 border-t border-gray-100 flex justify-end flex-shrink-0">
+                  <button
+                    onClick={() => setSelectedPqrsf(null)}
+                    className="px-5 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium text-sm transition"
+                  >
+                    Cerrar
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
     </div>
   );
 };
