@@ -38,7 +38,7 @@ export default function PqrsfPage() {
     if (!session) return;
     setLoadingMy(true);
     try {
-      const res = await fetch('/api/pqrsf?limit=100');
+      const res = await fetch('/api/pqrsf?limit=100&mine=true');
       if (res.ok) {
         const data: MyPQRSF[] = await res.json();
         setMyPqrsf(data);

@@ -3,7 +3,9 @@ import { getDb } from '../../../lib/db';
 import { ObjectId } from 'mongodb';
 import { auth } from '../../../lib/auth';
 
-// GET /api/pqrsf — list PQRSFs (admin sees all, user sees own)
+// GET /api/pqrsf — list PQRSFs
+//   - admin: returns all by default; pass ?mine=true to only see their own
+//   - user/fondo: always returns only their own
 export async function GET(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
@@ -11,15 +13,17 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const limitParam = searchParams.get('limit');
   const limit = Math.max(1, Math.min(parseInt(limitParam!) || 50, 500));
+  const mineOnly = searchParams.get('mine') === 'true';
 
   const db = await getDb();
 
-  if (session.user.rol === 'admin') {
+  // Admin sees all unless mine=true
+  if (session.user.rol === 'admin' && !mineOnly) {
     const results = await db.collection('pqrsf').find({}).sort({ created_at: -1 }).limit(limit).toArray();
     return NextResponse.json(results);
   }
 
-  // Regular users see only their own PQRSFs
+  // Everyone else (or admin with mine=true) sees only their own PQRSFs
   const results = await db.collection('pqrsf')
     .find({ user_id: session.user.id })
     .sort({ created_at: -1 })

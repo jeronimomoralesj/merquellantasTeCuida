@@ -260,7 +260,9 @@ const getEventStatus = (event: CalendarEvent) => {
     async function fetchMyPqrsf() {
       setLoadingMyPqrsf(true);
       try {
-        const res = await fetch('/api/pqrsf?limit=100');
+        // mine=true forces server to filter to the logged-in user only,
+        // even if they're an admin (so admins don't see all PQRSFs here)
+        const res = await fetch('/api/pqrsf?limit=100&mine=true');
         if (!mounted) return;
         if (res.ok) {
           const data = await res.json();
