@@ -48,15 +48,22 @@ interface CycleRow {
   social: number;
   actividad: number;
   credito_pago: number;
-  cartera_id: string;
+}
+
+interface CambioRow {
+  user_id: string;
+  nombre: string;
+  cambios: Record<string, { antes: unknown; despues: unknown }>;
 }
 
 interface Ciclo {
-  id: string;
+  _id?: string;
+  id?: string;
   periodo: string;
   estado: "enviado_admin" | "aprobado" | "rechazado";
-  rows: CycleRow[];
-  cambios_admin?: Record<string, unknown>;
+  movimientos: CycleRow[];
+  movimientos_admin?: CycleRow[] | null;
+  cambios_admin?: CambioRow[] | null;
   created_at: string;
 }
 
@@ -306,7 +313,6 @@ function CicloActualTab() {
             social: +(m.monto_aporte * 0.1).toFixed(0),
             actividad: 0,
             credito_pago: 0,
-            cartera_id: "",
           }))
         );
       } catch {
@@ -333,8 +339,6 @@ function CicloActualTab() {
           row.actividad = Number(value) || 0;
         } else if (field === "credito_pago") {
           row.credito_pago = Number(value) || 0;
-        } else if (field === "cartera_id") {
-          row.cartera_id = String(value);
         }
         next[idx] = row;
         return next;
@@ -363,7 +367,7 @@ function CicloActualTab() {
       const res = await fetch("/api/fondo/ciclos", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ periodo: currentPeriod(), rows }),
+        body: JSON.stringify({ periodo: currentPeriod(), movimientos: rows }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -454,8 +458,7 @@ function CicloActualTab() {
               <th className="px-4 py-3 text-right">Permanente (90%)</th>
               <th className="px-4 py-3 text-right">Social (10%)</th>
               <th className="px-4 py-3 text-right">Actividad ($)</th>
-              <th className="px-4 py-3 text-right">Credito Pago ($)</th>
-              <th className="px-4 py-3">Cartera ID</th>
+              <th className="px-4 py-3 text-right">Crédito Pago ($)</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -521,24 +524,13 @@ function CicloActualTab() {
                       className="w-28 text-right rounded-lg border border-gray-200 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff9900]/40 focus:border-[#ff9900]"
                     />
                   </td>
-                  <td className="px-4 py-3">
-                    <input
-                      type="text"
-                      value={row.cartera_id}
-                      onChange={(e) =>
-                        updateRow(idx, "cartera_id", e.target.value)
-                      }
-                      placeholder="—"
-                      className="w-24 rounded-lg border border-gray-200 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff9900]/40 focus:border-[#ff9900]"
-                    />
-                  </td>
                 </tr>
               );
             })}
             {filtered.length === 0 && (
               <tr>
                 <td
-                  colSpan={9}
+                  colSpan={8}
                   className="px-4 py-12 text-center text-gray-400"
                 >
                   No se encontraron miembros.
@@ -609,11 +601,12 @@ function HistorialTab() {
       ) : (
         <div className="divide-y divide-gray-100">
           {ciclos.map((c) => (
-            <div key={c.id}>
+            <div key={(c._id || c.id) as string}>
               <button
-                onClick={() =>
-                  setExpanded(expanded === c.id ? null : c.id)
-                }
+                onClick={() => {
+                  const cid = (c._id || c.id) as string;
+                  setExpanded(expanded === cid ? null : cid);
+                }}
                 className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition-colors text-left"
               >
                 <div className="flex items-center gap-4">
@@ -621,12 +614,18 @@ function HistorialTab() {
                     {c.periodo}
                   </span>
                   {estadoBadge(c.estado)}
+                  {c.cambios_admin && c.cambios_admin.length > 0 && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-300">
+                      <AlertCircle size={12} />
+                      {c.cambios_admin.length} cambio{c.cambios_admin.length !== 1 ? "s" : ""}
+                    </span>
+                  )}
                 </div>
                 <div className="flex items-center gap-3 text-gray-400">
                   <span className="text-xs">
                     {new Date(c.created_at).toLocaleDateString("es-CO")}
                   </span>
-                  {expanded === c.id ? (
+                  {expanded === (c._id || c.id) ? (
                     <ChevronDown size={18} />
                   ) : (
                     <ChevronRight size={18} />
@@ -634,64 +633,107 @@ function HistorialTab() {
                 </div>
               </button>
 
-              {expanded === c.id && (
+              {expanded === (c._id || c.id) && (
                 <div className="px-5 pb-5 space-y-4">
-                  {/* Cycle rows summary */}
-                  <div className="overflow-x-auto rounded-xl border border-gray-200">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                          <th className="px-3 py-2">Nombre</th>
-                          <th className="px-3 py-2 text-right">Aporte</th>
-                          <th className="px-3 py-2 text-right">Permanente</th>
-                          <th className="px-3 py-2 text-right">Social</th>
-                          <th className="px-3 py-2 text-right">Actividad</th>
-                          <th className="px-3 py-2 text-right">
-                            Credito Pago
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-100">
-                        {(c.rows ?? []).map((r, i) => (
-                          <tr
-                            key={i}
-                            className="hover:bg-gray-50 transition-colors"
-                          >
-                            <td className="px-3 py-2 font-medium text-gray-900">
-                              {r.nombre}
-                            </td>
-                            <td className="px-3 py-2 text-right text-gray-600">
-                              {fmt(r.aporte)}
-                            </td>
-                            <td className="px-3 py-2 text-right text-gray-600">
-                              {fmt(r.permanente)}
-                            </td>
-                            <td className="px-3 py-2 text-right text-gray-600">
-                              {fmt(r.social)}
-                            </td>
-                            <td className="px-3 py-2 text-right text-gray-600">
-                              {fmt(r.actividad)}
-                            </td>
-                            <td className="px-3 py-2 text-right text-gray-600">
-                              {fmt(r.credito_pago)}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                  {/* Build a map of changes by user_id for fast lookup */}
+                  {(() => {
+                    const cambiosMap = new Map<string, CambioRow>();
+                    if (c.cambios_admin) {
+                      for (const cambio of c.cambios_admin) {
+                        cambiosMap.set(cambio.user_id, cambio);
+                      }
+                    }
 
-                  {/* Admin changes */}
-                  {c.estado === "aprobado" && c.cambios_admin && (
-                    <div className="p-4 rounded-xl bg-green-50 border border-green-200">
-                      <h4 className="text-sm font-semibold text-green-800 mb-2 flex items-center gap-2">
-                        <Check size={16} /> Cambios del Administrador
-                      </h4>
-                      <pre className="text-xs text-green-700 overflow-x-auto whitespace-pre-wrap">
-                        {JSON.stringify(c.cambios_admin, null, 2)}
-                      </pre>
-                    </div>
-                  )}
+                    // Use admin version if approved, otherwise the original proposal
+                    const displayRows = c.movimientos_admin || c.movimientos || [];
+                    const originalRows = c.movimientos || [];
+
+                    return (
+                      <>
+                        {/* Legend */}
+                        {cambiosMap.size > 0 && (
+                          <div className="flex flex-wrap items-center gap-3 text-xs">
+                            <span className="text-gray-500 font-semibold">Leyenda:</span>
+                            <span className="inline-flex items-center gap-1.5">
+                              <span className="w-3 h-3 rounded bg-amber-100 border border-amber-300" />
+                              <span className="text-gray-600">Modificado por admin</span>
+                            </span>
+                            <span className="inline-flex items-center gap-1.5">
+                              <span className="text-gray-400 line-through">propuesto</span>
+                              <span>→</span>
+                              <span className="text-emerald-700 font-semibold">real</span>
+                            </span>
+                          </div>
+                        )}
+
+                        <div className="overflow-x-auto rounded-xl border border-gray-200">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                                <th className="px-3 py-2">Nombre</th>
+                                <th className="px-3 py-2 text-right">Aporte</th>
+                                <th className="px-3 py-2 text-right">Permanente</th>
+                                <th className="px-3 py-2 text-right">Social</th>
+                                <th className="px-3 py-2 text-right">Actividad</th>
+                                <th className="px-3 py-2 text-right">Crédito Pago</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                              {displayRows.map((r, i) => {
+                                const cambio = cambiosMap.get(r.user_id);
+                                const original = originalRows[i];
+                                const modified = !!cambio;
+                                const renderCell = (field: string, value: number) => {
+                                  const wasChanged = cambio?.cambios?.[field];
+                                  if (!wasChanged || !original) {
+                                    return <span className="text-gray-600">{fmt(value)}</span>;
+                                  }
+                                  const before = (original as unknown as Record<string, number>)[field];
+                                  return (
+                                    <div className="flex flex-col items-end gap-0.5">
+                                      <span className="text-gray-400 line-through text-xs">{fmt(before || 0)}</span>
+                                      <span className="text-emerald-700 font-semibold">{fmt(value)}</span>
+                                    </div>
+                                  );
+                                };
+                                return (
+                                  <tr
+                                    key={i}
+                                    className={`transition-colors ${
+                                      modified
+                                        ? "bg-amber-50 hover:bg-amber-100"
+                                        : "hover:bg-gray-50"
+                                    }`}
+                                  >
+                                    <td className="px-3 py-2 font-medium text-gray-900">
+                                      {r.nombre}
+                                      {modified && (
+                                        <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-200 text-amber-900 uppercase">
+                                          Modificado
+                                        </span>
+                                      )}
+                                    </td>
+                                    <td className="px-3 py-2 text-right">{renderCell("aporte", r.aporte)}</td>
+                                    <td className="px-3 py-2 text-right">{renderCell("permanente", r.permanente)}</td>
+                                    <td className="px-3 py-2 text-right">{renderCell("social", r.social)}</td>
+                                    <td className="px-3 py-2 text-right">{renderCell("actividad", r.actividad)}</td>
+                                    <td className="px-3 py-2 text-right">{renderCell("credito_pago", r.credito_pago)}</td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        {cambiosMap.size === 0 && c.estado === "aprobado" && (
+                          <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm flex items-center gap-2">
+                            <Check size={16} />
+                            Aprobado sin cambios por el administrador.
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
               )}
             </div>
