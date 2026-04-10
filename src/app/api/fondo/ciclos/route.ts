@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '../../../../lib/db';
 import { ObjectId } from 'mongodb';
 import { auth } from '../../../../lib/auth';
+import { getCurrentCyclePeriodo } from '../../../../lib/fondo-period';
 
 // GET /api/fondo/ciclos?estado=X
 export async function GET(req: NextRequest) {
@@ -13,11 +14,12 @@ export async function GET(req: NextRequest) {
   const db = await getDb();
   const { searchParams } = new URL(req.url);
   const estado = searchParams.get('estado');
+  const periodo = searchParams.get('periodo');
 
   const filter: Record<string, unknown> = {};
   if (estado) filter.estado = estado;
+  if (periodo) filter.periodo = periodo;
 
-  // Fondo user sees their own cycles, admin sees those sent to them
   if (session.user.rol === 'fondo') {
     filter.created_by = session.user.id;
   }
@@ -27,7 +29,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json(results);
 }
 
-// POST /api/fondo/ciclos — create a new cycle (fondo submits for admin approval)
+// POST /api/fondo/ciclos — fondo creates or updates a cycle for the current period
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session || session.user.rol !== 'fondo') {
@@ -35,19 +37,50 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json();
-  if (!body.periodo || !body.movimientos || !Array.isArray(body.movimientos)) {
-    return NextResponse.json({ error: 'periodo y movimientos requeridos' }, { status: 400 });
+  if (!body.movimientos || !Array.isArray(body.movimientos)) {
+    return NextResponse.json({ error: 'movimientos requeridos' }, { status: 400 });
   }
 
+  const periodo = body.periodo || getCurrentCyclePeriodo();
   const db = await getDb();
 
+  // Check for existing ciclo for this period
+  const existing = await db.collection('fondo_ciclos').findOne({
+    periodo,
+    estado: { $in: ['enviado_admin', 'ajustes_admin', 'aprobado'] },
+  });
+
+  if (existing) {
+    // If the existing cycle is in 'ajustes_admin' state, the fondo is responding to admin's adjustments
+    if (existing.estado === 'ajustes_admin') {
+      await db.collection('fondo_ciclos').updateOne(
+        { _id: existing._id },
+        {
+          $set: {
+            movimientos: body.movimientos,
+            estado: 'enviado_admin',
+            updated_at: new Date(),
+            revision_count: (existing.revision_count || 0) + 1,
+          },
+        }
+      );
+      return NextResponse.json({ success: true, id: existing._id.toString(), updated: true });
+    }
+    // Otherwise it's already submitted/approved — block
+    return NextResponse.json(
+      { error: `Ya existe un ciclo para este periodo (${existing.estado})`, existing_id: existing._id.toString() },
+      { status: 409 }
+    );
+  }
+
   const result = await db.collection('fondo_ciclos').insertOne({
-    periodo: body.periodo,
-    tipo: body.tipo || 'mensual',
+    periodo,
+    tipo: body.tipo || 'biweekly',
     estado: 'enviado_admin',
-    movimientos: body.movimientos, // array of {user_id, nombre, cedula, aporte, actividad, credito, ...}
-    movimientos_admin: null, // admin-modified version
-    cambios_admin: null, // diff
+    movimientos: body.movimientos,
+    movimientos_admin: null,
+    cambios_admin: null,
+    revision_count: 0,
     created_by: session.user.id,
     approved_by: null,
     created_at: new Date(),
@@ -57,7 +90,7 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ success: true, id: result.insertedId.toString() });
 }
 
-// PUT /api/fondo/ciclos — admin approves/modifies a cycle
+// PUT /api/fondo/ciclos — admin approves/modifies/rejects a cycle
 export async function PUT(req: NextRequest) {
   const session = await auth();
   if (!session || session.user.rol !== 'admin') {
@@ -73,45 +106,56 @@ export async function PUT(req: NextRequest) {
   const ciclo = await db.collection('fondo_ciclos').findOne({ _id: new ObjectId(body.id) });
   if (!ciclo) return NextResponse.json({ error: 'Ciclo no encontrado' }, { status: 404 });
 
-  if (body.action === 'aprobar') {
-    // Compute changes between original and admin version
-    const adminMovimientos = body.movimientos || ciclo.movimientos;
-    const cambios: Record<string, unknown>[] = [];
-
-    for (let i = 0; i < adminMovimientos.length; i++) {
-      const original = ciclo.movimientos[i];
-      const modified = adminMovimientos[i];
-      if (!original || !modified) continue;
-
-      const diff: Record<string, { antes: unknown; despues: unknown }> = {};
-      for (const key of Object.keys(modified)) {
-        if (key === 'user_id' || key === 'nombre' || key === 'cedula') continue;
-        if (String(original[key]) !== String(modified[key])) {
-          diff[key] = { antes: original[key], despues: modified[key] };
-        }
+  // RECHAZAR
+  if (body.action === 'rechazar') {
+    await db.collection('fondo_ciclos').updateOne(
+      { _id: new ObjectId(body.id) },
+      {
+        $set: {
+          estado: 'rechazado',
+          motivo_rechazo: body.motivo_rechazo || null,
+          approved_by: session.user.id,
+          approved_at: new Date(),
+        },
       }
+    );
+    return NextResponse.json({ success: true });
+  }
 
-      if (Object.keys(diff).length > 0) {
-        cambios.push({ user_id: modified.user_id, nombre: modified.nombre, cambios: diff });
-      }
+  // AJUSTES (admin made changes to budgets, send back to fondo)
+  // body.budget_adjustments: { user_id: newTotal }[]
+  if (body.action === 'ajustes') {
+    const ajustes = body.budget_adjustments || [];
+    if (!Array.isArray(ajustes)) {
+      return NextResponse.json({ error: 'budget_adjustments requeridos' }, { status: 400 });
     }
 
     await db.collection('fondo_ciclos').updateOne(
       { _id: new ObjectId(body.id) },
       {
         $set: {
-          estado: 'aprobado',
-          movimientos_admin: adminMovimientos,
-          cambios_admin: cambios,
-          approved_by: session.user.id,
-          approved_at: new Date(),
+          estado: 'ajustes_admin',
+          movimientos_admin: ajustes,
+          ajustes_admin_at: new Date(),
+          ajustado_por: session.user.id,
         },
       }
     );
 
-    // Apply the approved movements
-    for (const mov of adminMovimientos) {
-      // Record aportes if present
+    return NextResponse.json({ success: true });
+  }
+
+  // APROBAR (no changes — apply directly)
+  if (body.action === 'aprobar') {
+    if (ciclo.estado !== 'enviado_admin') {
+      return NextResponse.json({ error: 'Solo se pueden aprobar ciclos en estado enviado_admin' }, { status: 400 });
+    }
+
+    const movimientos = ciclo.movimientos || [];
+
+    // Apply each movement to the database
+    for (const mov of movimientos) {
+      // 1) Aporte (90% permanente / 10% social)
       if (mov.aporte && Number(mov.aporte) > 0) {
         const monto = Number(mov.aporte);
         const permanente = Math.round(monto * 0.9 * 100) / 100;
@@ -135,7 +179,7 @@ export async function PUT(req: NextRequest) {
         );
       }
 
-      // Record actividad if present
+      // 2) Actividad
       if (mov.actividad && Number(mov.actividad) !== 0) {
         const monto = Math.abs(Number(mov.actividad));
         const tipo = Number(mov.actividad) >= 0 ? 'aporte' : 'retiro';
@@ -157,56 +201,69 @@ export async function PUT(req: NextRequest) {
         );
       }
 
-      // Record credito payment if present
-      if (mov.credito_pago && Number(mov.credito_pago) > 0 && mov.cartera_id) {
-        const montoTotal = Number(mov.credito_pago);
-        const cartera = await db.collection('fondo_cartera').findOne({ _id: new ObjectId(mov.cartera_id) });
+      // 3) Per-credit payments — new array shape: creditos: [{ cartera_id, monto }]
+      const creditPayments: { cartera_id: string; monto: number }[] = Array.isArray(mov.creditos) ? mov.creditos : [];
 
-        if (cartera) {
-          const cuotaEsperada = cartera.numero_cuotas > 0
-            ? Math.round(cartera.saldo_total / cartera.cuotas_restantes * 100) / 100
-            : 0;
+      for (const cp of creditPayments) {
+        if (!cp.cartera_id || !cp.monto || Number(cp.monto) <= 0) continue;
+        if (!ObjectId.isValid(cp.cartera_id)) continue;
 
-          const pago = {
-            numero_cuota: cartera.cuotas_pagadas + 1,
-            fecha_pago: new Date(),
-            monto_total: montoTotal,
-            monto_esperado: cuotaEsperada,
-            diferencia: Math.round((montoTotal - cuotaEsperada) * 100) / 100,
-            flagged: Math.abs(montoTotal - cuotaEsperada) > 1,
-            ciclo_id: body.id,
-          };
+        const cartera = await db.collection('fondo_cartera').findOne({ _id: new ObjectId(cp.cartera_id) });
+        if (!cartera || cartera.estado !== 'activo') continue;
 
-          const newSaldoTotal = Math.max(0, cartera.saldo_total - montoTotal);
-          const estado = newSaldoTotal <= 0 ? 'pagado' : 'activo';
+        const montoTotal = Number(cp.monto);
+        const cuotaEsperada = cartera.cuotas_restantes > 0
+          ? Math.round((cartera.saldo_total / cartera.cuotas_restantes) * 100) / 100
+          : 0;
 
-          await db.collection('fondo_cartera').updateOne(
-            { _id: new ObjectId(mov.cartera_id) },
-            {
-              $set: {
-                cuotas_pagadas: cartera.cuotas_pagadas + 1,
-                cuotas_restantes: Math.max(0, cartera.cuotas_restantes - 1),
-                saldo_total: newSaldoTotal,
-                saldo_capital: Math.max(0, cartera.saldo_capital - (montoTotal * 0.8)),
-                saldo_interes: Math.max(0, cartera.saldo_interes - (montoTotal * 0.2)),
-                estado,
-              },
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              $push: { pagos: pago } as any,
-            }
-          );
-        }
+        const pago = {
+          numero_cuota: (cartera.cuotas_pagadas || 0) + 1,
+          fecha_pago: new Date(),
+          monto_total: montoTotal,
+          monto_esperado: cuotaEsperada,
+          diferencia: Math.round((montoTotal - cuotaEsperada) * 100) / 100,
+          flagged: Math.abs(montoTotal - cuotaEsperada) > 1,
+          ciclo_id: body.id,
+        };
+
+        const newSaldoTotal = Math.max(0, (cartera.saldo_total || 0) - montoTotal);
+        // Split payment proportionally between capital and interest
+        const ratio = cartera.saldo_total > 0 ? cartera.saldo_capital / cartera.saldo_total : 0;
+        const newSaldoCapital = Math.max(0, cartera.saldo_capital - montoTotal * ratio);
+        const newSaldoInteres = Math.max(0, cartera.saldo_interes - montoTotal * (1 - ratio));
+        const newCuotasPagadas = (cartera.cuotas_pagadas || 0) + 1;
+        const newCuotasRestantes = Math.max(0, (cartera.cuotas_restantes || 0) - 1);
+        const estado = newSaldoTotal <= 0 ? 'pagado' : 'activo';
+
+        await db.collection('fondo_cartera').updateOne(
+          { _id: new ObjectId(cp.cartera_id) },
+          {
+            $set: {
+              cuotas_pagadas: newCuotasPagadas,
+              cuotas_restantes: newCuotasRestantes,
+              saldo_total: newSaldoTotal,
+              saldo_capital: newSaldoCapital,
+              saldo_interes: newSaldoInteres,
+              estado,
+            },
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            $push: { pagos: pago } as any,
+          }
+        );
       }
     }
 
-    return NextResponse.json({ success: true, cambios });
-  }
-
-  if (body.action === 'rechazar') {
     await db.collection('fondo_ciclos').updateOne(
       { _id: new ObjectId(body.id) },
-      { $set: { estado: 'rechazado', approved_by: session.user.id, approved_at: new Date() } }
+      {
+        $set: {
+          estado: 'aprobado',
+          approved_by: session.user.id,
+          approved_at: new Date(),
+        },
+      }
     );
+
     return NextResponse.json({ success: true });
   }
 

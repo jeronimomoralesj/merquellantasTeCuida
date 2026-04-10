@@ -1,50 +1,52 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   ChevronDown,
   ChevronUp,
   CheckCircle,
   XCircle,
-  Download,
-  Upload,
   Loader2,
   AlertCircle,
-  FileSpreadsheet,
   Clock,
-  Eye,
   RefreshCw,
+  DollarSign,
 } from "lucide-react";
+
+interface CreditPayment {
+  cartera_id: string;
+  credito_id: string;
+  monto: number;
+}
 
 interface Movimiento {
   user_id: string;
   nombre: string;
   cedula: string;
-  aporte: number | string;
-  actividad: number | string;
-  credito_pago: number | string;
-  cartera_id: string;
-  [key: string]: unknown;
+  aporte: number;
+  actividad: number;
+  creditos?: CreditPayment[];
+  credito_pago_total?: number;
+  // Legacy field for old cycles
+  credito_pago?: number;
 }
 
-interface CambioAdmin {
+interface BudgetAdjustment {
   user_id: string;
   nombre: string;
-  cambios: Record<string, { antes: unknown; despues: unknown }>;
+  total_anterior: number;
+  total_nuevo: number;
 }
 
 interface Ciclo {
   _id: string;
   periodo: string;
-  tipo: string;
   estado: string;
   movimientos: Movimiento[];
-  movimientos_admin: Movimiento[] | null;
-  cambios_admin: CambioAdmin[] | null;
-  created_by: string;
-  approved_by: string | null;
+  movimientos_admin: BudgetAdjustment[] | null;
   created_at: string;
   approved_at: string | null;
+  revision_count?: number;
 }
 
 interface NotificationState {
@@ -52,560 +54,391 @@ interface NotificationState {
   type: "success" | "error" | "info";
 }
 
-const EDITABLE_FIELDS: string[] = [
-  "nombre",
-  "cedula",
-  "aporte",
-  "actividad",
-  "credito_pago",
-  "cartera_id",
-];
+const fmt = (n: number) =>
+  new Intl.NumberFormat("es-CO", {
+    style: "currency",
+    currency: "COP",
+    minimumFractionDigits: 0,
+  }).format(n || 0);
 
-const FIELD_LABELS: Record<string, string> = {
-  nombre: "Nombre",
-  cedula: "Cédula",
-  aporte: "Aporte",
-  actividad: "Actividad",
-  credito_pago: "Crédito Pago",
-  cartera_id: "Cartera ID",
+const formatPeriodoLabel = (periodo: string): string => {
+  const parts = periodo.split("-");
+  if (parts.length < 3) return periodo;
+  const [y, m, h] = parts;
+  const monthNames = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+  return `${h === "A" ? "1ra quincena" : "2da quincena"} de ${monthNames[parseInt(m) - 1] || m} ${y}`;
 };
+
+// Compute total for a movement
+function computeMovTotal(m: Movimiento): number {
+  let creditTotal = 0;
+  if (Array.isArray(m.creditos)) {
+    creditTotal = m.creditos.reduce((s, c) => s + (Number(c.monto) || 0), 0);
+  } else if (typeof m.credito_pago_total === "number") {
+    creditTotal = m.credito_pago_total;
+  } else if (typeof m.credito_pago === "number") {
+    creditTotal = m.credito_pago;
+  }
+  return (Number(m.aporte) || 0) + (Number(m.actividad) || 0) + creditTotal;
+}
 
 export default function FondoAdminCard() {
   const [pendingCycles, setPendingCycles] = useState<Ciclo[]>([]);
   const [approvedCycles, setApprovedCycles] = useState<Ciclo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [expandedPending, setExpandedPending] = useState<Record<string, boolean>>({});
-  const [expandedApproved, setExpandedApproved] = useState<Record<string, boolean>>({});
-  const [editedMovimientos, setEditedMovimientos] = useState<Record<string, Movimiento[]>>({});
-  const [processingId, setProcessingId] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [adjustments, setAdjustments] = useState<Record<string, Record<string, number>>>({});
+  const [processing, setProcessing] = useState<string | null>(null);
   const [notification, setNotification] = useState<NotificationState | null>(null);
-  const [tab, setTab] = useState<"pendientes" | "aprobados">("pendientes");
+  const [activeTab, setActiveTab] = useState<"pendientes" | "aprobados">("pendientes");
 
-  const formatDate = (d: string | undefined): string => {
-    if (!d) return "Sin fecha";
-    try {
-      return new Date(d).toLocaleDateString("es-ES", {
-        day: "numeric",
-        month: "long",
-        year: "numeric",
-      });
-    } catch {
-      return "Fecha inválida";
-    }
+  const showNotification = (message: string, type: NotificationState["type"]) => {
+    setNotification({ message, type });
+    setTimeout(() => setNotification(null), 4000);
   };
 
-  const formatCurrency = (val: number | string): string => {
-    const n = Number(val);
-    if (isNaN(n)) return "$0";
-    return new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", minimumFractionDigits: 0 }).format(n);
-  };
-
-  const fetchCycles = async () => {
+  const fetchCycles = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [pendRes, apprRes] = await Promise.all([
+      const [pRes, aRes] = await Promise.all([
         fetch("/api/fondo/ciclos?estado=enviado_admin"),
         fetch("/api/fondo/ciclos?estado=aprobado"),
       ]);
-      if (!pendRes.ok || !apprRes.ok) throw new Error("Error al cargar ciclos");
-      const pending: Ciclo[] = await pendRes.json();
-      const approved: Ciclo[] = await apprRes.json();
+      const pending: Ciclo[] = pRes.ok ? await pRes.json() : [];
+      const approved: Ciclo[] = aRes.ok ? await aRes.json() : [];
       setPendingCycles(pending);
       setApprovedCycles(approved);
 
-      // Initialize editable movimientos for pending cycles
-      const edits: Record<string, Movimiento[]> = {};
-      pending.forEach((c) => {
-        edits[c._id] = JSON.parse(JSON.stringify(c.movimientos));
-      });
-      setEditedMovimientos(edits);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Error desconocido");
+      // Initialize adjustments map: cycleId → {user_id: total}
+      const adj: Record<string, Record<string, number>> = {};
+      for (const c of pending) {
+        const cycleAdj: Record<string, number> = {};
+        for (const m of c.movimientos) {
+          cycleAdj[m.user_id] = computeMovTotal(m);
+        }
+        adj[c._id] = cycleAdj;
+      }
+      setAdjustments(adj);
+    } catch {
+      setError("Error al cargar los ciclos del fondo");
     } finally {
       setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    fetchCycles();
   }, []);
 
   useEffect(() => {
-    if (notification) {
-      const timer = setTimeout(() => setNotification(null), 5000);
-      return () => clearTimeout(timer);
+    fetchCycles();
+  }, [fetchCycles]);
+
+  const updateAdjustment = (cycleId: string, userId: string, value: string) => {
+    setAdjustments((prev) => ({
+      ...prev,
+      [cycleId]: {
+        ...prev[cycleId],
+        [userId]: Number(value) || 0,
+      },
+    }));
+  };
+
+  // Compare current adjustments to original totals
+  const hasChanges = (cycle: Ciclo): boolean => {
+    const adj = adjustments[cycle._id];
+    if (!adj) return false;
+    for (const m of cycle.movimientos) {
+      const original = computeMovTotal(m);
+      if ((adj[m.user_id] ?? original) !== original) return true;
     }
-  }, [notification]);
-
-  const handleFieldChange = (cycleId: string, rowIdx: number, field: string, value: string) => {
-    setEditedMovimientos((prev) => {
-      const copy = JSON.parse(JSON.stringify(prev));
-      if (copy[cycleId] && copy[cycleId][rowIdx]) {
-        copy[cycleId][rowIdx][field] = value;
-      }
-      return copy;
-    });
+    return false;
   };
 
-  const exportCSV = (cycleId: string) => {
-    const movs = editedMovimientos[cycleId];
-    if (!movs || movs.length === 0) return;
-
-    const headers = EDITABLE_FIELDS.join(",");
-    const rows = movs.map((m) =>
-      EDITABLE_FIELDS.map((f) => {
-        const val = String(m[f] ?? "");
-        // Escape commas and quotes in CSV
-        if (val.includes(",") || val.includes('"') || val.includes("\n")) {
-          return `"${val.replace(/"/g, '""')}"`;
-        }
-        return val;
-      }).join(",")
-    );
-
-    const csv = [headers, ...rows].join("\n");
-    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `fondo_ciclo_${cycleId}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const handleUploadCSV = (cycleId: string, file: File) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const text = e.target?.result as string;
-        const lines = text.trim().split("\n");
-        if (lines.length < 2) {
-          setNotification({ message: "El archivo CSV está vacío o solo tiene encabezados", type: "error" });
-          return;
-        }
-
-        // Skip header row
-        const dataLines = lines.slice(1);
-        const originalMovs = editedMovimientos[cycleId];
-        if (!originalMovs) return;
-
-        const parsed: Movimiento[] = dataLines.map((line, i) => {
-          // Simple CSV parsing: handle quoted fields
-          const fields: string[] = [];
-          let current = "";
-          let inQuotes = false;
-          for (let c = 0; c < line.length; c++) {
-            const ch = line[c];
-            if (ch === '"') {
-              if (inQuotes && line[c + 1] === '"') {
-                current += '"';
-                c++;
-              } else {
-                inQuotes = !inQuotes;
-              }
-            } else if (ch === "," && !inQuotes) {
-              fields.push(current.trim());
-              current = "";
-            } else {
-              current += ch;
-            }
-          }
-          fields.push(current.trim());
-
-          const base = originalMovs[i] ? { ...originalMovs[i] } : {
-            user_id: "",
-            nombre: "",
-            cedula: "",
-            aporte: 0,
-            actividad: 0,
-            credito_pago: 0,
-            cartera_id: "",
-          };
-
-          EDITABLE_FIELDS.forEach((f, idx) => {
-            if (idx < fields.length) {
-              (base as Record<string, unknown>)[f] = fields[idx];
-            }
-          });
-
-          return base;
-        });
-
-        setEditedMovimientos((prev) => ({ ...prev, [cycleId]: parsed }));
-        setNotification({ message: "CSV importado correctamente", type: "success" });
-      } catch {
-        setNotification({ message: "Error al procesar el archivo CSV", type: "error" });
-      }
-    };
-    reader.readAsText(file);
-  };
-
-  const handleAction = async (cycleId: string, action: "aprobar" | "rechazar") => {
-    setProcessingId(cycleId);
+  const handleApprove = async (cycle: Ciclo) => {
+    setProcessing(cycle._id);
     try {
-      const payload: Record<string, unknown> = { id: cycleId, action };
-      if (action === "aprobar") {
-        payload.movimientos = editedMovimientos[cycleId];
+      const changed = hasChanges(cycle);
+
+      if (!changed) {
+        // No changes — apply directly
+        const res = await fetch("/api/fondo/ciclos", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: cycle._id, action: "aprobar" }),
+        });
+        if (!res.ok) throw new Error((await res.json()).error || "Error");
+        showNotification("Ciclo aprobado y aplicado correctamente", "success");
+      } else {
+        // Send back to fondo with the new budgets
+        const adj = adjustments[cycle._id] || {};
+        const budget_adjustments: BudgetAdjustment[] = cycle.movimientos.map((m) => ({
+          user_id: m.user_id,
+          nombre: m.nombre,
+          total_anterior: computeMovTotal(m),
+          total_nuevo: adj[m.user_id] ?? computeMovTotal(m),
+        }));
+
+        const res = await fetch("/api/fondo/ciclos", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: cycle._id, action: "ajustes", budget_adjustments }),
+        });
+        if (!res.ok) throw new Error((await res.json()).error || "Error");
+        showNotification("Ajustes enviados al fondo para redistribución", "info");
       }
 
+      await fetchCycles();
+    } catch (err) {
+      showNotification(err instanceof Error ? err.message : "Error", "error");
+    } finally {
+      setProcessing(null);
+    }
+  };
+
+  const handleReject = async (cycle: Ciclo) => {
+    const motivo = prompt("Motivo del rechazo (opcional):") || "";
+    setProcessing(cycle._id);
+    try {
       const res = await fetch("/api/fondo/ciclos", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ id: cycle._id, action: "rechazar", motivo_rechazo: motivo }),
       });
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Error al procesar");
-      }
-
-      setNotification({
-        message: action === "aprobar" ? "Ciclo aprobado exitosamente" : "Ciclo rechazado",
-        type: action === "aprobar" ? "success" : "info",
-      });
+      if (!res.ok) throw new Error((await res.json()).error || "Error");
+      showNotification("Ciclo rechazado", "success");
       await fetchCycles();
     } catch (err) {
-      setNotification({
-        message: err instanceof Error ? err.message : "Error al procesar",
-        type: "error",
-      });
+      showNotification(err instanceof Error ? err.message : "Error", "error");
     } finally {
-      setProcessingId(null);
+      setProcessing(null);
     }
   };
 
-  const togglePending = (id: string) => {
-    setExpandedPending((prev) => ({ ...prev, [id]: !prev[id] }));
-  };
+  const renderCycleTable = (cycle: Ciclo, isApproved: boolean = false) => {
+    const adj = adjustments[cycle._id] || {};
+    const totalCiclo = cycle.movimientos.reduce((s, m) => s + computeMovTotal(m), 0);
+    const totalAdjusted = cycle.movimientos.reduce((s, m) => s + (adj[m.user_id] ?? computeMovTotal(m)), 0);
 
-  const toggleApproved = (id: string) => {
-    setExpandedApproved((prev) => ({ ...prev, [id]: !prev[id] }));
+    return (
+      <div className="overflow-x-auto rounded-xl border border-gray-200">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+              <th className="px-4 py-3">Usuario</th>
+              <th className="px-4 py-3">Cédula</th>
+              <th className="px-4 py-3 text-right">Total propuesto</th>
+              {!isApproved && <th className="px-4 py-3 text-right">Total ajustado</th>}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {cycle.movimientos.map((m) => {
+              const propuesto = computeMovTotal(m);
+              const ajustado = adj[m.user_id] ?? propuesto;
+              const changed = ajustado !== propuesto;
+              return (
+                <tr key={m.user_id} className={changed ? "bg-amber-50/50" : ""}>
+                  <td className="px-4 py-3 font-medium text-gray-900">
+                    {m.nombre}
+                    {changed && (
+                      <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-200 text-amber-900 uppercase">
+                        Modificado
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-gray-600">{m.cedula}</td>
+                  <td className="px-4 py-3 text-right font-mono text-gray-700">{fmt(propuesto)}</td>
+                  {!isApproved && (
+                    <td className="px-4 py-3 text-right">
+                      <input
+                        type="number"
+                        min={0}
+                        value={ajustado}
+                        onChange={(e) => updateAdjustment(cycle._id, m.user_id, e.target.value)}
+                        className={`w-32 text-right rounded-lg border px-2 py-1.5 text-sm focus:outline-none focus:ring-2 ${
+                          changed
+                            ? "border-amber-300 bg-white focus:ring-amber-300/40"
+                            : "border-gray-200 focus:ring-blue-300/40"
+                        }`}
+                      />
+                    </td>
+                  )}
+                </tr>
+              );
+            })}
+            <tr className="bg-gray-100 font-bold">
+              <td colSpan={2} className="px-4 py-3 text-gray-900">Total del ciclo</td>
+              <td className="px-4 py-3 text-right font-mono text-gray-900">{fmt(totalCiclo)}</td>
+              {!isApproved && (
+                <td className="px-4 py-3 text-right font-mono text-gray-900">
+                  {fmt(totalAdjusted)}
+                  {totalAdjusted !== totalCiclo && (
+                    <span className={`ml-2 text-xs font-semibold ${totalAdjusted < totalCiclo ? "text-emerald-600" : "text-red-600"}`}>
+                      ({totalAdjusted > totalCiclo ? "+" : ""}{fmt(totalAdjusted - totalCiclo)})
+                    </span>
+                  )}
+                </td>
+              )}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    );
   };
 
   if (loading) {
     return (
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
-        <div className="flex items-center justify-center gap-3 text-gray-500">
-          <Loader2 className="w-5 h-5 animate-spin" />
-          <span>Cargando ciclos del fondo...</span>
+      <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100 relative overflow-hidden">
+        <div className="absolute top-0 left-0 w-1 h-full bg-purple-500" />
+        <div className="flex justify-between items-center mb-5">
+          <h2 className="text-lg font-bold text-gray-900 flex items-center">
+            <DollarSign className="h-5 w-5 mr-2 text-purple-500" />
+            Fondo de Empleados
+          </h2>
         </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
-        <div className="flex items-center gap-3 text-red-600">
-          <AlertCircle className="w-5 h-5" />
-          <span>{error}</span>
-          <button onClick={fetchCycles} className="ml-auto text-sm text-blue-600 hover:underline flex items-center gap-1">
-            <RefreshCw className="w-4 h-4" /> Reintentar
-          </button>
+        <div className="flex items-center justify-center py-8">
+          <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+          <span className="ml-2 text-gray-500">Cargando ciclos...</span>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      {/* Notification */}
-      {notification && (
-        <div
-          className={`rounded-xl p-4 flex items-center gap-3 text-sm font-medium ${
-            notification.type === "success"
-              ? "bg-green-50 text-green-800 border border-green-200"
-              : notification.type === "error"
-              ? "bg-red-50 text-red-800 border border-red-200"
-              : "bg-blue-50 text-blue-800 border border-blue-200"
-          }`}
-        >
-          {notification.type === "success" ? (
-            <CheckCircle className="w-5 h-5" />
-          ) : notification.type === "error" ? (
-            <AlertCircle className="w-5 h-5" />
-          ) : (
-            <AlertCircle className="w-5 h-5" />
-          )}
-          {notification.message}
-        </div>
-      )}
+    <div className="bg-white rounded-xl shadow-sm border border-gray-100 relative overflow-hidden">
+      <div className="absolute top-0 left-0 w-1 h-full bg-purple-500" />
 
-      {/* Tabs */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="flex border-b border-gray-100">
+      <div className="p-6">
+        <div className="flex justify-between items-center mb-5">
+          <h2 className="text-lg font-bold text-gray-900 flex items-center">
+            <DollarSign className="h-5 w-5 mr-2 text-purple-500" />
+            Fondo de Empleados
+          </h2>
           <button
-            onClick={() => setTab("pendientes")}
-            className={`flex-1 px-6 py-4 text-sm font-semibold transition-colors ${
-              tab === "pendientes"
-                ? "text-orange-600 border-b-2 border-orange-500 bg-orange-50/50"
-                : "text-gray-500 hover:text-gray-700"
-            }`}
+            onClick={fetchCycles}
+            className="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1"
           >
-            <div className="flex items-center justify-center gap-2">
-              <Clock className="w-4 h-4" />
-              Pendientes ({pendingCycles.length})
-            </div>
-          </button>
-          <button
-            onClick={() => setTab("aprobados")}
-            className={`flex-1 px-6 py-4 text-sm font-semibold transition-colors ${
-              tab === "aprobados"
-                ? "text-green-600 border-b-2 border-green-500 bg-green-50/50"
-                : "text-gray-500 hover:text-gray-700"
-            }`}
-          >
-            <div className="flex items-center justify-center gap-2">
-              <CheckCircle className="w-4 h-4" />
-              Aprobados ({approvedCycles.length})
-            </div>
+            <RefreshCw className="h-4 w-4" />
+            Actualizar
           </button>
         </div>
 
-        <div className="p-6">
-          {/* Pending Cycles */}
-          {tab === "pendientes" && (
-            <div className="space-y-4">
-              {pendingCycles.length === 0 ? (
-                <div className="text-center py-12 text-gray-400">
-                  <FileSpreadsheet className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                  <p className="text-sm">No hay ciclos pendientes por aprobar</p>
-                </div>
-              ) : (
-                pendingCycles.map((cycle) => (
-                  <div key={cycle._id} className="border border-gray-200 rounded-xl overflow-hidden">
-                    {/* Card Header */}
-                    <button
-                      onClick={() => togglePending(cycle._id)}
-                      className="w-full px-5 py-4 flex items-center justify-between bg-gray-50 hover:bg-gray-100 transition-colors"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center">
-                          <FileSpreadsheet className="w-5 h-5 text-orange-600" />
-                        </div>
-                        <div className="text-left">
-                          <p className="font-semibold text-gray-800">Periodo: {cycle.periodo}</p>
-                          <p className="text-xs text-gray-500">
-                            Enviado {formatDate(cycle.created_at)} &middot; {cycle.movimientos.length} movimientos
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs px-3 py-1 rounded-full bg-yellow-100 text-yellow-800 border border-yellow-200 font-medium">
-                          Pendiente
-                        </span>
-                        {expandedPending[cycle._id] ? (
-                          <ChevronUp className="w-5 h-5 text-gray-400" />
-                        ) : (
-                          <ChevronDown className="w-5 h-5 text-gray-400" />
-                        )}
-                      </div>
-                    </button>
+        {error && (
+          <div className="mb-4 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm flex items-center gap-2">
+            <AlertCircle size={16} /> {error}
+          </div>
+        )}
 
-                    {/* Expanded Content */}
-                    {expandedPending[cycle._id] && (
-                      <div className="p-5 space-y-4">
-                        {/* Toolbar */}
-                        <div className="flex flex-wrap gap-2">
-                          <button
-                            onClick={() => exportCSV(cycle._id)}
-                            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                          >
-                            <Download className="w-4 h-4" />
-                            Exportar CSV
-                          </button>
-                          <label className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer">
-                            <Upload className="w-4 h-4" />
-                            Importar CSV
-                            <input
-                              type="file"
-                              accept=".csv"
-                              className="hidden"
-                              onChange={(e) => {
-                                const file = e.target.files?.[0];
-                                if (file) handleUploadCSV(cycle._id, file);
-                                e.target.value = "";
-                              }}
-                            />
-                          </label>
-                        </div>
+        {notification && (
+          <div className={`mb-4 p-3 rounded-xl border text-sm flex items-center gap-2 ${
+            notification.type === "success" ? "bg-emerald-50 border-emerald-200 text-emerald-800" :
+            notification.type === "error" ? "bg-red-50 border-red-200 text-red-800" :
+            "bg-blue-50 border-blue-200 text-blue-800"
+          }`}>
+            {notification.type === "success" ? <CheckCircle size={16} /> : notification.type === "error" ? <XCircle size={16} /> : <AlertCircle size={16} />}
+            {notification.message}
+          </div>
+        )}
 
-                        {/* Editable Table */}
-                        <div className="overflow-x-auto border border-gray-200 rounded-lg">
-                          <table className="w-full text-sm">
-                            <thead>
-                              <tr className="bg-gray-50">
-                                <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">#</th>
-                                {EDITABLE_FIELDS.map((f) => (
-                                  <th key={f} className="px-3 py-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                                    {FIELD_LABELS[f] || f}
-                                  </th>
-                                ))}
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-100">
-                              {(editedMovimientos[cycle._id] || []).map((mov, idx) => (
-                                <tr key={idx} className="hover:bg-gray-50">
-                                  <td className="px-3 py-2 text-gray-400 text-xs">{idx + 1}</td>
-                                  {EDITABLE_FIELDS.map((f) => (
-                                    <td key={f} className="px-1 py-1">
-                                      <input
-                                        type="text"
-                                        value={String((mov as Record<string, unknown>)[f] ?? "")}
-                                        onChange={(e) => handleFieldChange(cycle._id, idx, f as string, e.target.value)}
-                                        className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-orange-400 transition-colors bg-white"
-                                      />
-                                    </td>
-                                  ))}
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
+        {/* Tabs */}
+        <div className="flex gap-2 mb-4">
+          <button
+            onClick={() => setActiveTab("pendientes")}
+            className={`flex-1 px-3 py-2 rounded-lg text-xs font-bold transition-all ${
+              activeTab === "pendientes" ? "bg-purple-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+            }`}
+          >
+            Pendientes ({pendingCycles.length})
+          </button>
+          <button
+            onClick={() => setActiveTab("aprobados")}
+            className={`flex-1 px-3 py-2 rounded-lg text-xs font-bold transition-all ${
+              activeTab === "aprobados" ? "bg-purple-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+            }`}
+          >
+            Aprobados ({approvedCycles.length})
+          </button>
+        </div>
 
-                        {/* Action Buttons */}
-                        <div className="flex gap-3 pt-2">
-                          <button
-                            onClick={() => handleAction(cycle._id, "aprobar")}
-                            disabled={processingId === cycle._id}
-                            className="flex items-center gap-2 px-6 py-2.5 text-sm font-semibold text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                          >
-                            {processingId === cycle._id ? (
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : (
-                              <CheckCircle className="w-4 h-4" />
-                            )}
-                            Aprobar
-                          </button>
-                          <button
-                            onClick={() => handleAction(cycle._id, "rechazar")}
-                            disabled={processingId === cycle._id}
-                            className="flex items-center gap-2 px-6 py-2.5 text-sm font-semibold text-white bg-red-500 rounded-lg hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                          >
-                            {processingId === cycle._id ? (
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : (
-                              <XCircle className="w-4 h-4" />
-                            )}
-                            Rechazar
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ))
-              )}
+        {/* Cycles list */}
+        <div className="space-y-3">
+          {activeTab === "pendientes" && pendingCycles.length === 0 && (
+            <div className="text-center py-8 text-sm text-gray-400">
+              No hay ciclos pendientes de aprobación.
+            </div>
+          )}
+          {activeTab === "aprobados" && approvedCycles.length === 0 && (
+            <div className="text-center py-8 text-sm text-gray-400">
+              No hay ciclos aprobados.
             </div>
           )}
 
-          {/* Approved Cycles */}
-          {tab === "aprobados" && (
-            <div className="space-y-4">
-              {approvedCycles.length === 0 ? (
-                <div className="text-center py-12 text-gray-400">
-                  <CheckCircle className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                  <p className="text-sm">No hay ciclos aprobados aún</p>
-                </div>
-              ) : (
-                approvedCycles.map((cycle) => (
-                  <div key={cycle._id} className="border border-gray-200 rounded-xl overflow-hidden">
-                    <button
-                      onClick={() => toggleApproved(cycle._id)}
-                      className="w-full px-5 py-4 flex items-center justify-between bg-gray-50 hover:bg-gray-100 transition-colors"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
-                          <CheckCircle className="w-5 h-5 text-green-600" />
-                        </div>
-                        <div className="text-left">
-                          <p className="font-semibold text-gray-800">Periodo: {cycle.periodo}</p>
-                          <p className="text-xs text-gray-500">
-                            Aprobado {formatDate(cycle.approved_at || undefined)} &middot; {cycle.movimientos.length} movimientos
-                          </p>
-                        </div>
+          {(activeTab === "pendientes" ? pendingCycles : approvedCycles).map((cycle) => {
+            const isOpen = !!expanded[cycle._id];
+            const totalCiclo = cycle.movimientos.reduce((s, m) => s + computeMovTotal(m), 0);
+            const isApproved = activeTab === "aprobados";
+            const changed = !isApproved && hasChanges(cycle);
+
+            return (
+              <div key={cycle._id} className="border border-gray-200 rounded-xl overflow-hidden">
+                <button
+                  onClick={() => setExpanded((prev) => ({ ...prev, [cycle._id]: !prev[cycle._id] }))}
+                  className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors text-left"
+                >
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <Clock className="h-4 w-4 text-purple-500" />
+                    <div>
+                      <p className="font-semibold text-gray-900 text-sm">{formatPeriodoLabel(cycle.periodo)}</p>
+                      <p className="text-xs text-gray-500">
+                        {cycle.movimientos.length} usuarios · Total: <strong>{fmt(totalCiclo)}</strong>
+                      </p>
+                    </div>
+                    {cycle.revision_count && cycle.revision_count > 0 && (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-100 text-blue-800 border border-blue-200">
+                        Revisión {cycle.revision_count}
+                      </span>
+                    )}
+                  </div>
+                  {isOpen ? <ChevronUp className="h-5 w-5 text-gray-400" /> : <ChevronDown className="h-5 w-5 text-gray-400" />}
+                </button>
+
+                {isOpen && (
+                  <div className="p-4 bg-gray-50/50 border-t border-gray-200 space-y-4">
+                    {!isApproved && (
+                      <div className="p-3 rounded-xl bg-blue-50 border border-blue-200 text-xs text-blue-900">
+                        <p className="font-semibold mb-1">Solo se muestra el total por usuario.</p>
+                        <p>Si necesitas reducir o aumentar el presupuesto de algún usuario, ajusta el total en la columna de la derecha. Si haces cambios, el ciclo regresará al fondo para que redistribuya el dinero entre las categorías.</p>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs px-3 py-1 rounded-full bg-green-100 text-green-800 border border-green-200 font-medium">
-                          Aprobado
-                        </span>
-                        {expandedApproved[cycle._id] ? (
-                          <ChevronUp className="w-5 h-5 text-gray-400" />
-                        ) : (
-                          <ChevronDown className="w-5 h-5 text-gray-400" />
-                        )}
-                      </div>
-                    </button>
+                    )}
 
-                    {expandedApproved[cycle._id] && (
-                      <div className="p-5 space-y-4">
-                        {/* Final Movimientos Table (read-only) */}
-                        <div className="overflow-x-auto border border-gray-200 rounded-lg">
-                          <table className="w-full text-sm">
-                            <thead>
-                              <tr className="bg-gray-50">
-                                <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">#</th>
-                                {EDITABLE_FIELDS.map((f) => (
-                                  <th key={f} className="px-3 py-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                                    {FIELD_LABELS[f] || f}
-                                  </th>
-                                ))}
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-100">
-                              {(cycle.movimientos_admin || cycle.movimientos).map((mov, idx) => (
-                                <tr key={idx} className="hover:bg-gray-50">
-                                  <td className="px-3 py-2 text-gray-400 text-xs">{idx + 1}</td>
-                                  {EDITABLE_FIELDS.map((f) => (
-                                    <td key={f} className="px-3 py-2 text-gray-700">
-                                      {["aporte", "actividad", "credito_pago"].includes(f)
-                                        ? formatCurrency((mov as Record<string, unknown>)[f] as number)
-                                        : String((mov as Record<string, unknown>)[f] ?? "-")}
-                                    </td>
-                                  ))}
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
+                    {renderCycleTable(cycle, isApproved)}
 
-                        {/* Admin Changes */}
-                        {cycle.cambios_admin && cycle.cambios_admin.length > 0 && (
-                          <div className="mt-4">
-                            <h4 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
-                              <Eye className="w-4 h-4" />
-                              Cambios realizados por el administrador
-                            </h4>
-                            <div className="space-y-2">
-                              {cycle.cambios_admin.map((cambio, idx) => (
-                                <div key={idx} className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-                                  <p className="text-sm font-medium text-amber-800">{cambio.nombre}</p>
-                                  <div className="mt-1 space-y-1">
-                                    {Object.entries(cambio.cambios).map(([field, diff]) => (
-                                      <p key={field} className="text-xs text-amber-700">
-                                        <span className="font-medium">{FIELD_LABELS[field] || field}:</span>{" "}
-                                        <span className="line-through text-red-500">{String(diff.antes)}</span>{" "}
-                                        <span className="text-green-700 font-semibold">{String(diff.despues)}</span>
-                                      </p>
-                                    ))}
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {(!cycle.cambios_admin || cycle.cambios_admin.length === 0) && (
-                          <p className="text-sm text-gray-400 italic">Sin cambios del administrador</p>
-                        )}
+                    {!isApproved && (
+                      <div className="flex justify-end gap-2">
+                        <button
+                          onClick={() => handleReject(cycle)}
+                          disabled={processing === cycle._id}
+                          className="px-4 py-2 rounded-xl bg-red-100 text-red-700 font-semibold text-sm hover:bg-red-200 disabled:opacity-50 inline-flex items-center gap-2"
+                        >
+                          <XCircle size={16} /> Rechazar
+                        </button>
+                        <button
+                          onClick={() => handleApprove(cycle)}
+                          disabled={processing === cycle._id}
+                          className={`px-5 py-2 rounded-xl font-semibold text-sm disabled:opacity-50 inline-flex items-center gap-2 ${
+                            changed
+                              ? "bg-amber-500 text-white hover:bg-amber-600"
+                              : "bg-emerald-600 text-white hover:bg-emerald-700"
+                          }`}
+                        >
+                          {processing === cycle._id ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle size={16} />}
+                          {changed ? "Enviar ajustes al fondo" : "Aprobar (sin cambios)"}
+                        </button>
                       </div>
                     )}
                   </div>
-                ))
-              )}
-            </div>
-          )}
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>

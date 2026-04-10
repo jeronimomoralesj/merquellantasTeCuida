@@ -38,6 +38,14 @@ interface FondoMember {
   monto_aporte: number;
 }
 
+interface CreditPayment {
+  cartera_id: string;
+  credito_id: string;
+  monto: number;
+  saldo_total: number;
+  cuota_esperada: number;
+}
+
 interface CycleRow {
   user_id: string;
   nombre: string;
@@ -47,23 +55,26 @@ interface CycleRow {
   permanente: number;
   social: number;
   actividad: number;
-  credito_pago: number;
+  creditos: CreditPayment[];
+  credito_pago_total?: number;
 }
 
-interface CambioRow {
+interface BudgetAdjustment {
   user_id: string;
   nombre: string;
-  cambios: Record<string, { antes: unknown; despues: unknown }>;
+  total_anterior: number;
+  total_nuevo: number;
 }
 
 interface Ciclo {
   _id?: string;
   id?: string;
   periodo: string;
-  estado: "enviado_admin" | "aprobado" | "rechazado";
+  estado: "enviado_admin" | "ajustes_admin" | "aprobado" | "rechazado";
   movimientos: CycleRow[];
-  movimientos_admin?: CycleRow[] | null;
-  cambios_admin?: CambioRow[] | null;
+  movimientos_admin?: BudgetAdjustment[] | null;
+  ajustes_admin_at?: string;
+  revision_count?: number;
   created_at: string;
 }
 
@@ -290,61 +301,113 @@ export default function FondoPage() {
 /* ================================================================== */
 
 function CicloActualTab() {
-  const [members, setMembers] = useState<FondoMember[]>([]);
   const [rows, setRows] = useState<CycleRow[]>([]);
   const [filter, setFilter] = useState("");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
+  const [periodo, setPeriodo] = useState<string>("");
+  const [periodoLabel, setPeriodoLabel] = useState<string>("");
+  const [existingCiclo, setExistingCiclo] = useState<Ciclo | null>(null);
+  const [budgetMap, setBudgetMap] = useState<Record<string, number>>({});
+
+  // Compute current periodo (YYYY-MM-A or YYYY-MM-B)
+  const computeCurrentPeriodo = () => {
+    const now = new Date();
+    const day = now.getDate();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, "0");
+    const half = day <= 15 ? "A" : "B";
+    return `${year}-${month}-${half}`;
+  };
+
+  const formatPeriodoLabel = (p: string) => {
+    const [y, m, h] = p.split("-");
+    const monthNames = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+    const monthLabel = monthNames[parseInt(m) - 1] || m;
+    return `${h === "A" ? "1ra quincena" : "2da quincena"} de ${monthLabel} ${y}`;
+  };
 
   useEffect(() => {
     (async () => {
       try {
-        // Fetch members AND all active credits in parallel
+        const currentPeriodo = computeCurrentPeriodo();
+        setPeriodo(currentPeriodo);
+        setPeriodoLabel(formatPeriodoLabel(currentPeriodo));
+
+        // Check for existing cycle for this periodo first
+        const ciclosRes = await fetch(`/api/fondo/ciclos?periodo=${currentPeriodo}`);
+        const ciclos: Ciclo[] = ciclosRes.ok ? await ciclosRes.json() : [];
+        const existing = ciclos.find(c => c.estado === "enviado_admin" || c.estado === "ajustes_admin" || c.estado === "aprobado");
+
+        if (existing) {
+          setExistingCiclo(existing);
+          // If we're in ajustes_admin state, we still need to load and show the rows
+          if (existing.estado !== "ajustes_admin") {
+            setLoading(false);
+            return;
+          }
+        }
+
+        // Fetch members and active credits
         const [memRes, cartRes] = await Promise.all([
           fetch("/api/fondo/members"),
           fetch("/api/fondo/cartera?estado=activo"),
         ]);
         if (!memRes.ok) throw new Error("Error cargando miembros");
         const data: FondoMember[] = await memRes.json();
-        setMembers(data);
 
-        // Build map: user_id → total expected payment for this period
-        // For each active credit, calculate cuota = (valor + total_interes) / numero_cuotas
-        // Sum across all active credits for that user
-        const debtByUser = new Map<string, number>();
+        // Group active credits by user
+        const creditsByUser = new Map<string, CreditPayment[]>();
         if (cartRes.ok) {
           const credits: Array<{
+            _id: string;
             user_id: string;
-            valor_prestamo: number;
-            tasa_interes: number;
-            numero_cuotas: number;
+            credito_id?: string;
             cuotas_restantes: number;
             saldo_total: number;
-            frecuencia_pago?: string;
           }> = await cartRes.json();
-
           for (const c of credits) {
             if (c.cuotas_restantes <= 0) continue;
-            // Cuota per period = saldo_total / cuotas_restantes (auto-adjusts to over/under payments)
             const cuota = Math.round(c.saldo_total / c.cuotas_restantes);
-            debtByUser.set(c.user_id, (debtByUser.get(c.user_id) || 0) + cuota);
+            const arr = creditsByUser.get(c.user_id) || [];
+            arr.push({
+              cartera_id: c._id,
+              credito_id: c.credito_id || c._id.slice(-6),
+              monto: cuota,
+              saldo_total: c.saldo_total,
+              cuota_esperada: cuota,
+            });
+            creditsByUser.set(c.user_id, arr);
           }
         }
 
+        // If existing is in ajustes_admin, build budget map from admin's adjustments
+        if (existing && existing.estado === "ajustes_admin" && existing.movimientos_admin) {
+          const bm: Record<string, number> = {};
+          for (const adj of existing.movimientos_admin) {
+            bm[adj.user_id] = adj.total_nuevo;
+          }
+          setBudgetMap(bm);
+        }
+
         setRows(
-          data.map((m) => ({
-            user_id: m.user_id,
-            nombre: m.nombre,
-            cedula: m.cedula,
-            frecuencia: m.frecuencia,
-            aporte: m.monto_aporte,
-            permanente: +(m.monto_aporte * 0.9).toFixed(0),
-            social: +(m.monto_aporte * 0.1).toFixed(0),
-            actividad: 0,
-            credito_pago: debtByUser.get(m.user_id) || 0,
-          }))
+          data.map((m) => {
+            const aporte = m.monto_aporte;
+            const creditos = creditsByUser.get(m.user_id) || [];
+            return {
+              user_id: m.user_id,
+              nombre: m.nombre,
+              cedula: m.cedula,
+              frecuencia: m.frecuencia,
+              aporte,
+              permanente: +(aporte * 0.9).toFixed(0),
+              social: +(aporte * 0.1).toFixed(0),
+              actividad: 0,
+              creditos,
+            };
+          })
         );
       } catch {
         setError("No se pudieron cargar los miembros del fondo.");
@@ -354,8 +417,8 @@ function CicloActualTab() {
     })();
   }, []);
 
-  const updateRow = useCallback(
-    (idx: number, field: keyof CycleRow, value: string | number) => {
+  const updateRowField = useCallback(
+    (idx: number, field: "frecuencia" | "aporte" | "actividad", value: string | number) => {
       setRows((prev) => {
         const next = [...prev];
         const row = { ...next[idx] };
@@ -368,8 +431,6 @@ function CicloActualTab() {
           row.social = +(n * 0.1).toFixed(0);
         } else if (field === "actividad") {
           row.actividad = Number(value) || 0;
-        } else if (field === "credito_pago") {
-          row.credito_pago = Number(value) || 0;
         }
         next[idx] = row;
         return next;
@@ -378,13 +439,33 @@ function CicloActualTab() {
     []
   );
 
+  const updateCreditPayment = useCallback(
+    (rowIdx: number, creditIdx: number, value: string) => {
+      setRows((prev) => {
+        const next = [...prev];
+        const row = { ...next[rowIdx] };
+        const creditos = [...row.creditos];
+        creditos[creditIdx] = { ...creditos[creditIdx], monto: Number(value) || 0 };
+        row.creditos = creditos;
+        next[rowIdx] = row;
+        return next;
+      });
+    },
+    []
+  );
+
+  const computeRowTotal = (row: CycleRow): number => {
+    const creditTotal = row.creditos.reduce((s, c) => s + (c.monto || 0), 0);
+    return (row.aporte || 0) + (row.actividad || 0) + creditTotal;
+  };
+
   const filtered = useMemo(
     () => {
       const q = filter.toLowerCase().trim();
       if (!q) return rows;
       return rows.filter((r) =>
         r.nombre.toLowerCase().includes(q) ||
-        (r.cedula || '').toLowerCase().includes(q)
+        (r.cedula || "").toLowerCase().includes(q)
       );
     },
     [rows, filter]
@@ -395,16 +476,25 @@ function CicloActualTab() {
     setError("");
     setSuccess(false);
     try {
+      // Add credito_pago_total computed for backwards compat
+      const movimientos = rows.map(r => ({
+        ...r,
+        credito_pago_total: r.creditos.reduce((s, c) => s + (c.monto || 0), 0),
+      }));
+
       const res = await fetch("/api/fondo/ciclos", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ periodo: currentPeriod(), movimientos: rows }),
+        body: JSON.stringify({ periodo, movimientos }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error || "Error al enviar el ciclo");
       }
       setSuccess(true);
+      // Mark cycle as existing now
+      const data = await res.json();
+      setExistingCiclo({ ...existingCiclo, _id: data.id, estado: "enviado_admin", periodo, movimientos: rows, created_at: new Date().toISOString() });
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Error desconocido");
     } finally {
@@ -420,6 +510,36 @@ function CicloActualTab() {
     );
   }
 
+  // If a cycle already exists for this period and it's NOT in ajustes_admin state,
+  // show a "already submitted" message
+  if (existingCiclo && existingCiclo.estado !== "ajustes_admin") {
+    const stateLabels: Record<string, { label: string; color: string }> = {
+      enviado_admin: { label: "Enviado al administrador", color: "bg-amber-100 text-amber-800 border-amber-300" },
+      aprobado: { label: "Aprobado", color: "bg-emerald-100 text-emerald-800 border-emerald-300" },
+      rechazado: { label: "Rechazado", color: "bg-red-100 text-red-800 border-red-300" },
+    };
+    const stateInfo = stateLabels[existingCiclo.estado] || { label: existingCiclo.estado, color: "bg-gray-100 text-gray-800" };
+    return (
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 text-center">
+        <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-amber-100 flex items-center justify-center">
+          <Check className="w-8 h-8 text-amber-600" />
+        </div>
+        <h2 className="text-xl font-bold text-gray-900 mb-2">Ciclo ya enviado</h2>
+        <p className="text-sm text-gray-600 mb-4">
+          Ya existe un ciclo para la <strong>{periodoLabel}</strong>.
+        </p>
+        <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border ${stateInfo.color}`}>
+          {stateInfo.label}
+        </span>
+        <p className="text-xs text-gray-500 mt-6">
+          El próximo ciclo estará disponible cuando inicie la siguiente quincena.
+        </p>
+      </div>
+    );
+  }
+
+  const isAjustesMode = existingCiclo?.estado === "ajustes_admin";
+
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
       {/* Header */}
@@ -428,11 +548,16 @@ function CicloActualTab() {
           <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
             <Clock size={20} className="text-[#ff9900]" />
             Ciclo Actual
+            {isAjustesMode && (
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-300">
+                Ajustes pendientes
+              </span>
+            )}
           </h2>
           <p className="text-sm text-gray-500 mt-1">
             Periodo:{" "}
             <span className="font-semibold text-gray-800">
-              {currentPeriod()}
+              {periodoLabel}
             </span>
           </p>
         </div>
@@ -460,10 +585,17 @@ function CicloActualTab() {
             ) : (
               <Send size={16} />
             )}
-            Aprobar y Enviar
+            {isAjustesMode ? "Reenviar al administrador" : "Aprobar y Enviar"}
           </button>
         </div>
       </div>
+
+      {isAjustesMode && (
+        <div className="mx-5 mt-4 p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-sm">
+          <p className="font-semibold mb-1">El administrador ajustó los presupuestos.</p>
+          <p className="text-xs">Los presupuestos máximos por usuario aparecen en la columna &quot;Presupuesto admin&quot;. Redistribuye el dinero entre las categorías sin sobrepasar el presupuesto y reenvía.</p>
+        </div>
+      )}
 
       {/* Messages */}
       {error && (
@@ -477,99 +609,101 @@ function CicloActualTab() {
         </div>
       )}
 
-      {/* Table */}
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
-              <th className="px-4 py-3">Nombre</th>
-              <th className="px-4 py-3">Cedula</th>
-              <th className="px-4 py-3">Frecuencia</th>
-              <th className="px-4 py-3 text-right">Aporte ($)</th>
-              <th className="px-4 py-3 text-right">Permanente (90%)</th>
-              <th className="px-4 py-3 text-right">Social (10%)</th>
-              <th className="px-4 py-3 text-right">Actividad ($)</th>
-              <th className="px-4 py-3 text-right">Crédito Pago ($)</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {filtered.map((row) => {
-              const idx = rows.findIndex((r) => r.user_id === row.user_id);
-              return (
-                <tr
-                  key={row.user_id}
-                  className="hover:bg-[#ff9900]/[0.03] transition-colors"
-                >
-                  <td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">
-                    {row.nombre}
-                  </td>
-                  <td className="px-4 py-3 text-gray-600">{row.cedula}</td>
-                  <td className="px-4 py-3">
-                    <select
-                      value={row.frecuencia}
-                      onChange={(e) =>
-                        updateRow(idx, "frecuencia", e.target.value)
-                      }
-                      className="rounded-lg border border-gray-200 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff9900]/40 focus:border-[#ff9900] bg-white"
-                    >
-                      <option value="quincenal">Quincenal (cada 15 dias)</option>
-                      <option value="mensual">Mensual (cada mes)</option>
-                    </select>
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <input
-                      type="number"
-                      min={0}
-                      value={row.aporte}
-                      onChange={(e) =>
-                        updateRow(idx, "aporte", e.target.value)
-                      }
-                      className="w-28 text-right rounded-lg border border-gray-200 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff9900]/40 focus:border-[#ff9900]"
-                    />
-                  </td>
-                  <td className="px-4 py-3 text-right text-gray-500 font-mono">
-                    {fmt(row.permanente)}
-                  </td>
-                  <td className="px-4 py-3 text-right text-gray-500 font-mono">
-                    {fmt(row.social)}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <input
-                      type="number"
-                      min={0}
-                      value={row.actividad}
-                      onChange={(e) =>
-                        updateRow(idx, "actividad", e.target.value)
-                      }
-                      className="w-28 text-right rounded-lg border border-gray-200 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff9900]/40 focus:border-[#ff9900]"
-                    />
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <input
-                      type="number"
-                      min={0}
-                      value={row.credito_pago}
-                      onChange={(e) =>
-                        updateRow(idx, "credito_pago", e.target.value)
-                      }
-                      className="w-28 text-right rounded-lg border border-gray-200 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff9900]/40 focus:border-[#ff9900]"
-                    />
-                  </td>
-                </tr>
-              );
-            })}
-            {filtered.length === 0 && (
-              <tr>
-                <td
-                  colSpan={8}
-                  className="px-4 py-12 text-center text-gray-400"
-                >
-                  No se encontraron miembros.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+      {/* Cards-per-user layout (cleaner for the multi-credit case) */}
+      <div className="p-4 space-y-3">
+        {filtered.length === 0 && (
+          <div className="text-center py-12 text-gray-400 text-sm">No se encontraron miembros.</div>
+        )}
+        {filtered.map((row) => {
+          const idx = rows.findIndex((r) => r.user_id === row.user_id);
+          const total = computeRowTotal(row);
+          const budget = budgetMap[row.user_id];
+          const overBudget = budget !== undefined && total > budget;
+          return (
+            <div
+              key={row.user_id}
+              className={`rounded-xl border ${overBudget ? "border-red-300 bg-red-50/30" : "border-gray-200 bg-white"} p-4`}
+            >
+              <div className="flex items-start justify-between flex-wrap gap-3 mb-3">
+                <div>
+                  <p className="font-bold text-gray-900">{row.nombre}</p>
+                  <p className="text-xs text-gray-500">CC {row.cedula}</p>
+                </div>
+                <div className="flex items-center gap-3 flex-wrap">
+                  {budget !== undefined && (
+                    <div className={`px-3 py-1.5 rounded-lg border text-xs ${overBudget ? "bg-red-100 border-red-300 text-red-800" : "bg-amber-50 border-amber-200 text-amber-800"}`}>
+                      <span className="font-semibold">Presupuesto admin:</span> {fmt(budget)}
+                    </div>
+                  )}
+                  <div className={`px-3 py-1.5 rounded-lg border text-xs ${overBudget ? "bg-red-100 border-red-300 text-red-800" : "bg-emerald-50 border-emerald-200 text-emerald-800"}`}>
+                    <span className="font-semibold">Total:</span> {fmt(total)}
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+                <div>
+                  <label className="block text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Frecuencia</label>
+                  <select
+                    value={row.frecuencia}
+                    onChange={(e) => updateRowField(idx, "frecuencia", e.target.value)}
+                    className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#ff9900]/40 focus:border-[#ff9900]"
+                  >
+                    <option value="quincenal">Quincenal</option>
+                    <option value="mensual">Mensual</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Aporte ($) — 90% perm / 10% social</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={row.aporte}
+                    onChange={(e) => updateRowField(idx, "aporte", e.target.value)}
+                    className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff9900]/40 focus:border-[#ff9900]"
+                  />
+                  <p className="text-[9px] text-gray-400 mt-0.5">Permanente: {fmt(row.permanente)} · Social: {fmt(row.social)}</p>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Actividad ($)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={row.actividad}
+                    onChange={(e) => updateRowField(idx, "actividad", e.target.value)}
+                    className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff9900]/40 focus:border-[#ff9900]"
+                  />
+                </div>
+              </div>
+
+              {/* Credits — one input per active loan */}
+              {row.creditos.length > 0 && (
+                <div>
+                  <label className="block text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                    Créditos activos ({row.creditos.length})
+                  </label>
+                  <div className="space-y-2">
+                    {row.creditos.map((cr, ci) => (
+                      <div key={cr.cartera_id} className="flex items-center gap-3 p-2 rounded-lg bg-gray-50 border border-gray-100">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold text-gray-700 truncate">Crédito {cr.credito_id}</p>
+                          <p className="text-[10px] text-gray-500">Saldo: {fmt(cr.saldo_total)} · Cuota esperada: {fmt(cr.cuota_esperada)}</p>
+                        </div>
+                        <input
+                          type="number"
+                          min={0}
+                          value={cr.monto}
+                          onChange={(e) => updateCreditPayment(idx, ci, e.target.value)}
+                          className="w-32 text-right rounded-lg border border-gray-200 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff9900]/40 focus:border-[#ff9900]"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -645,10 +779,9 @@ function HistorialTab() {
                     {c.periodo}
                   </span>
                   {estadoBadge(c.estado)}
-                  {c.cambios_admin && c.cambios_admin.length > 0 && (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-300">
-                      <AlertCircle size={12} />
-                      {c.cambios_admin.length} cambio{c.cambios_admin.length !== 1 ? "s" : ""}
+                  {(c.revision_count || 0) > 0 && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 border border-blue-300">
+                      Revisión {c.revision_count}
                     </span>
                   )}
                 </div>
@@ -666,89 +799,40 @@ function HistorialTab() {
 
               {expanded === (c._id || c.id) && (
                 <div className="px-5 pb-5 space-y-4">
-                  {/* Build a map of changes by user_id for fast lookup */}
                   {(() => {
-                    const cambiosMap = new Map<string, CambioRow>();
-                    if (c.cambios_admin) {
-                      for (const cambio of c.cambios_admin) {
-                        cambiosMap.set(cambio.user_id, cambio);
-                      }
-                    }
-
-                    // Use admin version if approved, otherwise the original proposal
-                    const displayRows = c.movimientos_admin || c.movimientos || [];
-                    const originalRows = c.movimientos || [];
+                    const movimientos = c.movimientos || [];
+                    const computeTotal = (m: CycleRow): number => {
+                      const credTotal = Array.isArray(m.creditos)
+                        ? m.creditos.reduce((s, x) => s + (Number(x.monto) || 0), 0)
+                        : (m.credito_pago_total || 0);
+                      return (Number(m.aporte) || 0) + (Number(m.actividad) || 0) + credTotal;
+                    };
 
                     return (
                       <>
-                        {/* Legend */}
-                        {cambiosMap.size > 0 && (
-                          <div className="flex flex-wrap items-center gap-3 text-xs">
-                            <span className="text-gray-500 font-semibold">Leyenda:</span>
-                            <span className="inline-flex items-center gap-1.5">
-                              <span className="w-3 h-3 rounded bg-amber-100 border border-amber-300" />
-                              <span className="text-gray-600">Modificado por admin</span>
-                            </span>
-                            <span className="inline-flex items-center gap-1.5">
-                              <span className="text-gray-400 line-through">propuesto</span>
-                              <span>→</span>
-                              <span className="text-emerald-700 font-semibold">real</span>
-                            </span>
-                          </div>
-                        )}
-
                         <div className="overflow-x-auto rounded-xl border border-gray-200">
                           <table className="w-full text-sm">
                             <thead>
                               <tr className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
                                 <th className="px-3 py-2">Nombre</th>
                                 <th className="px-3 py-2 text-right">Aporte</th>
-                                <th className="px-3 py-2 text-right">Permanente</th>
-                                <th className="px-3 py-2 text-right">Social</th>
                                 <th className="px-3 py-2 text-right">Actividad</th>
-                                <th className="px-3 py-2 text-right">Crédito Pago</th>
+                                <th className="px-3 py-2 text-right">Créditos</th>
+                                <th className="px-3 py-2 text-right">Total</th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
-                              {displayRows.map((r, i) => {
-                                const cambio = cambiosMap.get(r.user_id);
-                                const original = originalRows[i];
-                                const modified = !!cambio;
-                                const renderCell = (field: string, value: number) => {
-                                  const wasChanged = cambio?.cambios?.[field];
-                                  if (!wasChanged || !original) {
-                                    return <span className="text-gray-600">{fmt(value)}</span>;
-                                  }
-                                  const before = (original as unknown as Record<string, number>)[field];
-                                  return (
-                                    <div className="flex flex-col items-end gap-0.5">
-                                      <span className="text-gray-400 line-through text-xs">{fmt(before || 0)}</span>
-                                      <span className="text-emerald-700 font-semibold">{fmt(value)}</span>
-                                    </div>
-                                  );
-                                };
+                              {movimientos.map((r, i) => {
+                                const credTotal = Array.isArray(r.creditos)
+                                  ? r.creditos.reduce((s, x) => s + (Number(x.monto) || 0), 0)
+                                  : (r.credito_pago_total || 0);
                                 return (
-                                  <tr
-                                    key={i}
-                                    className={`transition-colors ${
-                                      modified
-                                        ? "bg-amber-50 hover:bg-amber-100"
-                                        : "hover:bg-gray-50"
-                                    }`}
-                                  >
-                                    <td className="px-3 py-2 font-medium text-gray-900">
-                                      {r.nombre}
-                                      {modified && (
-                                        <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-200 text-amber-900 uppercase">
-                                          Modificado
-                                        </span>
-                                      )}
-                                    </td>
-                                    <td className="px-3 py-2 text-right">{renderCell("aporte", r.aporte)}</td>
-                                    <td className="px-3 py-2 text-right">{renderCell("permanente", r.permanente)}</td>
-                                    <td className="px-3 py-2 text-right">{renderCell("social", r.social)}</td>
-                                    <td className="px-3 py-2 text-right">{renderCell("actividad", r.actividad)}</td>
-                                    <td className="px-3 py-2 text-right">{renderCell("credito_pago", r.credito_pago)}</td>
+                                  <tr key={i} className="hover:bg-gray-50">
+                                    <td className="px-3 py-2 font-medium text-gray-900">{r.nombre}</td>
+                                    <td className="px-3 py-2 text-right text-gray-600">{fmt(r.aporte || 0)}</td>
+                                    <td className="px-3 py-2 text-right text-gray-600">{fmt(r.actividad || 0)}</td>
+                                    <td className="px-3 py-2 text-right text-gray-600">{fmt(credTotal)}</td>
+                                    <td className="px-3 py-2 text-right font-semibold text-gray-900">{fmt(computeTotal(r))}</td>
                                   </tr>
                                 );
                               })}
@@ -756,7 +840,7 @@ function HistorialTab() {
                           </table>
                         </div>
 
-                        {cambiosMap.size === 0 && c.estado === "aprobado" && (
+                        {c.estado === "aprobado" && (
                           <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm flex items-center gap-2">
                             <Check size={16} />
                             Aprobado sin cambios por el administrador.
