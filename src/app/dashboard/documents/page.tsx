@@ -1,23 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { onAuthStateChanged } from 'firebase/auth';
-import { 
-  collection, 
-  getDocs, 
-  addDoc, 
-  deleteDoc, 
-  doc, 
-  getDoc,
-  Timestamp
-} from 'firebase/firestore';
-import { 
-  ref, 
-  uploadBytes, 
-  getDownloadURL, 
-  deleteObject 
-} from 'firebase/storage';
-import { db, storage, auth } from '../../../firebase'; // Adjust path as needed
+import { useSession } from 'next-auth/react';
 import DashboardNavbar from '../navbar';
 import { 
   FileText, 
@@ -38,118 +22,48 @@ interface Document {
   id: string;
   name: string;
   category: string;
-  dateUploaded: Timestamp | Date; 
+  dateUploaded: string;
   document: string;
   size?: string;
   type?: 'pdf' | 'excel' | 'word' | 'other';
 }
 
-interface UserData {
-  nombre: string;
-  rol: string;
-  posicion: string;
-  antiguedad?: number | string;
-  extra?: Record<string, unknown>;
-}
-
 
 export default function DocumentsPage() {
+  const { data: session } = useSession();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [loading, setLoading] = useState(false);
   const [documents, setDocuments] = useState<Document[]>([]);
-  const [userRole, setUserRole] = useState<string>('user');
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadName, setUploadName] = useState('');
   const [uploadCategory, setUploadCategory] = useState('');
   const [uploading, setUploading] = useState(false);
 
-  // Helper functions
-  const convertExcelDateToJSDate = (excelDate: number): Date => {
-    const excelEpoch = new Date(1900, 0, 1);
-    const jsDate = new Date(excelEpoch.getTime() + (excelDate - 2) * 24 * 60 * 60 * 1000);
-    return jsDate;
-  };
+  const userRole = (session?.user as { rol?: string } | undefined)?.rol || 'user';
 
-  const calculateYearsOfService = (startDate: Date): number => {
-    const today = new Date();
-    const years = today.getFullYear() - startDate.getFullYear();
-    const monthDiff = today.getMonth() - startDate.getMonth();
-    
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < startDate.getDate())) {
-      return years - 1;
-    }
-    return years;
-  };
-
-  // Auth and user profile setup
+  // Fetch documents on mount
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (u) => {
-      if (!u) return;
-      
-      const snap = await getDoc(doc(db, 'users', u.uid));
-      if (snap.exists()) {
-        const data = snap.data() as UserData;
-
-        // Handle antiguedad calculation
-        let calculatedAntiguedad = 0;
-
-// Check if Fecha Ingreso exists and is a number
-const rawFechaIngreso = data.extra?.["Fecha Ingreso"];
-if (typeof rawFechaIngreso === 'number' && rawFechaIngreso > 1000) {
-  console.log("Fecha Ingreso found:", rawFechaIngreso);
-  const startDate = convertExcelDateToJSDate(rawFechaIngreso);
-  console.log("Converted start date:", startDate);
-  calculatedAntiguedad = calculateYearsOfService(startDate);
-  console.log("Calculated antiguedad:", calculatedAntiguedad);
-} else if (data.antiguedad) {
-  if (typeof data.antiguedad === 'number' && data.antiguedad > 1000) {
-    const startDate = convertExcelDateToJSDate(data.antiguedad);
-    calculatedAntiguedad = calculateYearsOfService(startDate);
-    console.log("Converted antiguedad from Excel date:", calculatedAntiguedad);
-  } else if (typeof data.antiguedad === 'string') {
-    calculatedAntiguedad = parseInt(data.antiguedad) || 0;
-    console.log("Parsed antiguedad from string:", calculatedAntiguedad);
-  } else {
-    calculatedAntiguedad = data.antiguedad as number;
-    console.log("Assigned antiguedad as number:", calculatedAntiguedad);
-  }
-}
-
-
-        setUserRole(data.rol || "user");
-      }
-    });
-    
-    return () => unsub();
+    fetchDocuments();
   }, []);
-
-  // Fetch documents from Firestore
-useEffect(() => {
-  fetchDocuments();
-}, []);
 
 
   const fetchDocuments = useCallback(async () => {
     setLoading(true);
     try {
-      const querySnapshot = await getDocs(collection(db, 'documentos'));
-      const docs: Document[] = [];
-      
-      querySnapshot.forEach((doc) => {
-        const data = doc.data();
-        docs.push({
-          id: doc.id,
-          name: data.name,
-          category: data.category,
-          dateUploaded: data.dateUploaded,
-          document: data.document,
-          size: data.size || 'N/A',
-          type: getFileTypeFromUrl(data.document)
-        });
-      });
-      
+      const res = await fetch('/api/documentos');
+      if (!res.ok) throw new Error('Failed to fetch documents');
+      const data = await res.json();
+      const docs: Document[] = (data.documents ?? data).map((d: Record<string, unknown>) => ({
+        id: d.id,
+        name: d.name,
+        category: d.category,
+        dateUploaded: d.date_uploaded || d.dateUploaded,
+        document: d.document,
+        size: d.size || 'N/A',
+        type: getFileTypeFromUrl(d.document as string)
+      }));
       setDocuments(docs);
     } catch (error) {
       console.error('Error fetching documents:', error);
@@ -205,28 +119,20 @@ useEffect(() => {
   };
 
   // Format date
-const formatDate = (
-  timestamp: Timestamp | Date | string | null | undefined
-): string => {
-  if (!timestamp) return 'N/A';
+  const formatDate = (
+    timestamp: string | Date | null | undefined
+  ): string => {
+    if (!timestamp) return 'N/A';
 
-  let date: Date;
-  if (typeof timestamp === 'string') {
-    date = new Date(timestamp);
-  } else if (timestamp instanceof Date) {
-    date = timestamp;
-  } else if ('toDate' in timestamp) {
-    date = timestamp.toDate();
-  } else {
-    return 'N/A';
-  }
+    const date = typeof timestamp === 'string' ? new Date(timestamp) : timestamp;
+    if (isNaN(date.getTime())) return 'N/A';
 
-  return date.toLocaleDateString('es-ES', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  });
-};
+    return date.toLocaleDateString('es-ES', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+  };
 
   // Handle file upload
   const handleUpload = async () => {
@@ -237,19 +143,27 @@ const formatDate = (
 
     setUploading(true);
     try {
-      // Upload file to Firebase Storage
-      const storageRef = ref(storage, `documentos/${uploadFile.name}`);
-      const snapshot = await uploadBytes(storageRef, uploadFile);
-      const downloadURL = await getDownloadURL(snapshot.ref);
+      // Upload file via API
+      const formData = new FormData();
+      formData.append('file', uploadFile);
+      formData.append('folder', 'documentos');
 
-      // Add document to Firestore
-      await addDoc(collection(db, 'documentos'), {
-        name: uploadName,
-        category: uploadCategory,
-        dateUploaded: new Date(),
-        document: downloadURL,
-        size: `${(uploadFile.size / (1024 * 1024)).toFixed(2)} MB`
+      const uploadRes = await fetch('/api/upload', { method: 'POST', body: formData });
+      if (!uploadRes.ok) throw new Error('Upload failed');
+      const { url: downloadURL } = await uploadRes.json();
+
+      // Create document record via API
+      const docRes = await fetch('/api/documentos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: uploadName,
+          category: uploadCategory,
+          document: downloadURL,
+          size: `${(uploadFile.size / (1024 * 1024)).toFixed(2)} MB`
+        })
       });
+      if (!docRes.ok) throw new Error('Failed to create document record');
 
       // Reset form and refresh documents
       setUploadFile(null);
@@ -257,7 +171,7 @@ const formatDate = (
       setUploadCategory('');
       setShowUploadModal(false);
       fetchDocuments();
-      
+
       alert('Documento subido exitosamente');
     } catch (error) {
       console.error('Error uploading document:', error);
@@ -274,13 +188,13 @@ const formatDate = (
     }
 
     try {
-      // Delete from Firestore
-      await deleteDoc(doc(db, 'documentos', docToDelete.id));
-      
-      // Delete from Storage
-      const storageRef = ref(storage, docToDelete.document);
-      await deleteObject(storageRef);
-      
+      const res = await fetch('/api/documentos', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: docToDelete.id })
+      });
+      if (!res.ok) throw new Error('Failed to delete document');
+
       // Refresh documents
       fetchDocuments();
       alert('Documento eliminado exitosamente');

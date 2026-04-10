@@ -2,10 +2,8 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { MessageCircle, X, Send, MessageSquare } from "lucide-react";
-import { onAuthStateChanged } from "firebase/auth";
-import { doc, getDoc, setDoc, Timestamp } from "firebase/firestore";
-import { auth, db } from "../../../firebase";
 
 type Mood = "feliz" | "neutral" | "triste";
 type Role = "user" | "bot";
@@ -139,35 +137,37 @@ export default function BienestarChat() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const maxChars = 240;
 
-  const shouldAskMood = (lastMoodDate: { toDate: () => Date } | null) => {
+  const { data: session } = useSession();
+
+  const shouldAskMood = (lastMoodDate: string | null) => {
     if (!lastMoodDate) return true;
-    return new Date().toDateString() !== lastMoodDate.toDate().toDateString();
+    return new Date().toDateString() !== new Date(lastMoodDate).toDateString();
   };
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (!user) {
-        setUserName("");
-        setUserId(null);
-        return;
-      }
-      setUserId(user.uid);
+    if (!session?.user) {
+      setUserName("");
+      setUserId(null);
+      return;
+    }
+    setUserId(session.user.id);
+    setUserName(session.user.nombre || "Usuario");
+
+    // Fetch mood info from API
+    (async () => {
       try {
-        const userDoc = await getDoc(doc(db, "users", user.uid));
-        if (userDoc.exists()) {
-          const userData = userDoc.data();
-          setUserName(userData.nombre || "Usuario");
+        const res = await fetch("/api/users/me");
+        if (res.ok) {
+          const userData = await res.json();
           if (userData.mood && userData.mood.date && !shouldAskMood(userData.mood.date)) {
             setShowMoodSelector(false);
           }
         }
       } catch (e) {
         console.error("Error fetching user data:", e);
-        setUserName("Usuario");
       }
-    });
-    return () => unsubscribe();
-  }, []);
+    })();
+  }, [session]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -177,14 +177,14 @@ export default function BienestarChat() {
     if (isOpen && inputRef.current && !showMoodSelector) inputRef.current.focus();
   }, [isOpen, showMoodSelector]);
 
-  const storeMoodInFirebase = async (selectedMood: Mood) => {
+  const storeMood = async (selectedMood: Mood) => {
     if (!userId) return;
     try {
-      await setDoc(
-        doc(db, "users", userId),
-        { mood: { mood: selectedMood, date: Timestamp.now() } },
-        { merge: true }
-      );
+      await fetch("/api/users/mood", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mood: selectedMood }),
+      });
     } catch (e) {
       console.error("Error storing mood:", e);
     }
@@ -192,24 +192,27 @@ export default function BienestarChat() {
 
   const sendSadMoodAlert = async () => {
     try {
-      const formData = new FormData();
-      formData.append(
-        "email",
-        "saludocupacional@merquellantas.com, dptodelagente@merquellantas.com"
-      );
-      formData.append("subject", "Alert: Bienestar - usuario triste");
-      formData.append(
-        "message",
-        `Usuario: ${userName}\nEstado de ánimo: Triste\nFecha: ${new Date().toLocaleString(
-          "es-CO"
-        )}\n\nSistema de Bienestar - Merquellantas`
-      );
-      await fetch("https://formsubmit.co/ajax/marcelagonzalez@merquellantas.com", {
+      await fetch("/api/send-email", {
         method: "POST",
-        body: formData,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          emails: [
+            "marcelagonzalez@merquellantas.com",
+            "saludocupacional@merquellantas.com",
+            "dptodelagente@merquellantas.com",
+          ],
+          subject: "Alert: Bienestar - usuario triste",
+          html: `
+            <h2>Alerta de bienestar</h2>
+            <p><strong>Usuario:</strong> ${userName}</p>
+            <p><strong>Estado de ánimo:</strong> Triste</p>
+            <p><strong>Fecha:</strong> ${new Date().toLocaleString("es-CO")}</p>
+            <p>Sistema de Bienestar - Merquellantas</p>
+          `,
+        }),
       });
     } catch (e) {
-      console.error("Error sending email alert:", e);
+      console.error("Error sending email alert");
     }
   };
 
@@ -218,7 +221,7 @@ export default function BienestarChat() {
     setShowMoodSelector(false);
     setFinished(false);
     setCurrentNodeId("start");
-    await storeMoodInFirebase(selectedMood);
+    await storeMood(selectedMood);
     if (selectedMood === "triste") await sendSadMoodAlert();
 
     const startNode = FLOWS[selectedMood].start;

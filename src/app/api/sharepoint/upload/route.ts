@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { auth } from '../../../../lib/auth';
 
 // In-memory caches. These live for the lifetime of the serverless function
 // instance, which is fine — tokens are refreshed when they expire and folder
@@ -52,31 +53,25 @@ async function resolveFolder(
 ): Promise<{ driveId: string; itemId: string }> {
   if (cachedFolder) return cachedFolder;
 
-  const shareUrl = process.env.SHAREPOINT_FOLDER_SHARE_URL;
-  if (!shareUrl) {
-    throw new Error('Missing SHAREPOINT_FOLDER_SHARE_URL env variable');
-  }
+  const owner =
+    process.env.SHAREPOINT_FOLDER_OWNER ||
+    'saludocupacional@merquellantas.com';
+  const folderPath =
+    process.env.SHAREPOINT_FOLDER_PATH || '17. DOCUMENTOS NUESTRA GENTE';
 
-  // Strip tracking query params (e.g. ?e=...) — these break Graph's
-  // /shares endpoint with a 401 generalException.
-  const cleanUrl = shareUrl.split('?')[0];
-
-  // Encode the sharing URL into Graph's share token format: "u!" + base64url
-  const b64 = Buffer.from(cleanUrl)
-    .toString('base64')
-    .replace(/=+$/, '')
-    .replace(/\//g, '_')
-    .replace(/\+/g, '-');
-  const shareId = `u!${b64}`;
-
+  // Graph path addressing: /users/{upn}/drive/root:/path/to/folder
+  // encodeURI (not encodeURIComponent) preserves `/` as separator.
+  const encodedPath = encodeURI(folderPath);
   const res = await fetch(
-    `https://graph.microsoft.com/v1.0/shares/${shareId}/driveItem`,
+    `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(
+      owner
+    )}/drive/root:/${encodedPath}`,
     { headers: { Authorization: `Bearer ${token}` } }
   );
 
   if (!res.ok) {
     throw new Error(
-      `Share resolve failed: ${res.status} ${await res.text()}`
+      `Folder resolve failed: ${res.status} ${await res.text()}`
     );
   }
 
@@ -89,6 +84,11 @@ async function resolveFolder(
 }
 
 export async function POST(req: NextRequest) {
+  const session = await auth();
+  if (!session) {
+    return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+  }
+
   try {
     const formData = await req.formData();
     const file = formData.get('file') as File | null;

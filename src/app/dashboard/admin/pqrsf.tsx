@@ -13,17 +13,11 @@ import {
   FileText,
   Users
 } from "lucide-react";
-import { collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
-import { db } from '../../../firebase'; // Adjust path as needed
-
 interface PQRSF {
   id: string;
   cedula?: string;
-  createdAt: {
-    toDate: () => Date;
-    toMillis: () => number;
-  };
-  isAnonymous: boolean;
+  created_at: string;
+  is_anonymous: number;
   message: string;
   nombre?: string;
   type: string;
@@ -92,28 +86,9 @@ export default function PQRSFCard() {
       setLoading(true);
       setError(null);
 
-      const pqrsfQuery = query(
-        collection(db, 'pqrsf'), 
-        orderBy('createdAt', 'desc'),
-        limit(5)
-      );
-      
-      const pqrsfSnapshot = await getDocs(pqrsfQuery);
-      
-      const pqrsfData: PQRSF[] = [];
-      pqrsfSnapshot.forEach((doc) => {
-        const data = doc.data();
-        pqrsfData.push({
-          id: doc.id,
-          cedula: data.cedula,
-          createdAt: data.createdAt,
-          isAnonymous: data.isAnonymous || false,
-          message: data.message || '',
-          nombre: data.nombre,
-          type: data.type || 'Sin tipo',
-          userId: data.userId || ''
-        });
-      });
+      const res = await fetch('/api/pqrsf?limit=5');
+      if (!res.ok) throw new Error('Error fetching PQRSF');
+      const pqrsfData: PQRSF[] = await res.json();
 
       setPqrsfList(pqrsfData);
     } catch (err) {
@@ -129,27 +104,9 @@ export default function PQRSFCard() {
     try {
       setModalLoading(true);
 
-      const pqrsfQuery = query(
-        collection(db, 'pqrsf'), 
-        orderBy('createdAt', 'desc')
-      );
-      
-      const pqrsfSnapshot = await getDocs(pqrsfQuery);
-      
-      const pqrsfData: PQRSF[] = [];
-      pqrsfSnapshot.forEach((doc) => {
-        const data = doc.data();
-        pqrsfData.push({
-          id: doc.id,
-          cedula: data.cedula,
-          createdAt: data.createdAt,
-          isAnonymous: data.isAnonymous || false,
-          message: data.message || '',
-          nombre: data.nombre,
-          type: data.type || 'Sin tipo',
-          userId: data.userId || ''
-        });
-      });
+      const res = await fetch('/api/pqrsf');
+      if (!res.ok) throw new Error('Error fetching all PQRSF');
+      const pqrsfData: PQRSF[] = await res.json();
 
       setAllPqrsfList(pqrsfData);
     } catch (err) {
@@ -264,7 +221,7 @@ export default function PQRSFCard() {
                   <div className="flex items-center justify-between mb-1">
                     <h3 className="font-medium text-gray-900 truncate flex items-center gap-2">
                       {pqrsf.nombre || 'Sin nombre'}
-                      {pqrsf.isAnonymous && (
+                      {!!pqrsf.is_anonymous && (
                         <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-gray-200 text-gray-700">
                           Anónimo
                         </span>
@@ -280,7 +237,7 @@ export default function PQRSFCard() {
                   <div className="flex items-center text-xs text-gray-500 space-x-4">
                     <div className="flex items-center">
                       <Calendar className="h-3 w-3 mr-1" />
-                      {formatDate(pqrsf.createdAt.toDate())}
+                      {formatDate(new Date(pqrsf.created_at))}
                     </div>
                     {pqrsf.cedula && (
                       <div className="flex items-center">
@@ -327,7 +284,7 @@ export default function PQRSFCard() {
                       className="flex items-start p-4 rounded-xl hover:bg-gray-50 transition-colors border border-gray-100"
                     >
                       <div className={`w-10 h-10 rounded-full overflow-hidden ${getAvatarColor(index)} flex items-center justify-center font-medium flex-shrink-0`}>
-                        {pqrsf.isAnonymous || !pqrsf.nombre ? 
+                        {!!pqrsf.is_anonymous || !pqrsf.nombre ? 
                           <User className="h-5 w-5" /> : 
                           getAvatarInitials(pqrsf.nombre)
                         }
@@ -336,7 +293,7 @@ export default function PQRSFCard() {
                         <div className="flex items-center justify-between mb-1">
                           <h4 className="font-medium text-gray-900 truncate flex items-center gap-2">
                             {pqrsf.nombre || 'Sin nombre'}
-                            {pqrsf.isAnonymous && (
+                            {!!pqrsf.is_anonymous && (
                               <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-gray-200 text-gray-700">
                                 Anónimo
                               </span>
@@ -352,7 +309,7 @@ export default function PQRSFCard() {
                         <div className="flex items-center text-xs text-gray-500 space-x-4">
                           <div className="flex items-center">
                             <Calendar className="h-3 w-3 mr-1" />
-                            {formatDate(pqrsf.createdAt.toDate())}
+                            {formatDate(new Date(pqrsf.created_at))}
                           </div>
                           {pqrsf.cedula && (
                             <div className="flex items-center">

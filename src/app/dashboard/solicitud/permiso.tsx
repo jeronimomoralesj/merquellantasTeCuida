@@ -1,15 +1,14 @@
 'use client';
 
 import React, { useState } from 'react';
-import { 
-  Upload, 
-  CheckCircle, 
-  AlertCircle, 
+import {
+  Upload,
+  CheckCircle,
+  AlertCircle,
   Info,
   Clock
 } from 'lucide-react';
-import { addDoc, collection, doc, getDoc, serverTimestamp } from 'firebase/firestore';
-import { auth, db } from '../../../firebase';
+import { useSession } from 'next-auth/react';
 
 interface PermisoFormData {
   fecha: string;
@@ -20,6 +19,7 @@ interface PermisoFormData {
 }
 
 const PermisoForm = () => {
+  const { data: session } = useSession();
   const [formData, setFormData] = useState<PermisoFormData>({
     fecha: '',
     tiempoInicio: '',
@@ -87,30 +87,27 @@ const PermisoForm = () => {
     setIsSubmitting(true);
 
     try {
-      const user = auth.currentUser;
-      if (!user) {
+      if (!session) {
         setFormError('Debe iniciar sesión para enviar una solicitud');
         return;
       }
 
-      // Upload document to SharePoint (saludocupacional folder) if provided
+      // Upload document to OneDrive if provided
       let documentName: string | null = null;
       let documentUrl: string | null = null;
       if (formData.document) {
         const file = formData.document as File;
         const fd = new FormData();
         fd.append('file', file);
-        fd.append('filename', `${Date.now()}_${user.uid}_${file.name}`);
+        fd.append('folder', 'permisos');
 
-        const uploadRes = await fetch('/api/sharepoint/upload', {
+        const uploadRes = await fetch('/api/upload', {
           method: 'POST',
           body: fd,
         });
 
         if (!uploadRes.ok) {
-          const errData = await uploadRes.json().catch(() => ({}));
-          console.error('SharePoint upload failed', errData);
-          throw new Error('Error al subir el documento a SharePoint');
+          throw new Error('Error al subir el documento');
         }
 
         const uploaded = await uploadRes.json();
@@ -118,31 +115,26 @@ const PermisoForm = () => {
         documentName = uploaded.name;
       }
 
-      const userDoc = await getDoc(doc(db, 'users', user.uid));
-      const userData = userDoc.exists() ? userDoc.data() : {};
-      const { nombre, cedula } = userData;
+      const res = await fetch('/api/solicitudes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tipo: 'permiso',
+          fecha: formData.fecha,
+          tiempoInicio: formData.tiempoInicio,
+          tiempoFin: formData.tiempoFin,
+          description: formData.description,
+          documentName,
+          documentUrl,
+        }),
+      });
 
-      const solicitudData = {
-        userId: user.uid,
-        nombre: nombre || '',
-        cedula: cedula || '',
-        tipo: 'permiso',
-        estado: 'pendiente',
-        fecha: formData.fecha,
-        tiempoInicio: formData.tiempoInicio,
-        tiempoFin: formData.tiempoFin,
-        description: formData.description,
-        documentName,
-        documentUrl,
-        createdAt: serverTimestamp(),
-      };
+      if (!res.ok) throw new Error('Error al crear solicitud');
 
-      await addDoc(collection(db, 'solicitudes'), solicitudData);
+      // Send email notification
+      await sendEmailNotification(session.user.nombre || 'Usuario');
 
-// Send email notification
-await sendEmailNotification(nombre || 'Usuario');
-
-setSubmitted(true);
+      setSubmitted(true);
 
     } catch (err) {
       console.error(err);

@@ -1,0 +1,1339 @@
+"use client";
+
+import { useState, useEffect, useMemo, useCallback } from "react";
+import { useSession } from "next-auth/react";
+import {
+  Search,
+  Users,
+  DollarSign,
+  CreditCard,
+  Check,
+  Clock,
+  ShieldAlert,
+  LayoutDashboard,
+  ChevronDown,
+  ChevronRight,
+  X,
+  UserPlus,
+  Send,
+  AlertCircle,
+  History,
+  Wallet,
+  Activity,
+  Landmark,
+} from "lucide-react";
+import DashboardNavbar from "../navbar";
+
+/* ------------------------------------------------------------------ */
+/*  Types                                                              */
+/* ------------------------------------------------------------------ */
+
+interface FondoMember {
+  id: string;
+  user_id: string;
+  nombre: string;
+  cedula: string;
+  frecuencia: "quincenal" | "mensual";
+  monto_aporte: number;
+}
+
+interface CycleRow {
+  user_id: string;
+  nombre: string;
+  cedula: string;
+  frecuencia: "quincenal" | "mensual";
+  aporte: number;
+  permanente: number;
+  social: number;
+  actividad: number;
+  credito_pago: number;
+  cartera_id: string;
+}
+
+interface Ciclo {
+  id: string;
+  periodo: string;
+  estado: "enviado_admin" | "aprobado" | "rechazado";
+  rows: CycleRow[];
+  cambios_admin?: Record<string, unknown>;
+  created_at: string;
+}
+
+interface Saldos {
+  permanente: number;
+  social: number;
+  actividad: number;
+  intereses: number;
+}
+
+interface AporteHistorial {
+  periodo: string;
+  aporte: number;
+  permanente: number;
+  social: number;
+  fecha: string;
+}
+
+interface ActividadHistorial {
+  id: string;
+  tipo: "deposito" | "retiro";
+  monto: number;
+  descripcion: string;
+  fecha: string;
+}
+
+interface Credito {
+  id: string;
+  monto_total: number;
+  cuota_esperada: number;
+  pagos: { fecha: string; monto: number }[];
+  estado: string;
+}
+
+interface SearchUser {
+  id: string;
+  nombre: string;
+  cedula: string;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Helpers                                                            */
+/* ------------------------------------------------------------------ */
+
+const fmt = (n: number) =>
+  new Intl.NumberFormat("es-CO", {
+    style: "currency",
+    currency: "COP",
+    minimumFractionDigits: 0,
+  }).format(n);
+
+const currentPeriod = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+};
+
+const estadoBadge = (estado: string) => {
+  const map: Record<string, string> = {
+    enviado_admin: "bg-yellow-100 text-yellow-800 border-yellow-300",
+    aprobado: "bg-green-100 text-green-800 border-green-300",
+    rechazado: "bg-red-100 text-red-800 border-red-300",
+  };
+  const labels: Record<string, string> = {
+    enviado_admin: "Enviado",
+    aprobado: "Aprobado",
+    rechazado: "Rechazado",
+  };
+  return (
+    <span
+      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${
+        map[estado] ?? "bg-gray-100 text-gray-800 border-gray-300"
+      }`}
+    >
+      {labels[estado] ?? estado}
+    </span>
+  );
+};
+
+/* ------------------------------------------------------------------ */
+/*  Tabs                                                               */
+/* ------------------------------------------------------------------ */
+
+type TabId = "ciclo" | "historial" | "buscar" | "nuevo";
+
+const tabs: { id: TabId; label: string; icon: React.ReactNode }[] = [
+  { id: "ciclo", label: "Ciclo Actual", icon: <DollarSign size={16} /> },
+  { id: "historial", label: "Historial Ciclos", icon: <History size={16} /> },
+  { id: "buscar", label: "Buscar Afiliado", icon: <Search size={16} /> },
+  { id: "nuevo", label: "Nuevo Afiliado", icon: <UserPlus size={16} /> },
+];
+
+/* ================================================================== */
+/*  MAIN PAGE                                                          */
+/* ================================================================== */
+
+export default function FondoPage() {
+  const { data: session, status } = useSession();
+  const [activeTab, setActiveTab] = useState<TabId>("ciclo");
+
+  /* ---- auth gate ---- */
+
+  if (status === "loading") {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin h-8 w-8 border-4 border-[#ff9900] border-t-transparent rounded-full" />
+      </div>
+    );
+  }
+
+  if (!session || session.user.rol !== "fondo") {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center p-8">
+          <ShieldAlert className="h-16 w-16 text-red-400 mx-auto mb-4" />
+          <h1 className="text-2xl font-bold text-gray-800 mb-2">
+            Acceso denegado
+          </h1>
+          <p className="text-gray-600">
+            No tienes permisos para acceder al panel del fondo.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <DashboardNavbar activePage="fondo" />
+
+      <div className="pt-20 px-4 sm:px-6 lg:px-8 pb-12">
+        <div className="max-w-7xl mx-auto">
+          {/* HERO */}
+          <section className="relative mb-8 overflow-hidden rounded-3xl bg-black text-white shadow-xl">
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-0 opacity-40"
+              style={{
+                backgroundImage:
+                  "radial-gradient(circle at 12% 20%, #ff9900 0, transparent 45%), radial-gradient(circle at 88% 90%, #ff9900 0, transparent 35%)",
+              }}
+            />
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-0 opacity-[0.06]"
+              style={{
+                backgroundImage:
+                  "linear-gradient(#ffffff 1px, transparent 1px), linear-gradient(90deg, #ffffff 1px, transparent 1px)",
+                backgroundSize: "36px 36px",
+              }}
+            />
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-[#ff9900] to-transparent" />
+
+            <div className="relative p-6 sm:p-8 lg:p-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#ff9900]/15 text-[#ff9900] text-xs font-semibold uppercase tracking-wider border border-[#ff9900]/30">
+                  <Landmark className="h-3.5 w-3.5" /> Fondo de Empleados
+                </span>
+                <h1 className="mt-3 text-2xl sm:text-3xl lg:text-4xl font-extrabold leading-tight">
+                  Panel del <span className="text-[#ff9900]">Fondo</span>
+                </h1>
+                <p className="mt-2 text-sm sm:text-base text-white/70">
+                  Gestiona ciclos, aportes y afiliados del fondo de empleados.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { icon: DollarSign, label: "Aportes" },
+                  { icon: Users, label: "Afiliados" },
+                  { icon: CreditCard, label: "Cartera" },
+                  { icon: Activity, label: "Actividad" },
+                ].map((c) => (
+                  <span
+                    key={c.label}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-xs font-semibold text-white/80"
+                  >
+                    <c.icon className="h-3.5 w-3.5 text-[#ff9900]" />
+                    {c.label}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </section>
+
+          {/* Tabs */}
+          <div className="mb-6 flex flex-wrap gap-2">
+            {tabs.map((t) => (
+              <button
+                key={t.id}
+                onClick={() => setActiveTab(t.id)}
+                className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 ${
+                  activeTab === t.id
+                    ? "bg-[#ff9900] text-white shadow-md shadow-[#ff9900]/25"
+                    : "bg-white text-gray-600 border border-gray-200 hover:border-[#ff9900]/40 hover:text-[#ff9900]"
+                }`}
+              >
+                {t.icon}
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Tab content */}
+          {activeTab === "ciclo" && <CicloActualTab />}
+          {activeTab === "historial" && <HistorialTab />}
+          {activeTab === "buscar" && <BuscarAfiliadoTab />}
+          {activeTab === "nuevo" && <NuevoAfiliadoTab />}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ================================================================== */
+/*  CICLO ACTUAL TAB                                                   */
+/* ================================================================== */
+
+function CicloActualTab() {
+  const [members, setMembers] = useState<FondoMember[]>([]);
+  const [rows, setRows] = useState<CycleRow[]>([]);
+  const [filter, setFilter] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [success, setSuccess] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch("/api/fondo/members");
+        if (!res.ok) throw new Error("Error cargando miembros");
+        const data: FondoMember[] = await res.json();
+        setMembers(data);
+        setRows(
+          data.map((m) => ({
+            user_id: m.user_id,
+            nombre: m.nombre,
+            cedula: m.cedula,
+            frecuencia: m.frecuencia,
+            aporte: m.monto_aporte,
+            permanente: +(m.monto_aporte * 0.9).toFixed(0),
+            social: +(m.monto_aporte * 0.1).toFixed(0),
+            actividad: 0,
+            credito_pago: 0,
+            cartera_id: "",
+          }))
+        );
+      } catch {
+        setError("No se pudieron cargar los miembros del fondo.");
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  const updateRow = useCallback(
+    (idx: number, field: keyof CycleRow, value: string | number) => {
+      setRows((prev) => {
+        const next = [...prev];
+        const row = { ...next[idx] };
+        if (field === "frecuencia") {
+          row.frecuencia = value as "quincenal" | "mensual";
+        } else if (field === "aporte") {
+          const n = Number(value) || 0;
+          row.aporte = n;
+          row.permanente = +(n * 0.9).toFixed(0);
+          row.social = +(n * 0.1).toFixed(0);
+        } else if (field === "actividad") {
+          row.actividad = Number(value) || 0;
+        } else if (field === "credito_pago") {
+          row.credito_pago = Number(value) || 0;
+        } else if (field === "cartera_id") {
+          row.cartera_id = String(value);
+        }
+        next[idx] = row;
+        return next;
+      });
+    },
+    []
+  );
+
+  const filtered = useMemo(
+    () =>
+      rows.filter((r) =>
+        r.nombre.toLowerCase().includes(filter.toLowerCase())
+      ),
+    [rows, filter]
+  );
+
+  const handleSubmit = async () => {
+    setSubmitting(true);
+    setError("");
+    setSuccess(false);
+    try {
+      const res = await fetch("/api/fondo/ciclos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ periodo: currentPeriod(), rows }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || "Error al enviar el ciclo");
+      }
+      setSuccess(true);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Error desconocido");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex justify-center py-16">
+        <div className="animate-spin h-8 w-8 border-4 border-[#ff9900] border-t-transparent rounded-full" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+      {/* Header */}
+      <div className="p-5 sm:p-6 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+            <Clock size={20} className="text-[#ff9900]" />
+            Ciclo Actual
+          </h2>
+          <p className="text-sm text-gray-500 mt-1">
+            Periodo:{" "}
+            <span className="font-semibold text-gray-800">
+              {currentPeriod()}
+            </span>
+          </p>
+        </div>
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="relative">
+            <Search
+              size={16}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+            />
+            <input
+              type="text"
+              placeholder="Filtrar por nombre..."
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              className="pl-9 pr-4 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff9900]/40 focus:border-[#ff9900] w-56"
+            />
+          </div>
+          <button
+            onClick={handleSubmit}
+            disabled={submitting}
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#ff9900] text-white font-semibold text-sm shadow-md shadow-[#ff9900]/25 hover:bg-[#e68a00] disabled:opacity-50 transition-all"
+          >
+            {submitting ? (
+              <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
+            ) : (
+              <Send size={16} />
+            )}
+            Aprobar y Enviar
+          </button>
+        </div>
+      </div>
+
+      {/* Messages */}
+      {error && (
+        <div className="mx-5 mt-4 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm flex items-center gap-2">
+          <AlertCircle size={16} /> {error}
+        </div>
+      )}
+      {success && (
+        <div className="mx-5 mt-4 p-3 rounded-xl bg-green-50 border border-green-200 text-green-700 text-sm flex items-center gap-2">
+          <Check size={16} /> Ciclo enviado exitosamente al administrador.
+        </div>
+      )}
+
+      {/* Table */}
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+              <th className="px-4 py-3">Nombre</th>
+              <th className="px-4 py-3">Cedula</th>
+              <th className="px-4 py-3">Frecuencia</th>
+              <th className="px-4 py-3 text-right">Aporte ($)</th>
+              <th className="px-4 py-3 text-right">Permanente (90%)</th>
+              <th className="px-4 py-3 text-right">Social (10%)</th>
+              <th className="px-4 py-3 text-right">Actividad ($)</th>
+              <th className="px-4 py-3 text-right">Credito Pago ($)</th>
+              <th className="px-4 py-3">Cartera ID</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {filtered.map((row) => {
+              const idx = rows.findIndex((r) => r.user_id === row.user_id);
+              return (
+                <tr
+                  key={row.user_id}
+                  className="hover:bg-[#ff9900]/[0.03] transition-colors"
+                >
+                  <td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">
+                    {row.nombre}
+                  </td>
+                  <td className="px-4 py-3 text-gray-600">{row.cedula}</td>
+                  <td className="px-4 py-3">
+                    <select
+                      value={row.frecuencia}
+                      onChange={(e) =>
+                        updateRow(idx, "frecuencia", e.target.value)
+                      }
+                      className="rounded-lg border border-gray-200 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff9900]/40 focus:border-[#ff9900] bg-white"
+                    >
+                      <option value="quincenal">Quincenal</option>
+                      <option value="mensual">Mensual</option>
+                    </select>
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <input
+                      type="number"
+                      min={0}
+                      value={row.aporte}
+                      onChange={(e) =>
+                        updateRow(idx, "aporte", e.target.value)
+                      }
+                      className="w-28 text-right rounded-lg border border-gray-200 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff9900]/40 focus:border-[#ff9900]"
+                    />
+                  </td>
+                  <td className="px-4 py-3 text-right text-gray-500 font-mono">
+                    {fmt(row.permanente)}
+                  </td>
+                  <td className="px-4 py-3 text-right text-gray-500 font-mono">
+                    {fmt(row.social)}
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <input
+                      type="number"
+                      min={0}
+                      value={row.actividad}
+                      onChange={(e) =>
+                        updateRow(idx, "actividad", e.target.value)
+                      }
+                      className="w-28 text-right rounded-lg border border-gray-200 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff9900]/40 focus:border-[#ff9900]"
+                    />
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <input
+                      type="number"
+                      min={0}
+                      value={row.credito_pago}
+                      onChange={(e) =>
+                        updateRow(idx, "credito_pago", e.target.value)
+                      }
+                      className="w-28 text-right rounded-lg border border-gray-200 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff9900]/40 focus:border-[#ff9900]"
+                    />
+                  </td>
+                  <td className="px-4 py-3">
+                    <input
+                      type="text"
+                      value={row.cartera_id}
+                      onChange={(e) =>
+                        updateRow(idx, "cartera_id", e.target.value)
+                      }
+                      placeholder="—"
+                      className="w-24 rounded-lg border border-gray-200 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff9900]/40 focus:border-[#ff9900]"
+                    />
+                  </td>
+                </tr>
+              );
+            })}
+            {filtered.length === 0 && (
+              <tr>
+                <td
+                  colSpan={9}
+                  className="px-4 py-12 text-center text-gray-400"
+                >
+                  No se encontraron miembros.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+/* ================================================================== */
+/*  HISTORIAL CICLOS TAB                                               */
+/* ================================================================== */
+
+function HistorialTab() {
+  const [ciclos, setCiclos] = useState<Ciclo[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [expanded, setExpanded] = useState<string | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch("/api/fondo/ciclos");
+        if (!res.ok) throw new Error("Error cargando ciclos");
+        const data: Ciclo[] = await res.json();
+        setCiclos(data);
+      } catch {
+        setError("No se pudieron cargar los ciclos.");
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex justify-center py-16">
+        <div className="animate-spin h-8 w-8 border-4 border-[#ff9900] border-t-transparent rounded-full" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm flex items-center gap-2">
+        <AlertCircle size={16} /> {error}
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="p-5 sm:p-6 border-b border-gray-100">
+        <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+          <History size={20} className="text-[#ff9900]" />
+          Historial de Ciclos
+        </h2>
+      </div>
+
+      {ciclos.length === 0 ? (
+        <div className="px-6 py-12 text-center text-gray-400">
+          No hay ciclos registrados.
+        </div>
+      ) : (
+        <div className="divide-y divide-gray-100">
+          {ciclos.map((c) => (
+            <div key={c.id}>
+              <button
+                onClick={() =>
+                  setExpanded(expanded === c.id ? null : c.id)
+                }
+                className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition-colors text-left"
+              >
+                <div className="flex items-center gap-4">
+                  <span className="font-semibold text-gray-900">
+                    {c.periodo}
+                  </span>
+                  {estadoBadge(c.estado)}
+                </div>
+                <div className="flex items-center gap-3 text-gray-400">
+                  <span className="text-xs">
+                    {new Date(c.created_at).toLocaleDateString("es-CO")}
+                  </span>
+                  {expanded === c.id ? (
+                    <ChevronDown size={18} />
+                  ) : (
+                    <ChevronRight size={18} />
+                  )}
+                </div>
+              </button>
+
+              {expanded === c.id && (
+                <div className="px-5 pb-5 space-y-4">
+                  {/* Cycle rows summary */}
+                  <div className="overflow-x-auto rounded-xl border border-gray-200">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                          <th className="px-3 py-2">Nombre</th>
+                          <th className="px-3 py-2 text-right">Aporte</th>
+                          <th className="px-3 py-2 text-right">Permanente</th>
+                          <th className="px-3 py-2 text-right">Social</th>
+                          <th className="px-3 py-2 text-right">Actividad</th>
+                          <th className="px-3 py-2 text-right">
+                            Credito Pago
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {(c.rows ?? []).map((r, i) => (
+                          <tr
+                            key={i}
+                            className="hover:bg-gray-50 transition-colors"
+                          >
+                            <td className="px-3 py-2 font-medium text-gray-900">
+                              {r.nombre}
+                            </td>
+                            <td className="px-3 py-2 text-right text-gray-600">
+                              {fmt(r.aporte)}
+                            </td>
+                            <td className="px-3 py-2 text-right text-gray-600">
+                              {fmt(r.permanente)}
+                            </td>
+                            <td className="px-3 py-2 text-right text-gray-600">
+                              {fmt(r.social)}
+                            </td>
+                            <td className="px-3 py-2 text-right text-gray-600">
+                              {fmt(r.actividad)}
+                            </td>
+                            <td className="px-3 py-2 text-right text-gray-600">
+                              {fmt(r.credito_pago)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Admin changes */}
+                  {c.estado === "aprobado" && c.cambios_admin && (
+                    <div className="p-4 rounded-xl bg-green-50 border border-green-200">
+                      <h4 className="text-sm font-semibold text-green-800 mb-2 flex items-center gap-2">
+                        <Check size={16} /> Cambios del Administrador
+                      </h4>
+                      <pre className="text-xs text-green-700 overflow-x-auto whitespace-pre-wrap">
+                        {JSON.stringify(c.cambios_admin, null, 2)}
+                      </pre>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ================================================================== */
+/*  BUSCAR AFILIADO TAB                                                */
+/* ================================================================== */
+
+function BuscarAfiliadoTab() {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<SearchUser[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [selected, setSelected] = useState<SearchUser | null>(null);
+
+  /* profile data */
+  const [saldos, setSaldos] = useState<Saldos | null>(null);
+  const [aportes, setAportes] = useState<AporteHistorial[]>([]);
+  const [actividades, setActividades] = useState<ActividadHistorial[]>([]);
+  const [creditos, setCreditos] = useState<Credito[]>([]);
+  const [loadingProfile, setLoadingProfile] = useState(false);
+
+  /* collapsible sections */
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({
+    saldos: true,
+    aportes: true,
+    actividades: false,
+    cartera: false,
+  });
+
+  const toggleSection = (key: string) =>
+    setOpenSections((p) => ({ ...p, [key]: !p[key] }));
+
+  const handleSearch = async () => {
+    if (!query.trim()) return;
+    setSearching(true);
+    setSelected(null);
+    try {
+      const res = await fetch(
+        `/api/fondo/members?search=${encodeURIComponent(query)}`
+      );
+      if (res.ok) {
+        setResults(await res.json());
+      }
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const selectUser = async (user: SearchUser) => {
+    setSelected(user);
+    setLoadingProfile(true);
+    try {
+      const [sRes, aRes, actRes, cRes] = await Promise.all([
+        fetch(`/api/fondo/saldos?user_id=${user.id}`),
+        fetch(`/api/fondo/aportes?user_id=${user.id}`),
+        fetch(`/api/fondo/actividades?user_id=${user.id}`),
+        fetch(`/api/fondo/creditos?user_id=${user.id}`),
+      ]);
+      if (sRes.ok) setSaldos(await sRes.json());
+      if (aRes.ok) setAportes(await aRes.json());
+      if (actRes.ok) setActividades(await actRes.json());
+      if (cRes.ok) setCreditos(await cRes.json());
+    } finally {
+      setLoadingProfile(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Search bar */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 sm:p-6">
+        <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2 mb-4">
+          <Search size={20} className="text-[#ff9900]" />
+          Buscar Afiliado
+        </h2>
+        <div className="flex gap-3">
+          <div className="relative flex-1">
+            <Search
+              size={16}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+            />
+            <input
+              type="text"
+              placeholder="Nombre del afiliado..."
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+              className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff9900]/40 focus:border-[#ff9900]"
+            />
+          </div>
+          <button
+            onClick={handleSearch}
+            disabled={searching}
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#ff9900] text-white font-semibold text-sm shadow-md shadow-[#ff9900]/25 hover:bg-[#e68a00] disabled:opacity-50 transition-all"
+          >
+            {searching ? (
+              <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
+            ) : (
+              <Search size={16} />
+            )}
+            Buscar
+          </button>
+        </div>
+
+        {/* Results */}
+        {results.length > 0 && !selected && (
+          <div className="mt-4 divide-y divide-gray-100 rounded-xl border border-gray-200 overflow-hidden">
+            {results.map((u) => (
+              <button
+                key={u.id}
+                onClick={() => selectUser(u)}
+                className="w-full flex items-center justify-between px-4 py-3 hover:bg-[#ff9900]/[0.04] transition-colors text-left"
+              >
+                <div>
+                  <p className="font-medium text-gray-900">{u.nombre}</p>
+                  <p className="text-xs text-gray-500">CC: {u.cedula}</p>
+                </div>
+                <ChevronRight size={16} className="text-gray-400" />
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Profile */}
+      {selected && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-bold text-gray-900">
+              {selected.nombre}{" "}
+              <span className="text-sm font-normal text-gray-500">
+                CC: {selected.cedula}
+              </span>
+            </h3>
+            <button
+              onClick={() => {
+                setSelected(null);
+                setSaldos(null);
+                setAportes([]);
+                setActividades([]);
+                setCreditos([]);
+              }}
+              className="p-2 rounded-lg hover:bg-gray-100 text-gray-400 transition-colors"
+            >
+              <X size={18} />
+            </button>
+          </div>
+
+          {loadingProfile ? (
+            <div className="flex justify-center py-12">
+              <div className="animate-spin h-8 w-8 border-4 border-[#ff9900] border-t-transparent rounded-full" />
+            </div>
+          ) : (
+            <>
+              {/* Saldos */}
+              <CollapsibleSection
+                title="Saldos"
+                icon={<Wallet size={18} className="text-[#ff9900]" />}
+                open={openSections.saldos}
+                onToggle={() => toggleSection("saldos")}
+              >
+                {saldos ? (
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                    {[
+                      { label: "Permanente", value: saldos.permanente },
+                      { label: "Social", value: saldos.social },
+                      { label: "Actividad", value: saldos.actividad },
+                      { label: "Intereses", value: saldos.intereses },
+                    ].map((s) => (
+                      <div
+                        key={s.label}
+                        className="bg-gray-50 rounded-xl p-4 border border-gray-100"
+                      >
+                        <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">
+                          {s.label}
+                        </p>
+                        <p className="mt-1 text-lg font-bold text-gray-900">
+                          {fmt(s.value)}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-400">
+                    No se encontraron saldos.
+                  </p>
+                )}
+              </CollapsibleSection>
+
+              {/* Estado de Cuenta (Aportes) */}
+              <CollapsibleSection
+                title="Estado de Cuenta"
+                icon={<DollarSign size={18} className="text-[#ff9900]" />}
+                open={openSections.aportes}
+                onToggle={() => toggleSection("aportes")}
+              >
+                {aportes.length > 0 ? (
+                  <div className="overflow-x-auto rounded-xl border border-gray-200">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                          <th className="px-3 py-2">Periodo</th>
+                          <th className="px-3 py-2 text-right">Aporte</th>
+                          <th className="px-3 py-2 text-right">Permanente</th>
+                          <th className="px-3 py-2 text-right">Social</th>
+                          <th className="px-3 py-2">Fecha</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {aportes.map((a, i) => (
+                          <tr
+                            key={i}
+                            className="hover:bg-gray-50 transition-colors"
+                          >
+                            <td className="px-3 py-2 font-medium text-gray-900">
+                              {a.periodo}
+                            </td>
+                            <td className="px-3 py-2 text-right text-gray-600">
+                              {fmt(a.aporte)}
+                            </td>
+                            <td className="px-3 py-2 text-right text-gray-600">
+                              {fmt(a.permanente)}
+                            </td>
+                            <td className="px-3 py-2 text-right text-gray-600">
+                              {fmt(a.social)}
+                            </td>
+                            <td className="px-3 py-2 text-gray-500 text-xs">
+                              {new Date(a.fecha).toLocaleDateString("es-CO")}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-400">
+                    Sin historial de aportes.
+                  </p>
+                )}
+              </CollapsibleSection>
+
+              {/* Actividades */}
+              <CollapsibleSection
+                title="Actividades"
+                icon={<Activity size={18} className="text-[#ff9900]" />}
+                open={openSections.actividades}
+                onToggle={() => toggleSection("actividades")}
+              >
+                {actividades.length > 0 ? (
+                  <div className="overflow-x-auto rounded-xl border border-gray-200">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                          <th className="px-3 py-2">Tipo</th>
+                          <th className="px-3 py-2 text-right">Monto</th>
+                          <th className="px-3 py-2">Descripcion</th>
+                          <th className="px-3 py-2">Fecha</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {actividades.map((a) => (
+                          <tr
+                            key={a.id}
+                            className="hover:bg-gray-50 transition-colors"
+                          >
+                            <td className="px-3 py-2">
+                              <span
+                                className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${
+                                  a.tipo === "deposito"
+                                    ? "bg-green-100 text-green-700"
+                                    : "bg-red-100 text-red-700"
+                                }`}
+                              >
+                                {a.tipo === "deposito"
+                                  ? "Deposito"
+                                  : "Retiro"}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2 text-right font-mono text-gray-700">
+                              {fmt(a.monto)}
+                            </td>
+                            <td className="px-3 py-2 text-gray-600">
+                              {a.descripcion}
+                            </td>
+                            <td className="px-3 py-2 text-gray-500 text-xs">
+                              {new Date(a.fecha).toLocaleDateString("es-CO")}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-400">
+                    Sin actividades registradas.
+                  </p>
+                )}
+              </CollapsibleSection>
+
+              {/* Cartera / Creditos */}
+              <CollapsibleSection
+                title="Cartera"
+                icon={<CreditCard size={18} className="text-[#ff9900]" />}
+                open={openSections.cartera}
+                onToggle={() => toggleSection("cartera")}
+              >
+                {creditos.length > 0 ? (
+                  <div className="space-y-4">
+                    {creditos.map((cr) => (
+                      <div
+                        key={cr.id}
+                        className="rounded-xl border border-gray-200 overflow-hidden"
+                      >
+                        <div className="px-4 py-3 bg-gray-50 flex items-center justify-between">
+                          <div>
+                            <span className="font-semibold text-gray-900 text-sm">
+                              Credito {cr.id}
+                            </span>
+                            <span className="ml-3 text-xs text-gray-500">
+                              Total: {fmt(cr.monto_total)} | Cuota esperada:{" "}
+                              {fmt(cr.cuota_esperada)}
+                            </span>
+                          </div>
+                          <span
+                            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${
+                              cr.estado === "activo"
+                                ? "bg-blue-100 text-blue-800 border-blue-300"
+                                : "bg-gray-100 text-gray-800 border-gray-300"
+                            }`}
+                          >
+                            {cr.estado}
+                          </span>
+                        </div>
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                              <th className="px-4 py-2">Fecha</th>
+                              <th className="px-4 py-2 text-right">Monto</th>
+                              <th className="px-4 py-2">Estado</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100">
+                            {(cr.pagos ?? []).map((p, i) => {
+                              const differs =
+                                Math.abs(p.monto - cr.cuota_esperada) > 1;
+                              return (
+                                <tr
+                                  key={i}
+                                  className={`transition-colors ${
+                                    differs
+                                      ? "bg-yellow-50"
+                                      : "hover:bg-gray-50"
+                                  }`}
+                                >
+                                  <td className="px-4 py-2 text-gray-600">
+                                    {new Date(p.fecha).toLocaleDateString(
+                                      "es-CO"
+                                    )}
+                                  </td>
+                                  <td className="px-4 py-2 text-right font-mono text-gray-700">
+                                    {fmt(p.monto)}
+                                  </td>
+                                  <td className="px-4 py-2">
+                                    {differs ? (
+                                      <span className="inline-flex items-center gap-1 text-xs text-yellow-700 font-semibold">
+                                        <AlertCircle size={14} /> Difiere de la
+                                        cuota
+                                      </span>
+                                    ) : (
+                                      <span className="text-xs text-green-600 font-semibold">
+                                        OK
+                                      </span>
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-400">
+                    Sin creditos registrados.
+                  </p>
+                )}
+              </CollapsibleSection>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ================================================================== */
+/*  NUEVO AFILIADO TAB                                                 */
+/* ================================================================== */
+
+function NuevoAfiliadoTab() {
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<SearchUser[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<SearchUser | null>(null);
+  const [montoAporte, setMontoAporte] = useState("");
+  const [frecuencia, setFrecuencia] = useState<"quincenal" | "mensual">(
+    "quincenal"
+  );
+  const [submitting, setSubmitting] = useState(false);
+  const [success, setSuccess] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleSearch = async () => {
+    if (!searchQuery.trim()) return;
+    setSearching(true);
+    try {
+      const res = await fetch(
+        `/api/fondo/members?search_users=${encodeURIComponent(searchQuery)}`
+      );
+      if (res.ok) setSearchResults(await res.json());
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const handleSubmit = async () => {
+    if (!selectedUser || !montoAporte) return;
+    setSubmitting(true);
+    setError("");
+    setSuccess(false);
+    try {
+      const res = await fetch("/api/fondo/members", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id: selectedUser.id,
+          monto_aporte: Number(montoAporte),
+          frecuencia,
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || "Error al crear afiliado");
+      }
+      setSuccess(true);
+      setSelectedUser(null);
+      setMontoAporte("");
+      setSearchQuery("");
+      setSearchResults([]);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Error desconocido");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="p-5 sm:p-6 border-b border-gray-100">
+        <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+          <UserPlus size={20} className="text-[#ff9900]" />
+          Nuevo Afiliado
+        </h2>
+        <p className="text-sm text-gray-500 mt-1">
+          Busca un usuario existente y enrollalo en el fondo de empleados.
+        </p>
+      </div>
+
+      <div className="p-5 sm:p-6 space-y-6">
+        {/* Messages */}
+        {error && (
+          <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm flex items-center gap-2">
+            <AlertCircle size={16} /> {error}
+          </div>
+        )}
+        {success && (
+          <div className="p-3 rounded-xl bg-green-50 border border-green-200 text-green-700 text-sm flex items-center gap-2">
+            <Check size={16} /> Afiliado creado exitosamente.
+          </div>
+        )}
+
+        {/* Step 1: Search user */}
+        <div>
+          <label className="block text-sm font-semibold text-gray-700 mb-2">
+            1. Buscar Usuario
+          </label>
+          <div className="flex gap-3">
+            <div className="relative flex-1">
+              <Search
+                size={16}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+              />
+              <input
+                type="text"
+                placeholder="Nombre del usuario..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+                className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff9900]/40 focus:border-[#ff9900]"
+              />
+            </div>
+            <button
+              onClick={handleSearch}
+              disabled={searching}
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gray-900 text-white font-semibold text-sm hover:bg-gray-800 disabled:opacity-50 transition-all"
+            >
+              {searching ? (
+                <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
+              ) : (
+                <Search size={16} />
+              )}
+              Buscar
+            </button>
+          </div>
+
+          {searchResults.length > 0 && !selectedUser && (
+            <div className="mt-3 divide-y divide-gray-100 rounded-xl border border-gray-200 overflow-hidden">
+              {searchResults.map((u) => (
+                <button
+                  key={u.id}
+                  onClick={() => setSelectedUser(u)}
+                  className="w-full flex items-center justify-between px-4 py-3 hover:bg-[#ff9900]/[0.04] transition-colors text-left"
+                >
+                  <div>
+                    <p className="font-medium text-gray-900">{u.nombre}</p>
+                    <p className="text-xs text-gray-500">CC: {u.cedula}</p>
+                  </div>
+                  <ChevronRight size={16} className="text-gray-400" />
+                </button>
+              ))}
+            </div>
+          )}
+
+          {selectedUser && (
+            <div className="mt-3 flex items-center gap-3 p-3 rounded-xl bg-[#ff9900]/[0.06] border border-[#ff9900]/20">
+              <Users size={18} className="text-[#ff9900]" />
+              <div className="flex-1">
+                <p className="font-semibold text-gray-900 text-sm">
+                  {selectedUser.nombre}
+                </p>
+                <p className="text-xs text-gray-500">
+                  CC: {selectedUser.cedula}
+                </p>
+              </div>
+              <button
+                onClick={() => setSelectedUser(null)}
+                className="p-1 rounded-lg hover:bg-white text-gray-400 transition-colors"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Step 2: Configure */}
+        {selectedUser && (
+          <div className="space-y-4">
+            <label className="block text-sm font-semibold text-gray-700">
+              2. Configurar Aporte
+            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">
+                  Monto del Aporte ($)
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  value={montoAporte}
+                  onChange={(e) => setMontoAporte(e.target.value)}
+                  placeholder="Ej: 100000"
+                  className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff9900]/40 focus:border-[#ff9900]"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">
+                  Frecuencia
+                </label>
+                <select
+                  value={frecuencia}
+                  onChange={(e) =>
+                    setFrecuencia(
+                      e.target.value as "quincenal" | "mensual"
+                    )
+                  }
+                  className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff9900]/40 focus:border-[#ff9900] bg-white"
+                >
+                  <option value="quincenal">Quincenal</option>
+                  <option value="mensual">Mensual</option>
+                </select>
+              </div>
+            </div>
+
+            <button
+              onClick={handleSubmit}
+              disabled={submitting || !montoAporte}
+              className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-[#ff9900] text-white font-semibold text-sm shadow-md shadow-[#ff9900]/25 hover:bg-[#e68a00] disabled:opacity-50 transition-all"
+            >
+              {submitting ? (
+                <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
+              ) : (
+                <UserPlus size={16} />
+              )}
+              Crear Afiliado
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ================================================================== */
+/*  Collapsible Section                                                */
+/* ================================================================== */
+
+function CollapsibleSection({
+  title,
+  icon,
+  open,
+  onToggle,
+  children,
+}: {
+  title: string;
+  icon: React.ReactNode;
+  open: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+      <button
+        onClick={onToggle}
+        className="w-full flex items-center justify-between p-5 hover:bg-gray-50 transition-colors text-left"
+      >
+        <span className="flex items-center gap-2 font-bold text-gray-900">
+          {icon}
+          {title}
+        </span>
+        {open ? (
+          <ChevronDown size={18} className="text-gray-400" />
+        ) : (
+          <ChevronRight size={18} className="text-gray-400" />
+        )}
+      </button>
+      {open && <div className="px-5 pb-5">{children}</div>}
+    </div>
+  );
+}

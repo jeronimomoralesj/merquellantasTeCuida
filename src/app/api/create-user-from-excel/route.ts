@@ -1,20 +1,25 @@
-// app/api/create-user-from-excel/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { getAuth } from 'firebase-admin/auth';
-import { adminDb } from '../../../lib/firebaseAdmin';
-
-const db = adminDb();
-const auth = getAuth();
+import { getDb } from '../../../lib/db';
+import { auth } from '../../../lib/auth';
+import bcrypt from 'bcryptjs';
 
 export async function POST(req: NextRequest) {
+  const session = await auth();
+  if (!session || session.user.rol !== 'admin') {
+    return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+  }
+
   try {
     const {
       cedula,
       nombre,
+      email: rawEmail,
       posicion,
       fechaNacimiento,
       extra = {},
     } = await req.json();
+
+    const email = rawEmail || `${cedula}@merque.com`;
 
     if (!cedula || !nombre) {
       return NextResponse.json(
@@ -23,84 +28,69 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const email = `${cedula}@merque.com`;
-    const password = `${cedula.slice(-4)}11`;
+    const db = await getDb();
 
-    // 1️⃣ Get-or-create Auth user (IDEMPOTENT)
-    let userRecord;
+    // Password = last 8 digits of cedula
+    const passwordHash = await bcrypt.hash(String(cedula).slice(-8), 10);
 
-    try {
-      userRecord = await auth.getUserByEmail(email);
-    } catch (err: any) {
-      if (err.code === 'auth/user-not-found') {
-        userRecord = await auth.createUser({
-          email,
-          password,
-          displayName: nombre,
-        });
-      } else {
-        throw err;
-      }
-    }
+    const userDoc = {
+      cedula: String(cedula),
+      email,
+      nombre,
+      posicion: posicion || null,
+      rol: 'user',
+      passwordHash,
+      departamento: extra['Nombre Área Funcional'] || extra['Dpto Donde Labora'] || null,
+      eps: extra['EPS'] || null,
+      banco: extra['Banco'] || null,
+      caja_compensacion: extra['CAJA DE COMPENSACION'] || null,
+      fondo_pensiones: extra['FONDO DE PENSIONES'] || null,
+      arl: extra['ARL'] || null,
+      fecha_ingreso: extra['Fecha Ingreso'] || null,
+      fondo_cesantias: extra['Fondo Cesantías'] || null,
+      cargo_empleado: extra['Cargo Empleado'] || null,
+      numero_cuenta: extra['Número Cuenta'] || null,
+      tipo_cuenta: extra['Tipo Cuenta'] || null,
+      tipo_documento: extra['Tipo de Documento'] || null,
+      fecha_nacimiento: fechaNacimiento || extra['fechaNacimiento'] || null,
+    };
 
-    const uid = userRecord.uid;
-
-    // 2️⃣ Upsert Firestore user
-    await db.collection('users').doc(uid).set(
-      {
-        cedula: String(cedula),
-        email,
-        nombre,
-        posicion: posicion ?? null,
-        rol: 'user',
-        extra,
-        createdAt: new Date(),
-      },
-      { merge: true } // 🔑 critical
+    // Upsert user by cedula
+    await db.collection('users').updateOne(
+      { cedula: String(cedula) },
+      { $set: userDoc, $setOnInsert: { created_at: new Date() } },
+      { upsert: true }
     );
 
-    // 3️⃣ Create birthday event ONLY if it doesn't exist
+    // Create birthday event if provided
     if (fechaNacimiento) {
       const birthDate = new Date(fechaNacimiento);
       if (!isNaN(birthDate.getTime())) {
-        const existing = await db
-          .collection('calendar')
-          .where('userId', '==', uid)
-          .where('type', '==', 'birthday')
-          .limit(1)
-          .get();
+        const userId = String(cedula);
 
-        if (existing.empty) {
-          await db.collection('calendar').add({
-            userId: uid,
+        // Check if birthday event already exists
+        const existing = await db.collection('calendar').findOne({
+          user_id: userId,
+          type: 'birthday',
+        });
+
+        if (!existing) {
+          await db.collection('calendar').insertOne({
+            user_id: userId,
             type: 'birthday',
             title: `Cumpleaños de ${nombre}`,
             description: `Recuerden que cumple años ${nombre}`,
-            image:
-              'https://media.istockphoto.com/id/1349208049/es/foto/marco-multicolor-de-accesorios-para-fiestas-o-cumplea%C3%B1os.jpg',
+            image: 'https://media.istockphoto.com/id/1349208049/es/foto/marco-multicolor-de-accesorios-para-fiestas-o-cumplea%C3%B1os.jpg',
             date: birthDate,
-            createdAt: new Date(),
+            created_at: new Date(),
           });
         }
       }
     }
 
-    return NextResponse.json(
-      {
-        success: true,
-        uid,
-        email,
-      },
-      { status: 200 }
-    );
-  } catch (error: any) {
-    console.error('Create user error:', error);
-
-    return NextResponse.json(
-      {
-        error: error.message || 'Error al crear usuario',
-      },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: true, id: String(cedula), email });
+  } catch (error: unknown) {
+    console.error('Create user error');
+    return NextResponse.json({ error: 'Error al crear usuario' }, { status: 500 });
   }
 }

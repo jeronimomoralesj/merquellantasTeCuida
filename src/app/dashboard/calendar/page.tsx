@@ -11,8 +11,6 @@ import {
   Gift,
   Sparkles,
 } from "lucide-react";
-import { collection, query, getDocs, orderBy } from "firebase/firestore";
-import { db } from "../../../firebase";
 
 interface CalendarEvent {
   id: string;
@@ -41,19 +39,19 @@ export default function CalendarPage() {
     async function fetchEvents() {
       try {
         setLoading(true);
-        const q = query(collection(db, "calendar"), orderBy("date", "asc"));
-        const snapshot = await getDocs(q);
+        const res = await fetch("/api/calendar");
+        if (!res.ok) throw new Error("Failed to fetch events");
+        const data: { id: string; title: string; description: string; date: string; time?: string; type: string }[] = await res.json();
 
-        const events = snapshot.docs.map((docSnap) => {
-          const data = docSnap.data();
-          const storedDate = data.date.toDate();
+        const events = data.map((item) => {
+          const storedDate = new Date(item.date);
           return {
-            id: docSnap.id,
-            title: data.title || "",
-            description: data.description || "",
+            id: item.id,
+            title: item.title || "",
+            description: item.description || "",
             date: addOneDay(storedDate),
-            time: data.time || undefined,
-            type: data.type || "event",
+            time: item.time || undefined,
+            type: item.type || "event",
           };
         });
 

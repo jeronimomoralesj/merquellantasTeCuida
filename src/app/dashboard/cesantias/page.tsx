@@ -13,17 +13,7 @@ import {
   Info
 } from 'lucide-react';
 
-// Firebase imports
-import { auth, db, storage } from '../../../firebase';
-import { onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc, collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
-
-// Type definitions
-interface UserProfile {
-  nombre?: string;
-  [key: string]: unknown;
-}
+import { useSession } from 'next-auth/react';
 
 // Document requirements for each category
 const documentRequirements = {
@@ -61,31 +51,9 @@ export default function CesantiasPage() {
   const [submitted, setSubmitted] = useState(false);
   const [formError, setFormError] = useState('');
 
-  // user profile state
-  const [userNombre, setUserNombre] = useState('');
-  const [userCedula, setUserCedula] = useState('');
-
-  // on mount, grab user profile
-  useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (u) => {
-      if (!u) return;
-      // parse cedula from email (before @)
-      const cedula = u.email?.split('@')[0] || '';
-      setUserCedula(cedula);
-
-      // fetch their profile doc for "nombre"
-      try {
-        const snap = await getDoc(doc(db, 'users', u.uid));
-        if (snap.exists()) {
-          const data = snap.data() as UserProfile;
-          setUserNombre(data.nombre || '');
-        }
-      } catch (e) {
-        console.error("Error fetching user profile:", e);
-      }
-    });
-    return () => unsub();
-  }, []);
+  const { data: session } = useSession();
+  const userNombre = session?.user?.nombre || '';
+  const userCedula = session?.user?.cedula || '';
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] ?? null;
@@ -110,29 +78,29 @@ export default function CesantiasPage() {
 
   const sendEmailNotification = async (motivoSolicitud: string, categoria: string) => {
     try {
-      const response = await fetch('https://formsubmit.co/marcelagonzalez@merquellantas.com', {
+      await fetch('/api/send-email', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          _to: 'marcelagonzalez@merquellantas.com,saludocupacional@merquellantas.com, dptodelagente@merquellantas.com',
-          _subject: 'Alerta: Nueva Solicitud de Cesantías Pendiente',
-          message: 'Hay una nueva solicitud de cesantías esperándote...',
-          categoria: categoria,
-          motivo: motivoSolicitud,
-          nombre: userNombre,
-          cedula: userCedula,
-          _captcha: 'false'
-        })
+          emails: [
+            'marcelagonzalez@merquellantas.com',
+            'saludocupacional@merquellantas.com',
+            'dptodelagente@merquellantas.com',
+          ],
+          userName: userNombre,
+          subject: 'Alerta: Nueva Solicitud de Cesantías Pendiente',
+          html: `
+            <h2>Nueva solicitud de cesantías</h2>
+            <p>Se ha registrado una nueva solicitud de cesantías.</p>
+            <p><strong>Categoría:</strong> ${categoria}</p>
+            <p><strong>Motivo:</strong> ${motivoSolicitud}</p>
+            <p><strong>Usuario:</strong> ${userNombre}</p>
+            <p>Por favor ingrese al sistema para revisarla.</p>
+          `,
+        }),
       });
-      
-      if (!response.ok) {
-        console.warn('Email notification failed, but form submission succeeded');
-      }
     } catch (error) {
-      console.warn('Email notification error:', error);
-      // Don't throw error - we don't want to fail the form submission if email fails
+      console.warn('Email notification error');
     }
   };
 
@@ -155,25 +123,26 @@ export default function CesantiasPage() {
     setIsSubmitting(true);
 
     try {
-      const user = auth.currentUser!;
-      // 1) upload to Storage
-      const path = `cesantias/${user.uid}/${Date.now()}_${selectedFile.name}`;
-      const ref = storageRef(storage, path);
-      await uploadBytes(ref, selectedFile);
-      const url = await getDownloadURL(ref);
+      // 1) upload to OneDrive
+      const fd = new FormData();
+      fd.append('file', selectedFile);
+      fd.append('folder', 'cesantias');
 
-      // 2) write Firestore doc
-      await addDoc(collection(db, 'cesantias'), {
-        motivoSolicitud: motivoSolicitud.trim(),
-        categoria,
-        fileName,
-        fileUrl: url,
-        userId: user.uid,
-        nombre: userNombre,
-        cedula: userCedula,
-        createdAt: serverTimestamp(),
-        estado: "pendiente"
+      const uploadRes = await fetch('/api/upload', { method: 'POST', body: fd });
+      if (!uploadRes.ok) throw new Error('Error al subir el documento');
+      const uploaded = await uploadRes.json();
+
+      // 2) create cesantias record
+      const res = await fetch('/api/cesantias', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          motivoSolicitud: motivoSolicitud.trim(),
+          categoria,
+          fileUrl: uploaded.webUrl,
+        }),
       });
+      if (!res.ok) throw new Error('Error al crear solicitud');
 
       // 3) Send email notification
       await sendEmailNotification(motivoSolicitud, categoria);

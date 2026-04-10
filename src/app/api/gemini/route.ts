@@ -1,6 +1,7 @@
 // /app/api/gemini/route.ts
 import { NextResponse } from "next/server";
 import { GoogleGenAI } from "@google/genai";
+import { auth } from "../../../lib/auth";
 
 // 1) Define a strong type for your messages
 interface ChatMessage {
@@ -21,13 +22,17 @@ function isChatMessage(obj: unknown): obj is ChatMessage {
 }
 
 export async function POST(request: Request) {
+  const session = await auth();
+  if (!session) {
+    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  }
   try {
     // 3) Cast the JSON body to your typed shape
     const { messages } = (await request.json()) as { messages: unknown };
 
     // 4) Validate that you actually got an array of ChatMessage objects
     if (!Array.isArray(messages)) {
-      console.error("Invalid messages format:", messages);
+      console.error("Invalid messages format received");
       return NextResponse.json(
         { error: "Invalid messages format" },
         { status: 400 }
@@ -51,7 +56,7 @@ export async function POST(request: Request) {
     if (!apiKey) {
       console.error("GEMINI_API_KEY not configured");
       return NextResponse.json(
-        { error: "GEMINI_API_KEY not configured" },
+        { error: "Servicio de chat no disponible" },
         { status: 500 }
       );
     }
@@ -65,12 +70,9 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ message: result.text });
   } catch (err: unknown) {
-    // 9) Handle unknown errors safely
-    const message =
-      err instanceof Error ? err.message : "Failed to process request";
     console.error("Gemini API error:", err);
     return NextResponse.json(
-      { error: message },
+      { error: "Error al procesar la solicitud" },
       { status: 500 }
     );
   }

@@ -6,7 +6,9 @@ import {
   Users as UsersIcon,
   Calendar as CalendarIcon,
   Zap,
+  ShieldAlert,
 } from "lucide-react";
+import { useSession } from "next-auth/react";
 import StatsCard from "./stats";
 import TristesCard from "./tristes";
 import SolicitudesCard from "./solicitudes";
@@ -14,6 +16,7 @@ import CalendarCard from "./calendar";
 import PQRSFCard from "./pqrsf";
 import Users from "./user";
 import QuickActionsAdmin from "./quickActionsAdmin";
+import FondoAdmin from "./fondo";
 
 interface AdminPageProps {
   /** When true, the parent already renders the navbar so we shouldn't add another one. */
@@ -21,6 +24,27 @@ interface AdminPageProps {
 }
 
 export default function AdminPage({ embedded = false }: AdminPageProps) {
+  const { data: session, status } = useSession();
+
+  if (status === "loading") {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin h-8 w-8 border-4 border-[#ff9900] border-t-transparent rounded-full" />
+      </div>
+    );
+  }
+
+  if (!session || session.user.rol !== "admin") {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center p-8">
+          <ShieldAlert className="h-16 w-16 text-red-400 mx-auto mb-4" />
+          <h1 className="text-2xl font-bold text-gray-800 mb-2">Acceso denegado</h1>
+          <p className="text-gray-600">No tienes permisos de administrador.</p>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className={embedded ? "" : "min-h-screen bg-gray-50"}>
       <div className={`${embedded ? "" : "pt-20"} px-4 sm:px-6 lg:px-8 pb-12`}>
@@ -92,6 +116,8 @@ export default function AdminPage({ embedded = false }: AdminPageProps) {
               <Users />
 
               <QuickActionsAdmin />
+
+              <FondoAdmin />
             </div>
 
             {/* Right column */}

@@ -13,19 +13,16 @@ import {
   Clock,
   DollarSign
 } from "lucide-react";
-import { collection, getDocs, Timestamp } from 'firebase/firestore';
-import { db } from '../../../firebase'; // Adjust path as needed
-
+import { escapeHtml } from '../../../lib/sanitize';
 interface CesantiasData {
   id: string;
   cedula: string;
-  createdAt?: Timestamp;
+  created_at?: string;
   estado: string;
-  fileName: string;
-  fileUrl: string;
-  motivoSolicitud: string;
+  file_url: string;
+  motivo_solicitud: string;
   nombre: string;
-  userId: string;
+  user_id: string;
   categoria: string;
 }
 
@@ -95,17 +92,9 @@ const fetchCesantiasData = useCallback(async () => {
     setLoading(true);
     setError(null);
 
-    const cesantiasCollection = collection(db, "cesantias");
-    const querySnapshot = await getDocs(cesantiasCollection);
-    const data: CesantiasData[] = [];
-
-    querySnapshot.forEach((doc) => {
-      const docData = doc.data();
-      data.push({
-        id: doc.id,
-        ...docData,
-      } as CesantiasData);
-    });
+    const res = await fetch('/api/cesantias');
+    if (!res.ok) throw new Error('Error fetching cesantias data');
+    const data: CesantiasData[] = await res.json();
 
     setCesantiasData(data);
     calculateStatistics(data);
@@ -136,7 +125,7 @@ const fetchCesantiasData = useCallback(async () => {
     const categoriaStatsData: CategoriaStats = {};
 
     data.forEach((item) => {
-      const createdDate = item.createdAt?.toDate() || new Date();
+      const createdDate = item.created_at ? new Date(item.created_at) : new Date();
       const monthName = getMonthName(createdDate);
       const estado = item.estado?.toLowerCase() || 'pendiente';
       const categoria = item.categoria || 'Sin categoría';
@@ -266,7 +255,7 @@ const fetchCesantiasData = useCallback(async () => {
             <tbody>
               ${Object.entries(monthlyStats).map(([month, stats]) => `
                 <tr>
-                  <td><strong>${month}</strong></td>
+                  <td><strong>${escapeHtml(month)}</strong></td>
                   <td>${stats.cantidad}</td>
                 </tr>
               `).join('')}
@@ -281,7 +270,7 @@ const fetchCesantiasData = useCallback(async () => {
             <tbody>
               ${Object.entries(categoriaStats).map(([categoria, stats]) => `
                 <tr>
-                  <td><strong>${categoria}</strong></td>
+                  <td><strong>${escapeHtml(categoria)}</strong></td>
                   <td>${stats.cantidad}</td>
                   <td>${stats.porcentaje.toFixed(1)}%</td>
                 </tr>
@@ -297,7 +286,7 @@ const fetchCesantiasData = useCallback(async () => {
             <tbody>
               ${Object.entries(approvalRates).map(([month, stats]) => `
                 <tr>
-                  <td><strong>${month}</strong></td>
+                  <td><strong>${escapeHtml(month)}</strong></td>
                   <td style="color: #10b981;">${stats.aprobados}</td>
                   <td style="color: #ef4444;">${stats.rechazados}</td>
                   <td style="color: #f59e0b;">${stats.pendientes}</td>

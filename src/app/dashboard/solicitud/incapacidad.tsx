@@ -1,20 +1,17 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { 
-  Upload, 
-  Calendar, 
-  FileText, 
-  CheckCircle, 
-  AlertCircle, 
-  Info, 
-  User, 
+import { useSession } from 'next-auth/react';
+import {
+  Upload,
+  Calendar,
+  FileText,
+  CheckCircle,
+  AlertCircle,
+  Info,
+  User,
   Briefcase,
 } from 'lucide-react';
-// Imports for Firebase
-import { addDoc, collection, doc, getDoc, serverTimestamp, FieldValue } from 'firebase/firestore';
-import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { auth, db } from '../../../firebase';    // adjust path if needed
 
 // Interface definition - removed name and cedula
 interface FormData {
@@ -33,6 +30,7 @@ interface FormData {
 }
 
 const IncapacidadForm = () => {
+  const { data: session } = useSession();
   const [formData, setFormData] = useState<FormData>({
     edad: '',
     gender: '',
@@ -160,85 +158,54 @@ const IncapacidadForm = () => {
     setIsSubmitting(true);
 
     try {
-      // 1) get current user
-      const user = auth.currentUser;
-      if (!user) {
+      // 1) check session
+      if (!session?.user) {
         setFormError('Debe iniciar sesión para enviar una solicitud');
         setIsSubmitting(false);
         return;
       }
-      
-      // 2) upload the file to Storage
-      const storage = getStorage();
+
+      // 2) upload the file
       const fileToUpload = formData.document;
       if (!fileToUpload) {
         setFormError('Debe adjuntar un documento');
         setIsSubmitting(false);
         return;
       }
-      
-      // Type assertion to tell TypeScript that fileToUpload is definitely a File
       if (!(fileToUpload instanceof File)) {
-  setFormError('Archivo inválido');
-  setIsSubmitting(false);
-  return;
-}
-      const path = `solicitudes/${user.uid}/${Date.now()}_${fileToUpload.name}`;
-      const fileRef = storageRef(storage, path);
-      const snap = await uploadBytes(fileRef, fileToUpload);
-
-      const url = await getDownloadURL(snap.ref);
-
-      // 3) fetch user profile info from users collection
-      const userDoc = await getDoc(doc(db, 'users', user.uid));
-      const userData = userDoc.exists() ? userDoc.data() : {};
-      const { nombre, cedula } = userData;
-
-      // 4) calculate number of days
-      // Inside handleSubmit:
-const start = new Date(formData.startDate);
-const end = new Date(formData.endDate);
-const diffTime = end.getTime() - start.getTime();
-const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
-
-
-      // 5) write the solicitud to Firestore with all required fields
-      interface SolicitudData {
-        userId: string;
-        nombre: string;
-        cedula: string;
-        tipo: string;
-        estado: string;
-        startDate: string;
-        endDate: string;
-        numDias: number;
-        documentName: string;
-        documentUrl: string;
-        createdAt: FieldValue; // Firebase serverTimestamp type
-        // Fields for incapacidad type
-        edad: string;
-        gender: string;
-        cargo: string;
-        tipoContrato: string;
-        ubicacion: string;
-        tipoEvento: string;
-        codigoIncap: string;
-        cie10: string;
-        mesDiagnostico: string;
+        setFormError('Archivo inválido');
+        setIsSubmitting(false);
+        return;
       }
 
-      const solicitudData: SolicitudData = {
-        userId: user.uid,
-        nombre: nombre || 'Usuario',
-        cedula: cedula || 'No disponible',
+      const uploadForm = new window.FormData();
+      uploadForm.append('file', fileToUpload);
+      uploadForm.append('folder', 'incapacidad');
+
+      const uploadRes = await fetch('/api/upload', { method: 'POST', body: uploadForm });
+      if (!uploadRes.ok) throw new Error('Error al subir archivo');
+      const { url } = await uploadRes.json();
+
+      // 3) user info from session
+      const nombre = session.user.nombre || 'Usuario';
+      const cedula = session.user.cedula || 'No disponible';
+
+      // 4) calculate number of days
+      const start = new Date(formData.startDate);
+      const end = new Date(formData.endDate);
+      const diffTime = end.getTime() - start.getTime();
+      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
+
+      // 5) create solicitud via API
+      const solicitudData = {
+        nombre,
+        cedula,
         tipo: 'incapacidad',
         estado: 'pendiente',
         startDate: formData.startDate,
         endDate: formData.endDate,
         documentName: fileToUpload.name,
-
         documentUrl: url,
-        createdAt: serverTimestamp(),
         edad: formData.edad,
         gender: formData.gender,
         cargo: formData.cargo,
@@ -251,11 +218,16 @@ const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
         numDias: diffDays,
       };
 
-      await addDoc(collection(db, 'solicitudes'), solicitudData);
-      
-      // NEW: Send email notification after successful database save
-      await sendEmailNotification(nombre || 'Usuario');
-      
+      const solRes = await fetch('/api/solicitudes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(solicitudData),
+      });
+      if (!solRes.ok) throw new Error('Error al crear solicitud');
+
+      // Send email notification after successful save
+      await sendEmailNotification(nombre);
+
       setSubmitted(true);
 
     } catch (err) {

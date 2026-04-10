@@ -22,35 +22,24 @@ import {
   Filter,
   RefreshCw,
 } from "lucide-react";
-import { 
-  collection, 
-  query, 
-  orderBy, 
-  getDocs, 
-  doc, 
-  updateDoc,
-  Timestamp 
-} from "firebase/firestore";
-import { db } from "../../../firebase"; // Make sure this path is correct
-
 // Type definitions
 interface BaseDocumentData {
   nombre: string;
   cedula: string;
   estado: string;
-  createdAt: Timestamp;
-  updatedAt?: Timestamp;
+  created_at: string;
+  updated_at?: string;
   description?: string;
-  documentUrl?: string;
-  documentName?: string;
-  motivoRespuesta?: string;
+  document_url?: string;
+  document_name?: string;
+  motivo_respuesta?: string;
 }
 
 interface RequestData {
   id: string;
   title: string;
   employee: string;
-  date: Timestamp | Date | string;
+  date: Date | string;
   status: string;
   statusColor: string;
   type: string;
@@ -60,7 +49,7 @@ interface RequestData {
   attachment?: string;
   motivoRespuesta?: string;
   isPermiso: boolean;
-  collectionName: string; // Added to track which collection this belongs to
+  collectionName: string; // 'solicitudes' or 'cesantias'
   rawData?: BaseDocumentData | IncapacidadData | VacacionesData | PermisoData | CesantiasData;
 }
 
@@ -73,35 +62,35 @@ interface IncapacidadData extends BaseDocumentData {
   tipo: 'incapacidad';
   edad: string;
   gender: string;
-  tipoContrato: string;
+  tipo_contrato: string;
   ubicacion: string;
   cargo: string;
-  tipoEvento: string;
+  tipo_evento: string;
   cie10: string;
-  codigoIncap: string;
-  mesDiagnostico: string;
-  startDate: string;
-  endDate: string;
-  numDias: number;
+  codigo_incap: string;
+  mes_diagnostico: string;
+  start_date: string;
+  end_date: string;
+  num_dias: number;
 }
 
 interface VacacionesData extends BaseDocumentData {
   tipo: 'vacaciones';
-  fechaInicio: string;
-  fechaFin: string;
-  diasVacaciones: number;
+  fecha_inicio: string;
+  fecha_fin: string;
+  dias_vacaciones: number;
 }
 
 interface PermisoData extends BaseDocumentData {
   tipo: 'permiso';
   fecha: string;
-  tiempoInicio: string;
-  tiempoFin: string;
+  tiempo_inicio: string;
+  tiempo_fin: string;
 }
 
 interface CesantiasData extends BaseDocumentData {
-  motivoSolicitud: string;
-  fileUrl?: string;
+  motivo_solicitud: string;
+  file_url?: string;
 }
 
 type TabKey = "pendiente" | "gestionada" | "todas";
@@ -120,10 +109,10 @@ export default function SolicitudesCard() {
   const [tab, setTab] = useState<TabKey>("pendiente");
 
   // Helper: format date
-  const formatDate = (d: Timestamp | Date | string | undefined): string => {
+  const formatDate = (d: Date | string | undefined): string => {
     if (!d) return 'Fecha no disponible';
     try {
-      const dt = (d as Timestamp)?.toDate?.() || new Date(d as string | Date);
+      const dt = d instanceof Date ? d : new Date(d);
       return dt.toLocaleDateString("es-ES", {
         day: "numeric",
         month: "long",
@@ -234,12 +223,13 @@ export default function SolicitudesCard() {
 
     try {
       setProcessingId(requestId);
-      const requestRef = doc(db, collectionName, requestId);
-      await updateDoc(requestRef, {
-        estado: newStatus,
-        motivoRespuesta: motivo,
-        updatedAt: Timestamp.now(),
+      const endpoint = collectionName === 'cesantias' ? '/api/cesantias' : '/api/solicitudes';
+      const res = await fetch(endpoint, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: requestId, estado: newStatus, motivoRespuesta: motivo }),
       });
+      if (!res.ok) throw new Error('Error updating status');
 
       setRequests(prevRequests =>
         prevRequests.map(req =>
@@ -269,60 +259,44 @@ export default function SolicitudesCard() {
     }
   };
 
-  // Load all requests from Firebase
+  // Load all requests from API
   useEffect(() => {
     async function loadAll() {
       setLoading(true);
       try {
-        console.log("Loading requests from Firebase...");
-        
-        // Fetch cesantias
-        const qCes = query(
-          collection(db, "cesantias"),
-          orderBy("createdAt", "desc")
-        );
-        
-        // Fetch solicitudes
-        const qSol = query(
-          collection(db, "solicitudes"),
-          orderBy("createdAt", "desc")
-        );
-        
-        const [cesSnap, solSnap] = await Promise.all([
-          getDocs(qCes),
-          getDocs(qSol),
+        const [cesRes, solRes] = await Promise.all([
+          fetch('/api/cesantias'),
+          fetch('/api/solicitudes'),
         ]);
 
-        console.log(`Loaded ${cesSnap.docs.length} cesantías and ${solSnap.docs.length} solicitudes`);
+        if (!cesRes.ok || !solRes.ok) throw new Error('Error fetching data');
+
+        const cesData: CesantiasData[] = await cesRes.json();
+        const solData: (IncapacidadData | VacacionesData | PermisoData)[] = await solRes.json();
 
         // Process cesantias
-        const ces: RequestData[] = cesSnap.docs.map((d) => {
-          const data = d.data() as CesantiasData;
-          return {
-            id: d.id,
-            title: "Solicitud de Cesantías",
-            employee: data.nombre,
-            date: data.createdAt,
-            status: data.estado,
-            statusColor: statusColor(data.estado),
-            type: "Cesantías",
-            avatarColor: "bg-indigo-100",
-            avatarText: initials(data.nombre),
-            description: data.motivoSolicitud,
-            attachment: data.fileUrl,
-            motivoRespuesta: data.motivoRespuesta,
-            isPermiso: false,
-            collectionName: "cesantias", // Store the collection name
-            rawData: data,
-          };
-        });
+        const ces: RequestData[] = cesData.map((data) => ({
+          id: data.cedula ? (data as unknown as { id: string }).id : (data as unknown as { id: string }).id,
+          title: "Solicitud de Cesantías",
+          employee: data.nombre,
+          date: data.created_at,
+          status: data.estado,
+          statusColor: statusColor(data.estado),
+          type: "Cesantías",
+          avatarColor: "bg-indigo-100",
+          avatarText: initials(data.nombre),
+          description: data.motivo_solicitud,
+          attachment: data.file_url,
+          motivoRespuesta: data.motivo_respuesta,
+          isPermiso: false,
+          collectionName: "cesantias",
+          rawData: data,
+        }));
 
         // Process solicitudes
-        const sol: RequestData[] = solSnap.docs.map((d) => {
-          const data = d.data() as IncapacidadData | VacacionesData | PermisoData;
+        const sol: RequestData[] = solData.map((data) => {
           let typ = "Desconocido";
           let avatarColor = "bg-gray-100";
-          const collectionName = "solicitudes";
 
           if (data.tipo === "incapacidad") {
             typ = "Incapacidad";
@@ -336,20 +310,20 @@ export default function SolicitudesCard() {
           }
 
           return {
-            id: d.id,
+            id: (data as unknown as { id: string }).id,
             title: `Solicitud de ${typ}`,
             employee: data.nombre,
-            date: data.createdAt,
+            date: data.created_at,
             status: data.estado,
             statusColor: statusColor(data.estado),
             type: typ,
             avatarColor: avatarColor,
             avatarText: initials(data.nombre),
             description: data.description,
-            attachment: data.documentUrl,
-            motivoRespuesta: data.motivoRespuesta,
+            attachment: data.document_url,
+            motivoRespuesta: data.motivo_respuesta,
             isPermiso: typ === "Permiso",
-            collectionName: collectionName, // Store the collection name
+            collectionName: "solicitudes",
             rawData: data,
           };
         });
@@ -358,19 +332,18 @@ export default function SolicitudesCard() {
         const merged = [...ces, ...sol].sort((a, b) => {
           if (a.status === "pendiente" && b.status !== "pendiente") return -1;
           if (a.status !== "pendiente" && b.status === "pendiente") return 1;
-          
-          const da = (a.date as Timestamp)?.toDate?.().getTime() || new Date(a.date as string | Date).getTime();
-          const db_ = (b.date as Timestamp)?.toDate?.().getTime() || new Date(b.date as string | Date).getTime();
+
+          const da = new Date(a.date as string).getTime();
+          const db_ = new Date(b.date as string).getTime();
           return da - db_;
         });
 
         setRequests(merged);
-        console.log("Requests loaded successfully:", merged.length);
       } catch (error) {
-  console.error("Error loading requests:", error);
-  const errorMessage = error instanceof Error ? error.message : "Error desconocido";
-  showNotification(`Error al cargar las solicitudes: ${errorMessage}`, "error");
-} finally {
+        console.error("Error loading requests:", error);
+        const errorMessage = error instanceof Error ? error.message : "Error desconocido";
+        showNotification(`Error al cargar las solicitudes: ${errorMessage}`, "error");
+      } finally {
         setLoading(false);
       }
     }
@@ -540,7 +513,7 @@ export default function SolicitudesCard() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <p className="text-sm text-gray-600">Tipo de contrato</p>
-            <p className="font-medium text-gray-800 capitalize">{data.tipoContrato || 'No disponible'}</p>
+            <p className="font-medium text-gray-800 capitalize">{data.tipo_contrato || 'No disponible'}</p>
           </div>
           <div>
             <p className="text-sm text-gray-600">Ubicación</p>
@@ -561,7 +534,7 @@ export default function SolicitudesCard() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <p className="text-sm text-gray-600">Tipo de evento</p>
-            <p className="font-medium text-gray-800">{data.tipoEvento || 'No disponible'}</p>
+            <p className="font-medium text-gray-800">{data.tipo_evento || 'No disponible'}</p>
           </div>
           <div>
             <p className="text-sm text-gray-600">Código CIE-10</p>
@@ -569,11 +542,11 @@ export default function SolicitudesCard() {
           </div>
           <div>
             <p className="text-sm text-gray-600">Código de incapacidad</p>
-            <p className="font-medium text-gray-800">{data.codigoIncap || 'No disponible'}</p>
+            <p className="font-medium text-gray-800">{data.codigo_incap || 'No disponible'}</p>
           </div>
           <div>
             <p className="text-sm text-gray-600">Mes de diagnóstico</p>
-            <p className="font-medium text-gray-800">{data.mesDiagnostico || 'No disponible'}</p>
+            <p className="font-medium text-gray-800">{data.mes_diagnostico || 'No disponible'}</p>
           </div>
         </div>
       </div>
@@ -586,29 +559,29 @@ export default function SolicitudesCard() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <p className="text-sm text-gray-600">Fecha de inicio</p>
-            <p className="font-medium text-gray-800">{formatShortDate(data.startDate)}</p>
+            <p className="font-medium text-gray-800">{formatShortDate(data.start_date)}</p>
           </div>
           <div>
             <p className="text-sm text-gray-600">Fecha de fin</p>
-            <p className="font-medium text-gray-800">{formatShortDate(data.endDate)}</p>
+            <p className="font-medium text-gray-800">{formatShortDate(data.end_date)}</p>
           </div>
           <div>
             <p className="text-sm text-gray-600">Número de días</p>
-            <p className="font-medium text-gray-800">{data.numDias || 0} días</p>
+            <p className="font-medium text-gray-800">{data.num_dias || 0} días</p>
           </div>
         </div>
       </div>
 
-      {data.documentUrl && (
+      {data.document_url && (
         <div className="bg-purple-50 p-4 rounded-lg">
           <h4 className="font-semibold mb-3 text-gray-800 flex items-center">
             <FileText className="h-5 w-5 mr-2 text-purple-600" />
             Documento Adjunto
           </h4>
           <div className="flex items-center justify-between">
-            <p className="text-gray-700">{data.documentName || 'Documento médico'}</p>
+            <p className="text-gray-700">{data.document_name || 'Documento médico'}</p>
             <button
-              onClick={() => window.open(data.documentUrl, "_blank")}
+              onClick={() => window.open(data.document_url, "_blank")}
               className="flex items-center px-4 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors duration-200"
             >
               <Download className="mr-2 h-4 w-4" /> Ver documento

@@ -13,9 +13,7 @@ import {
 } from 'lucide-react';
 import Solicitudes from "./components/solicitudes";
 import AdminPage from './admin/page';
-import { onAuthStateChanged } from 'firebase/auth'
-import { doc, getDoc, collection, query, where, orderBy, limit, getDocs, Timestamp } from 'firebase/firestore'
-import { auth, db } from '../../firebase'
+import { useSession } from 'next-auth/react'
 import GeminiChat from './components/chat';
 import { getIcon } from './admin/quickActionIcons';
 
@@ -31,19 +29,16 @@ interface CalendarEvent {
   title: string;
   description: string;
   image: string;
-  date: Timestamp;
+  date: string;
   type?: string;
   videoUrl?: string;
   videoPath?: string;
-  _originalDate?: Date;
-  _displayDate?: Date;
-  _comparisonDate?: Date;
 }
 
 interface PendingRequest {
   id: string;
   tipo: 'cesantias' | 'enfermedad' | 'permiso';
-  createdAt: Timestamp;
+  createdAt: string;
   estado: string;
   motivoRespuesta?: string;
 }
@@ -94,7 +89,7 @@ const [currentEventIndex, setCurrentEventIndex] = useState(0);
   const [upcomingEvents, setUpcomingEvents] = useState<CalendarEvent[]>([]);
   const [loadingEvents, setLoadingEvents] = useState(true);
 
-  // Dynamic quick actions from Firestore
+  // Dynamic quick actions from API
   const [dynamicActions, setDynamicActions] = useState<DynamicQuickAction[] | null>(null);
 
 const [todayEventsCount, setTodayEventsCount] = useState(0);
@@ -152,30 +147,30 @@ const isEventToday = (eventDate: Date) => {
 };
 
 const getEventStatus = (event: CalendarEvent) => {
-  const eventDate = event._comparisonDate || event.date.toDate();
+  const eventDate = new Date(event.date);
   const now = new Date();
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  
+
   const eventDateOnly = new Date(eventDate);
   eventDateOnly.setHours(0, 0, 0, 0);
-  
+
   // For birthdays, check if it's today based on month and day
   if (event.type === 'cumpleaños' || event.type === 'birthday' || event.title.toLowerCase().includes('cumpleaños')) {
-    const isBirthdayToday = 
-      eventDate.getDate() === today.getDate() && 
+    const isBirthdayToday =
+      eventDate.getDate() === today.getDate() &&
       eventDate.getMonth() === today.getMonth();
-    
+
     if (isBirthdayToday) {
       return { status: 'today', label: 'Hoy', color: 'bg-green-500' };
     } else if (eventDateOnly > today) {
       return { status: 'upcoming', label: 'Próximo', color: 'bg-[#ff9900]' };
     }
   }
-  
+
   // For regular events
   if (eventDateOnly.getTime() === today.getTime()) {
-    const originalDate = event.date.toDate();
+    const originalDate = new Date(event.date);
     const isAllDay = originalDate.getHours() === 0 && originalDate.getMinutes() === 0 && originalDate.getSeconds() === 0;
     if (isAllDay || eventDate > now) {
       return { status: 'today', label: 'Hoy', color: 'bg-green-500' };
@@ -189,64 +184,47 @@ const getEventStatus = (event: CalendarEvent) => {
 };
 
   const router = useRouter();
+  const { data: session, status: sessionStatus } = useSession();
 
-  // Auth state listener
+  // Auth check — redirect to login if unauthenticated
   useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged(user => {
-      if (!user) {
-        router.replace('/auth/login');
-      }
-    });
-    return unsubscribe;
-  }, [router]);
+    if (sessionStatus === 'unauthenticated') {
+      router.replace('/auth/login');
+    }
+  }, [sessionStatus, router]);
 
   // Load pending requests
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+    if (sessionStatus !== 'authenticated') return;
+
+    async function fetchRequests() {
       setLoadingRequests(true);
-
-      if (!user) {
-        setPendingRequests([]);
-        setLoadingRequests(false);
-        return;
-      }
-
       try {
-        // Build both queries in parallel — fetch ALL user requests, sort client-side
-        // (avoid composite index requirement on userId+createdAt)
-        const qCes = query(
-          collection(db, 'cesantias'),
-          where('userId', '==', user.uid)
-        );
-        const qSol = query(
-          collection(db, 'solicitudes'),
-          where('userId', '==', user.uid)
-        );
-
-        const [cesSnap, solSnap] = await Promise.all([
-          getDocs(qCes),
-          getDocs(qSol),
+        const [cesRes, solRes] = await Promise.all([
+          fetch('/api/cesantias'),
+          fetch('/api/solicitudes'),
         ]);
 
-        // Map to a unified shape
-        const ces = cesSnap.docs.map(d => ({
-          id: d.id,
+        const cesData = cesRes.ok ? await cesRes.json() : [];
+        const solData = solRes.ok ? await solRes.json() : [];
+
+        const ces: PendingRequest[] = (Array.isArray(cesData) ? cesData : []).map((d: Record<string, unknown>) => ({
+          id: String(d.id),
           tipo: 'cesantias' as const,
-          createdAt: d.data().createdAt as Timestamp,
-          estado: d.data().estado as string,
-          motivoRespuesta: d.data().motivoRespuesta as string | undefined,
+          createdAt: d.created_at as string,
+          estado: d.estado as string,
+          motivoRespuesta: (d.motivo_respuesta as string | undefined),
         }));
-        const sol = solSnap.docs.map(d => ({
-          id: d.id,
-          tipo: d.data().tipo as 'enfermedad' | 'permiso',
-          createdAt: d.data().createdAt as Timestamp,
-          estado: d.data().estado as string,
-          motivoRespuesta: d.data().motivoRespuesta as string | undefined,
+        const sol: PendingRequest[] = (Array.isArray(solData) ? solData : []).map((d: Record<string, unknown>) => ({
+          id: String(d.id),
+          tipo: d.tipo as 'enfermedad' | 'permiso',
+          createdAt: d.created_at as string,
+          estado: d.estado as string,
+          motivoRespuesta: (d.motivo_respuesta as string | undefined),
         }));
 
-        // Merge & sort by timestamp desc
         const all = [...ces, ...sol].sort((a, b) =>
-          b.createdAt.seconds - a.createdAt.seconds
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
         );
         setPendingRequests(all);
       } catch (err) {
@@ -255,10 +233,10 @@ const getEventStatus = (event: CalendarEvent) => {
       } finally {
         setLoadingRequests(false);
       }
-    });
+    }
 
-    return () => unsubscribe();
-  }, []);
+    fetchRequests();
+  }, [sessionStatus]);
 
 // Normaliza una fecha de cumpleaños al próximo cumpleaños válido
 const normalizeBirthdayDate = (originalDate: Date): Date => {
@@ -300,22 +278,17 @@ useEffect(() => {
     try {
       setLoadingEvent(true);
 
-      const q = query(
-        collection(db, 'calendar'),
-        orderBy('date', 'asc')
-      );
+      const res = await fetch('/api/calendar');
+      const calendarData: CalendarEvent[] = res.ok ? await res.json() : [];
 
-      const snap = await getDocs(q);
       const now = new Date();
       now.setHours(0, 0, 0, 0);
 
-      const events = snap.docs
-        .map(doc => {
-          const data = doc.data() as CalendarEvent;
-          const storedDate = data.date.toDate();
-
+      const events = calendarData
+        .map(data => {
+          const storedDate = new Date(data.date);
           const displayDate = addOneDay(storedDate);
-          
+
           let comparisonDate: Date;
 
           if (
@@ -332,24 +305,21 @@ useEffect(() => {
 
           return {
             ...data,
-            date: Timestamp.fromDate(displayDate),
-            _originalDate: storedDate,
-            _displayDate: displayDate,
-            _comparisonDate: comparisonDate,
+            date: comparisonDate.toISOString(),
           };
         })
-        .filter(evt => evt._comparisonDate! >= now)
-        .sort((a, b) => a._comparisonDate!.getTime() - b._comparisonDate!.getTime())
-        .slice(0, 3); // Take only the 3 closest events
+        .filter(evt => new Date(evt.date) >= now)
+        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+        .slice(0, 3);
 
       const todayEvents = events.filter(evt => {
-        const evtDate = new Date(evt._comparisonDate!);
+        const evtDate = new Date(evt.date);
         evtDate.setHours(0, 0, 0, 0);
         return evtDate.getTime() === now.getTime();
       });
 
       setTodayEventsCount(todayEvents.length);
-      
+
       if (todayEvents.length > 1) {
         setAdditionalTodayEvents(todayEvents.slice(1));
       } else {
@@ -357,7 +327,7 @@ useEffect(() => {
       }
 
       setNextEvent(events.length > 0 ? events[0] : null);
-      setUpcomingEvents(events); // This will now contain up to 3 events
+      setUpcomingEvents(events);
     } catch (error) {
       console.error('Error fetching next events:', error);
       setNextEvent(null);
@@ -370,92 +340,81 @@ useEffect(() => {
   fetchNextEvents();
 }, []);
 
-  // Load user profile with date conversion and antiguedad calculation
+  // Load user profile from API
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (u) => {
-      if (!u) return setProfile(null);
-      
-      const snap = await getDoc(doc(db, 'users', u.uid));
-      if (snap.exists()) {
-        const data = snap.data() as UserData;
-        const dpto = data.extra?.["Nombre Área Funcional"] ?? "";
-        const eps = data.extra?.["EPS"] ?? "";
-        const banco = data.extra?.["Banco"] ?? "";
-        const pensiones = data.extra?.["FONDO DE PENSIONES"] ?? "";
-        const arl = data.extra?.["ARL"] ?? "";
-        
+    if (sessionStatus !== 'authenticated') {
+      if (sessionStatus === 'unauthenticated') setProfile(null);
+      return;
+    }
+
+    async function fetchProfile() {
+      try {
+        const res = await fetch('/api/users/me');
+        if (!res.ok) return;
+        const data = await res.json();
+
+        const dpto = data.extra?.["Nombre Área Funcional"] ?? data.dpto ?? "";
+        const eps = data.extra?.["EPS"] ?? data.eps ?? "";
+        const banco = data.extra?.["Banco"] ?? data.banco ?? "";
+        const pensiones = data.extra?.["FONDO DE PENSIONES"] ?? data.pensiones ?? "";
+        const arl = data.extra?.["ARL"] ?? data.arl ?? "";
+
         // Handle antiguedad calculation
         let calculatedAntiguedad = 0;
-        
-        // Check if there's a "Fecha Ingreso" in extra data
+
         if (data.extra?.["Fecha Ingreso"]) {
           const fechaIngreso = data.extra["Fecha Ingreso"];
-          console.log("Fecha Ingreso found:", fechaIngreso);
-          
-          // Convert the Excel date number to JavaScript Date
           const startDate = convertExcelDateToJSDate(fechaIngreso);
-          console.log("Converted start date:", startDate);
-          
-          // Calculate years of service
           calculatedAntiguedad = calculateYearsOfService(startDate);
-          console.log("Calculated antiguedad:", calculatedAntiguedad);
         } else if (data.antiguedad) {
-          // If there's an antiguedad field, check if it's an Excel date or regular number
           if (typeof data.antiguedad === 'number' && data.antiguedad > 1000) {
-            // Looks like an Excel date number (bigger than reasonable years)
             const startDate = convertExcelDateToJSDate(data.antiguedad);
             calculatedAntiguedad = calculateYearsOfService(startDate);
-            console.log("Converted antiguedad from Excel date:", calculatedAntiguedad);
           } else {
-            // Regular number, use as is
-            calculatedAntiguedad = typeof data.antiguedad === 'string' 
-              ? parseInt(data.antiguedad) || 0 
+            calculatedAntiguedad = typeof data.antiguedad === 'string'
+              ? parseInt(data.antiguedad) || 0
               : data.antiguedad;
           }
         }
-        
+
         setProfile({
           nombre: data.nombre,
           rol: data.rol,
-          posicion: (data.extra as Record<string, string> | undefined)?.posicion || '',
-          dpto: dpto,
-          eps: eps,
-          banco: banco,
-          pensiones: pensiones,
-          arl: arl,
-          antiguedad: calculatedAntiguedad
+          posicion: data.extra?.posicion || data.posicion || '',
+          dpto,
+          eps,
+          banco,
+          pensiones,
+          arl,
+          antiguedad: calculatedAntiguedad,
         });
         setUserRole(data.rol || "user");
+      } catch (err) {
+        console.error('Error loading profile', err);
       }
-    });
-    return () => unsub();
-  }, []);
+    }
+
+    fetchProfile();
+  }, [sessionStatus]);
 
 useEffect(() => {
   async function fetchUpcoming() {
     try {
       setLoadingEvents(true);
-      
-      const q = query(
-        collection(db, 'calendar'),
-        orderBy('date', 'asc')
-      );
 
-      const snap = await getDocs(q);
+      const res = await fetch('/api/calendar');
+      const calendarData: CalendarEvent[] = res.ok ? await res.json() : [];
+
       const now = new Date();
       now.setHours(0, 0, 0, 0);
 
-      const events = snap.docs
-        .map(doc => {
-          const data = doc.data() as CalendarEvent;
-          const storedDate = data.date.toDate();
-          
-          // Add +1 day to match what was subtracted during storage
+      const events = calendarData
+        .map(data => {
+          const storedDate = new Date(data.date);
           const displayDate = addOneDay(storedDate);
-          
+
           let comparisonDate: Date;
 
-          // For birthdays, normalize to next occurrence
           if (
             data.type === 'cumpleaños' ||
             data.type === 'birthday' ||
@@ -470,16 +429,11 @@ useEffect(() => {
 
           return {
             ...data,
-            date: Timestamp.fromDate(comparisonDate),
-            _originalDate: storedDate,
-            _displayDate: displayDate,
+            date: comparisonDate.toISOString(),
           };
         })
-        // Filter: keep only future or today events
-        .filter(evt => evt.date.toDate() >= now)
-        // Sort by closest date
-        .sort((a, b) => a.date.toMillis() - b.date.toMillis())
-        // Take only the 3 closest events
+        .filter(evt => new Date(evt.date) >= now)
+        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
         .slice(0, 3);
 
       setUpcomingEvents(events);
@@ -496,11 +450,15 @@ useEffect(() => {
 useEffect(() => {
   async function fetchQuickActions() {
     try {
-      const q = query(collection(db, 'quickActions'), orderBy('order', 'asc'));
-      const snap = await getDocs(q);
-      const list: DynamicQuickAction[] = snap.docs.map(d => ({
-        id: d.id,
-        ...(d.data() as Omit<DynamicQuickAction, 'id'>),
+      const res = await fetch('/api/quick-actions');
+      const data = res.ok ? await res.json() : [];
+      const list: DynamicQuickAction[] = (Array.isArray(data) ? data : []).map((d: Record<string, unknown>) => ({
+        id: String(d.id),
+        title: d.title as string,
+        href: d.href as string,
+        icon: d.icon as string,
+        order: d.order as number,
+        active: d.active as boolean,
       }));
       setDynamicActions(list.filter(a => a.active));
     } catch (e) {
@@ -544,13 +502,13 @@ useEffect(() => {
         <DashboardNavbar />
         <GeminiChat />
 
-        {/* Floating view-switcher (admins only) */}
-        {userRole === "admin" && (
+        {/* Floating view-switcher (admins and fondo) */}
+        {(userRole === "admin" || userRole === "fondo") && (
           <button
             type="button"
             onClick={() => setAdminView(v => !v)}
             className="fixed bottom-6 left-6 z-40 inline-flex items-center gap-2 px-4 py-3 rounded-full bg-black text-white shadow-2xl ring-2 ring-[#ff9900] hover:bg-[#ff9900] hover:text-black active:scale-95 transition-all"
-            title={adminView ? "Cambiar a vista de usuario" : "Cambiar a vista de admin"}
+            title={adminView ? "Cambiar a vista de usuario" : (userRole === "fondo" ? "Cambiar a panel fondo" : "Cambiar a vista de admin")}
           >
             {adminView ? (
               <>
@@ -560,7 +518,7 @@ useEffect(() => {
             ) : (
               <>
                 <LayoutDashboard className="h-5 w-5" />
-                <span className="text-sm font-bold hidden sm:inline">Vista admin</span>
+                <span className="text-sm font-bold hidden sm:inline">{userRole === "fondo" ? "Panel Fondo" : "Vista admin"}</span>
               </>
             )}
           </button>
@@ -573,8 +531,11 @@ useEffect(() => {
           </main>
         )}
 
-        {/* Main user content (hidden when admin is in admin view) */}
-        {!(userRole === "admin" && adminView) && (
+        {/* Fondo manager view — redirect to fondo panel */}
+        {userRole === "fondo" && adminView && (() => { router.push('/dashboard/fondo'); return null; })()}
+
+        {/* Main user content (hidden when admin/fondo is in panel view) */}
+        {!((userRole === "admin" || userRole === "fondo") && adminView) && (
         <main className="pb-16 px-4 sm:px-6 lg:px-8 pt-20 sm:pt-24">
           <div className="max-w-7xl mx-auto">
             {/* HERO — Merquito welcome */}
@@ -655,7 +616,7 @@ useEffect(() => {
       currentEvent.type === 'birthday' ||
       currentEvent.title.toLowerCase().includes('cumpleaños')
     );
-    const isCurrentBirthdayToday = isBirthday && currentEvent._originalDate && isBirthdayToday(currentEvent._originalDate);
+    const isCurrentBirthdayToday = isBirthday && isBirthdayToday(new Date(currentEvent.date));
 
     if (isCurrentBirthdayToday) {
       // Birthday messages array
@@ -709,7 +670,7 @@ useEffect(() => {
               </h2>
 
               {(() => {
-                const dt = currentEvent.date.toDate();
+                const dt = new Date(currentEvent.date);
                 const adjustedDt = dt;
                 const isToday = isEventToday(dt);
 
@@ -837,7 +798,7 @@ useEffect(() => {
             </h2>
 
             {(() => {
-              const dt = currentEvent.date.toDate();
+              const dt = new Date(currentEvent.date);
               const adjustedDt = dt;
               const isAllDay = dt.getHours() === 0 && dt.getMinutes() === 0 && dt.getSeconds() === 0;
               const isToday = isEventToday(dt);
@@ -1050,8 +1011,8 @@ useEffect(() => {
     ))
   ) : upcomingEvents.length > 0 ? (
     upcomingEvents.map((evt, idx) => {
-      const dt = evt.date.toDate();
-      const adjustedDt = dt; 
+      const dt = new Date(evt.date);
+      const adjustedDt = dt;
       const isAllDay = dt.getHours()===0 && dt.getMinutes()===0 && dt.getSeconds()===0;
       const isBirthday = evt.type === 'cumpleaños' || evt.type === 'birthday' || evt.title.toLowerCase().includes('cumpleaños');
       
@@ -1199,7 +1160,7 @@ useEffect(() => {
                           ))
                         ) : list.length > 0 ? (
                           list.map(req => {
-                            const dt = req.createdAt.toDate();
+                            const dt = new Date(req.createdAt);
                             const title = req.tipo === 'cesantias'
                               ? 'Solicitud de Cesantías'
                               : req.tipo === 'enfermedad'

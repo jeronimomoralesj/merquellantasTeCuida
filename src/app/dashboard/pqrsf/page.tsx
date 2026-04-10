@@ -3,27 +3,12 @@
 import React, { useState } from 'react';
 import DashboardNavbar from '../navbar';
 import { X, Send, Check, AlertCircle } from 'lucide-react';
-import { addDoc, collection, doc, getDoc, serverTimestamp } from 'firebase/firestore';
-import { auth, db } from '../../../firebase';
+import { useSession } from 'next-auth/react';
 
 type PqrsfType = 'Pregunta' | 'Queja' | 'Reclamo' | 'Sugerencia' | 'Felicitación';
 
-interface UserData {
-  nombre: string;
-  cedula: string;
-}
-
-interface PqrsfPayload {
-  type: PqrsfType;
-  message: string;
-  isAnonymous: boolean;
-  createdAt: ReturnType<typeof serverTimestamp>;
-  userId: string;
-  nombre?: string;
-  cedula?: string;
-}
-
 export default function PqrsfPage() {
+  const { data: session } = useSession();
   const [type, setType] = useState<PqrsfType>('Pregunta');
   const [message, setMessage] = useState('');
   const [isAnonymous, setIsAnonymous] = useState(false);
@@ -37,7 +22,7 @@ export default function PqrsfPage() {
     if (!isAnonymous) setShowConfirm(true);
     else setIsAnonymous(false);
   };
-  
+
   const confirmAnonymous = () => { setIsAnonymous(true); setShowConfirm(false); };
   const cancelAnonymous = () => { setShowConfirm(false); };
 
@@ -51,29 +36,18 @@ export default function PqrsfPage() {
     setSubmitting(true);
 
     try {
-      const user = auth.currentUser;
-      if (!user) throw new Error('Debes iniciar sesión antes de enviar.');
+      if (!session) throw new Error('Debes iniciar sesión antes de enviar.');
 
-      // base payload
-      const payload: PqrsfPayload = {
-        type,
-        message: message.trim(),
-        isAnonymous,
-        createdAt: serverTimestamp(),
-        userId: user.uid
-      };
+      const res = await fetch('/api/pqrsf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, message: message.trim(), isAnonymous }),
+      });
 
-      // always store nombre & cedula so admins can identify the user if needed,
-      // even when the submission is marked anonymous in the UI
-      const uSnap = await getDoc(doc(db, 'users', user.uid));
-      if (uSnap.exists()) {
-        const data = uSnap.data() as UserData;
-        payload.nombre = data.nombre;
-        payload.cedula = data.cedula;
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Error al enviar');
       }
-
-      // write to pqrsf collection
-      await addDoc(collection(db, 'pqrsf'), payload);
 
       // send email notification
       try {
@@ -82,7 +56,7 @@ export default function PqrsfPage() {
           'saludocupacional@merquellantas.com',
           'dptodelagente@merquellantas.com',
         ];
-        const displayName = payload.nombre || 'Usuario';
+        const displayName = session.user.nombre || 'Usuario';
         await fetch('/api/send-email', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -212,7 +186,7 @@ export default function PqrsfPage() {
                 </span>
                 {isAnonymous ? 'Anónimo activado' : 'Enviar como anónimo'}
               </button>
-              
+
               {isAnonymous && (
                 <span className="text-sm text-gray-600 mt-2 sm:mt-0">
                   Haz clic de nuevo para cancelar el modo anónimo
@@ -258,7 +232,7 @@ export default function PqrsfPage() {
             >
               <X size={24} />
             </button>
-            
+
             <div className="flex items-center gap-4 mb-4">
               <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center">
                 <AlertCircle size={24} className="text-amber-600" />
@@ -267,11 +241,11 @@ export default function PqrsfPage() {
                 Confirmar envío anónimo
               </h2>
             </div>
-            
+
             <p className="text-gray-700 mb-6">
               Al escoger el envío anónimo no podremos identificar quién envió esta solicitud, lo cual puede retrasar o dificultar una respuesta personalizada.
             </p>
-            
+
             <div className="flex flex-col sm:flex-row justify-end gap-3 sm:gap-4">
               <button
                 onClick={cancelAnonymous}

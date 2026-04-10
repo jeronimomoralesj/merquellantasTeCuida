@@ -3,60 +3,48 @@
 import React, { useEffect, useState } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
-import {
-  signInWithEmailAndPassword,
-  setPersistence,
-  browserLocalPersistence
-} from 'firebase/auth'
-import { doc, getDoc } from 'firebase/firestore'
-import { auth, db } from '../../../firebase'
+import { signIn, useSession } from 'next-auth/react'
 import { Eye, EyeOff, User, Lock, ArrowRight, ShieldCheck, Sparkles } from 'lucide-react'
 
 export default function MerqeuBienestarLogin() {
   const router = useRouter()
+  const { data: session } = useSession()
   const [cedula, setCedula] = useState('')
-  const [pin, setPin] = useState('')
-  const [showPin, setShowPin] = useState(false)
+  const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [rememberMe, setRememberMe] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    const unsub = auth.onAuthStateChanged(u => {
-      if (u) router.replace('/dashboard')
-    })
-    return unsub
-  }, [router])
+    if (session) router.replace('/dashboard')
+  }, [session, router])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
 
-    if (pin.length !== 4) {
-      setError('El PIN debe tener exactamente 4 dígitos')
+    if (!cedula || !password) {
+      setError('Ingrese su cédula y contraseña')
       return
     }
 
     setLoading(true)
-    const fakeEmail = `${cedula}@merque.com`
-    const firebasePassword = pin + '11'
 
     try {
-      if (rememberMe) {
-        await setPersistence(auth, browserLocalPersistence)
+      const res = await signIn('credentials', {
+        cedula,
+        password,
+        redirect: false,
+      })
+
+      if (res?.error) {
+        setError('Cédula o contraseña inválidos')
+      } else {
+        router.push('/dashboard')
       }
-
-      const userCred = await signInWithEmailAndPassword(auth, fakeEmail, firebasePassword)
-
-      const userSnap = await getDoc(doc(db, 'users', userCred.user.uid))
-      if (!userSnap.exists()) {
-        throw new Error('Perfil de usuario no encontrado')
-      }
-
-      router.push('/dashboard')
-    } catch (err: unknown) {
-      console.error('Login error:', err)
-      setError('Usuario o PIN inválidos')
+    } catch {
+      setError('Error al iniciar sesión')
     } finally {
       setLoading(false)
     }
@@ -150,7 +138,7 @@ export default function MerqeuBienestarLogin() {
                 </div>
                 <h2 className="text-2xl sm:text-3xl font-extrabold mt-2">Inicia sesión</h2>
                 <p className="text-gray-500 text-sm mt-1 mb-6">
-                  Ingresa con tu cédula y tu PIN de 4 dígitos.
+                  Ingresa con tu cédula y contraseña.
                 </p>
 
                 <form onSubmit={handleSubmit} noValidate>
@@ -177,34 +165,32 @@ export default function MerqeuBienestarLogin() {
                     </div>
                   </div>
 
-                  {/* PIN */}
+                  {/* Password */}
                   <div className="mb-4">
-                    <label htmlFor="pin" className="block text-xs font-semibold text-gray-700 mb-1.5 uppercase tracking-wide">
-                      PIN de 4 dígitos
+                    <label htmlFor="password" className="block text-xs font-semibold text-gray-700 mb-1.5 uppercase tracking-wide">
+                      Contraseña
                     </label>
                     <div className="relative">
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                         <Lock className="h-5 w-5 text-gray-400" />
                       </div>
                       <input
-                        id="pin"
-                        type={showPin ? 'text' : 'password'}
-                        inputMode="numeric"
+                        id="password"
+                        type={showPassword ? 'text' : 'password'}
                         autoComplete="current-password"
                         required
-                        maxLength={4}
-                        value={pin}
-                        onChange={e => setPin(e.target.value.replace(/\D/g, ''))}
-                        className="block w-full pl-10 pr-12 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#ff9900] focus:border-transparent transition tracking-[0.5em] font-semibold"
-                        placeholder="••••"
+                        value={password}
+                        onChange={e => setPassword(e.target.value)}
+                        className="block w-full pl-10 pr-12 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#ff9900] focus:border-transparent transition"
+                        placeholder="••••••••"
                       />
                       <button
                         type="button"
-                        onClick={() => setShowPin(!showPin)}
-                        aria-label={showPin ? 'Ocultar PIN' : 'Mostrar PIN'}
+                        onClick={() => setShowPassword(!showPassword)}
+                        aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
                         className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-[#ff9900] transition"
                       >
-                        {showPin ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                        {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                       </button>
                     </div>
                   </div>
@@ -236,7 +222,7 @@ export default function MerqeuBienestarLogin() {
 
                   <button
                     type="submit"
-                    disabled={loading || !cedula || pin.length !== 4}
+                    disabled={loading || !cedula || !password}
                     className="w-full flex justify-center items-center py-3.5 rounded-xl bg-[#ff9900] text-black font-bold text-base hover:bg-[#ffae33] active:scale-[0.99] transition disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-[#ff9900]/30"
                   >
                     {loading ? 'Ingresando...' : 'Iniciar sesión'}

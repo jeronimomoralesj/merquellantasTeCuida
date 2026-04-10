@@ -13,27 +13,26 @@ import {
   AlertCircle,
   Download
 } from "lucide-react";
-import { collection, getDocs, query, where, Timestamp } from 'firebase/firestore';
-import { db } from '../../../firebase'; // Adjust path as needed
+import { escapeHtml } from '../../../lib/sanitize';
 
 interface IncapacidadData {
   id: string;
   cargo: string;
   cedula: string;
   cie10: string;
-  codigoIncap: string;
-  createdAt?: Timestamp;
+  codigo_incap: string;
+  created_at?: string;
   edad: string;
-  endDate: string;
+  end_date: string;
   estado: string;
   gender: string;
-  mesDiagnostico: string;
+  mes_diagnostico: string;
   nombre: string;
-  numDias: number;
-  startDate: string;
+  num_dias: number;
+  start_date: string;
   tipo: string;
-  tipoContrato: string;
-  tipoEvento: string;
+  tipo_contrato: string;
+  tipo_evento: string;
   ubicacion: string;
 }
 
@@ -93,21 +92,9 @@ const fetchIncapacidadData = useCallback(async () => {
     setLoading(true);
     setError(null);
 
-    const solicitudesQuery = query(
-      collection(db, 'solicitudes'),
-      where('tipo', '==', 'incapacidad')
-    );
-    
-    const querySnapshot = await getDocs(solicitudesQuery);
-    const data: IncapacidadData[] = [];
-
-    querySnapshot.forEach((doc) => {
-      const docData = doc.data();
-      data.push({
-        id: doc.id,
-        ...docData,
-      } as IncapacidadData);
-    });
+    const res = await fetch('/api/solicitudes?tipo=incapacidad');
+    if (!res.ok) throw new Error('Error fetching incapacidad data');
+    const data: IncapacidadData[] = await res.json();
 
     setIncapacidadData(data);
     calculateStatistics(data);
@@ -134,9 +121,9 @@ const fetchIncapacidadData = useCallback(async () => {
     const approvalStats: ApprovalStats = {};
 
     data.forEach((item) => {
-      const createdDate = item.createdAt?.toDate() || new Date();
+      const createdDate = item.created_at ? new Date(item.created_at) : new Date();
       const monthName = getMonthName(createdDate);
-      const tipoEvento = item.tipoEvento || 'Sin especificar';
+      const tipoEvento = item.tipo_evento || 'Sin especificar';
       const cie10 = item.cie10 || 'Sin CIE10';
       const estado = item.estado?.toLowerCase() || '';
 
@@ -147,7 +134,7 @@ const fetchIncapacidadData = useCallback(async () => {
       monthlyStats[monthName][tipoEvento] = (monthlyStats[monthName][tipoEvento] || 0) + 1;
 
       // Days per tipoEvento
-      daysStats[tipoEvento] = (daysStats[tipoEvento] || 0) + (item.numDias || 0);
+      daysStats[tipoEvento] = (daysStats[tipoEvento] || 0) + (item.num_dias || 0);
 
       // CIE10 per month
       if (!cie10Stats[monthName]) {
@@ -225,13 +212,13 @@ const fetchIncapacidadData = useCallback(async () => {
                     if (!types.includes(type)) types.push(type);
                   });
                   return types;
-                }, [] as string[]).map(tipo => `<th>${tipo}</th>`).join('')}
+                }, [] as string[]).map(tipo => `<th>${escapeHtml(tipo)}</th>`).join('')}
               </tr>
             </thead>
             <tbody>
               ${Object.entries(monthlyAmounts).map(([month, data]) => `
                 <tr>
-                  <td><strong>${month}</strong></td>
+                  <td><strong>${escapeHtml(month)}</strong></td>
                   ${Object.values(monthlyAmounts).reduce((types, monthData) => {
                     Object.keys(monthData).forEach(type => {
                       if (!types.includes(type)) types.push(type);
@@ -250,7 +237,7 @@ const fetchIncapacidadData = useCallback(async () => {
             </thead>
             <tbody>
               ${Object.entries(daysPerType).map(([tipo, dias]) => `
-                <tr><td>${tipo}</td><td>${dias}</td></tr>
+                <tr><td>${escapeHtml(tipo)}</td><td>${dias}</td></tr>
               `).join('')}
             </tbody>
           </table>
@@ -265,13 +252,13 @@ const fetchIncapacidadData = useCallback(async () => {
                     if (!codes.includes(code)) codes.push(code);
                   });
                   return codes;
-                }, [] as string[]).map(code => `<th>${code}</th>`).join('')}
+                }, [] as string[]).map(code => `<th>${escapeHtml(code)}</th>`).join('')}
               </tr>
             </thead>
             <tbody>
               ${Object.entries(cie10PerMonth).map(([month, data]) => `
                 <tr>
-                  <td><strong>${month}</strong></td>
+                  <td><strong>${escapeHtml(month)}</strong></td>
                   ${Object.values(cie10PerMonth).reduce((codes, monthData) => {
                     Object.keys(monthData).forEach(code => {
                       if (!codes.includes(code)) codes.push(code);
@@ -291,7 +278,7 @@ const fetchIncapacidadData = useCallback(async () => {
             <tbody>
               ${Object.entries(approvalRates).map(([month, stats]) => `
                 <tr>
-                  <td><strong>${month}</strong></td>
+                  <td><strong>${escapeHtml(month)}</strong></td>
                   <td style="color: #10b981;">${stats.aprobados}</td>
                   <td style="color: #ef4444;">${stats.rechazados}</td>
                   <td>${stats.total}</td>

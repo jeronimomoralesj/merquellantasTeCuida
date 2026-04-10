@@ -15,20 +15,17 @@ import {
   User,
   Clock
 } from "lucide-react";
-import { collection, getDocs, Timestamp } from 'firebase/firestore';
-import { db } from '../../../firebase'; // Adjust path as needed
-
+import { escapeHtml } from '../../../lib/sanitize';
 interface UserData {
   id: string;
   cedula: string;
   nombre: string;
   posicion: string;
-  createdAt: Timestamp;
+  created_at: string;
   mood: {
-    date: Timestamp;
+    date: string;
     mood: 'feliz' | 'neutral' | 'triste';
   };
-  extra?: Record<string, unknown>; // instead of [key: string]: any
   rol: string;
 }
 
@@ -118,19 +115,10 @@ const fetchUsersData = useCallback(async () => {
     setLoading(true);
     setError(null);
 
-    const usersCollection = collection(db, 'users');
-    const querySnapshot = await getDocs(usersCollection);
-    const data: UserData[] = [];
-
-    querySnapshot.forEach((doc) => {
-      const docData = doc.data();
-      if (docData.mood && docData.mood.mood && docData.mood.date) {
-        data.push({
-          id: doc.id,
-          ...docData
-        } as UserData);
-      }
-    });
+    const res = await fetch('/api/users');
+    if (!res.ok) throw new Error('Error fetching users');
+    const allUsers: UserData[] = await res.json();
+    const data = allUsers.filter(u => u.mood && u.mood.mood && u.mood.date);
 
     setUsersData(data);
     calculateStatistics(data);
@@ -140,7 +128,7 @@ const fetchUsersData = useCallback(async () => {
   } finally {
     setLoading(false);
   }
-}, []); // Empty dependency array is safe here
+}, []);
 
 
   const calculateStatistics = (data: UserData[]) => {
@@ -160,7 +148,7 @@ const fetchUsersData = useCallback(async () => {
 
     data.forEach((user) => {
       const mood = user.mood.mood;
-      const moodDate = user.mood.date?.toDate() || new Date();
+      const moodDate = user.mood.date ? new Date(user.mood.date) : new Date();
       const monthName = getMonthName(moodDate);
 
       // Overall stats
@@ -256,9 +244,9 @@ const fetchUsersData = useCallback(async () => {
               <tbody>
                 ${consecutiveTristeUsers.map(user => `
                   <tr>
-                    <td>${user.nombre}</td>
-                    <td>${user.cedula}</td>
-                    <td>${user.posicion}</td>
+                    <td>${escapeHtml(user.nombre)}</td>
+                    <td>${escapeHtml(user.cedula)}</td>
+                    <td>${escapeHtml(user.posicion)}</td>
                     <td style="color: #dc2626; font-weight: bold;">${user.consecutiveDays} días</td>
                     <td>${user.lastMoodDate.toLocaleDateString('es-ES')}</td>
                   </tr>
@@ -295,7 +283,7 @@ const fetchUsersData = useCallback(async () => {
             <tbody>
               ${Object.entries(monthlyMoodStats).map(([month, stats]) => `
                 <tr>
-                  <td><strong>${month}</strong></td>
+                  <td><strong>${escapeHtml(month)}</strong></td>
                   <td style="color: #10b981;">${stats.feliz}</td>
                   <td style="color: #f59e0b;">${stats.neutral}</td>
                   <td style="color: #ef4444;">${stats.triste}</td>
@@ -543,7 +531,7 @@ useEffect(() => {
                       </div>
                       <div className="mt-2 flex items-center text-xs text-gray-500">
                         <Clock className="h-3 w-3 mr-1" />
-                        {user.mood.date?.toDate().toLocaleDateString('es-ES')}
+                        {user.mood.date ? new Date(user.mood.date).toLocaleDateString('es-ES') : ''}
                       </div>
                     </div>
                   ))}

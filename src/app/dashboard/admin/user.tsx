@@ -11,22 +11,6 @@ import {
   User,
   Cake,
 } from 'lucide-react';
-import { 
-  collection, 
-  getDocs, 
-  updateDoc, 
-  deleteDoc, 
-  doc,
-  serverTimestamp, 
-  setDoc,
-  Timestamp,
-  query,
-  where
-} from 'firebase/firestore';
-import { db } from '../../../firebase';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { secondaryAuth } from '../../../firebase';
-
 interface UserExtra {
   'Dpto Donde Labora': string;
   'ARL': string;
@@ -49,28 +33,15 @@ interface User {
   id: string;
   cedula: string;
   email: string;
-  password: string;
   createdAt: Date;
   extra: UserExtra;
   nombre: string;
 }
 
-interface FirestoreUserData {
-  cedula?: string;
-  nombre?: string;
-  email?: string;
-  password?: string;
-  createdAt?: Timestamp | Date;
-  extra?: Partial<UserExtra> & {
-    'Fecha Ingreso'?: string | number;
-    'fechaNacimiento'?: string;
-  };
-}
-
 interface CalendarEvent {
   id: string;
   title: string;
-  date: Timestamp | Date | { toDate: () => Date };
+  date: string | Date;
   description: string;
   type: 'general' | 'birthday';
   userId: string;
@@ -112,11 +83,8 @@ const Users: React.FC = () => {
 
   const [formData, setFormData] = useState(initialFormData);
 
-  const generateCredentials = (cedula: string) => {
-    return {
-      email: `${cedula}@merque.com`,
-      password: `${cedula.slice(-4)}11`
-    };
+  const generateEmail = (cedula: string) => {
+    return `${cedula}@merquellantas.com`;
   };
 
   const dateToExcelSerial = (dateString: string): number => {
@@ -137,17 +105,11 @@ const Users: React.FC = () => {
 
   const fetchCalendarEvents = async () => {
     try {
-      const eventsRef = collection(db, 'calendar');
-      const q = query(eventsRef, where('type', '==', 'birthday'));
-      const querySnapshot = await getDocs(q);
-      const events: CalendarEvent[] = [];
-      querySnapshot.forEach((doc) => {
-        events.push({
-          id: doc.id,
-          ...doc.data()
-        } as CalendarEvent);
-      });
-      setCalendarEvents(events);
+      const res = await fetch('/api/calendar');
+      if (!res.ok) throw new Error('Error fetching calendar');
+      const allEvents: CalendarEvent[] = await res.json();
+      const birthdayEvents = allEvents.filter(e => e.type === 'birthday');
+      setCalendarEvents(birthdayEvents);
     } catch (error) {
       console.error('Error fetching calendar events:', error);
     }
@@ -161,15 +123,9 @@ const Users: React.FC = () => {
     );
 
     if (birthdayEvent && birthdayEvent.date) {
-      let date: Date;
-
-      if (typeof birthdayEvent.date === 'object' && birthdayEvent.date !== null && 'toDate' in birthdayEvent.date) {
-        date = birthdayEvent.date.toDate();
-      } else if (birthdayEvent.date instanceof Date) {
-        date = birthdayEvent.date;
-      } else {
-        date = new Date(birthdayEvent.date);
-      }
+      const date = birthdayEvent.date instanceof Date
+        ? birthdayEvent.date
+        : new Date(birthdayEvent.date);
 
       date.setDate(date.getDate() + 1);
       return date.toISOString().split('T')[0];
@@ -184,39 +140,54 @@ const Users: React.FC = () => {
       return;
     }
 
-    const { email, password } = generateCredentials(formData.cedula);
+    const email = generateEmail(formData.cedula);
 
     try {
-      const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email, password);
-      const userDocRef = doc(db, 'users', userCredential.user.uid);
-      const createdAt = serverTimestamp();
-
       const payload = {
-  cedula: formData.cedula,
-  nombre: formData.nombre,
-  email,
-  password,
-  createdAt,
-  extra: {
-    ...formData.extra,
-    'Fecha Ingreso': dateToExcelSerial(formData.extra['Fecha Ingreso']),
-  }
-};
+        cedula: formData.cedula,
+        nombre: formData.nombre,
+        email,
+        departamento: formData.extra['Dpto Donde Labora'],
+        arl: formData.extra['ARL'],
+        banco: formData.extra['Banco'],
+        caja_compensacion: formData.extra['CAJA DE COMPENSACION'],
+        eps: formData.extra['EPS'],
+        fondo_pensiones: formData.extra['FONDO DE PENSIONES'],
+        fecha_ingreso: formData.extra['Fecha Ingreso'],
+        fondo_cesantias: formData.extra['Fondo Cesantías'],
+        cargo_empleado: formData.extra['Cargo Empleado'],
+        numero_cuenta: formData.extra['Número Cuenta'],
+        tipo_cuenta: formData.extra['Tipo Cuenta'],
+        tipo_documento: formData.extra['Tipo de Documento'],
+        posicion: formData.extra['posicion'],
+        fecha_nacimiento: formData.extra['fechaNacimiento'],
+        rol: formData.extra['rol'],
+      };
 
-      await setDoc(userDocRef, payload);
+      const res = await fetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Error creating user');
+      }
+
+      const created = await res.json();
 
       const newUser: User = {
-  id: userDocRef.id,
-  cedula: formData.cedula,
-  nombre: formData.nombre, // ✅ ADD THIS LINE
-  email,
-  password,
-  createdAt: new Date(),
-  extra: {
-    ...formData.extra,
-    'Fecha Ingreso': formData.extra['Fecha Ingreso']
-  }
-};
+        id: created.id,
+        cedula: formData.cedula,
+        nombre: formData.nombre,
+        email,
+        createdAt: new Date(),
+        extra: {
+          ...formData.extra,
+          'Fecha Ingreso': formData.extra['Fecha Ingreso']
+        }
+      };
 
       setUsers(prev => [...prev, newUser]);
       setFormData(initialFormData);
@@ -237,62 +208,47 @@ const Users: React.FC = () => {
     setLoading(true);
     try {
       await fetchCalendarEvents();
-      
-      const snap = await getDocs(collection(db, 'users'));
-      const fetched: User[] = snap.docs.map(docSnap => {
-        const data: FirestoreUserData = docSnap.data() || {};
-        const rawExtra: Partial<UserExtra> & { 'Fecha Ingreso'?: string | number; 'fechaNacimiento'?: string } = data.extra || {};
 
-        let createdAt: Date;
-        if (data.createdAt && typeof data.createdAt === 'object' && 'toDate' in data.createdAt) {
-          createdAt = data.createdAt.toDate();
-        } else if (data.createdAt instanceof Date) {
-          createdAt = data.createdAt;
-        } else {
-          createdAt = new Date();
-        }
+      const res = await fetch('/api/users');
+      if (!res.ok) throw new Error('Error fetching users');
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const usersData: any[] = await res.json();
 
-        const nombre = data.nombre?.toString().trim() || '';
+      const fetched: User[] = usersData.map(data => {
+        const createdAt = data.created_at ? new Date(data.created_at) : new Date();
+        const nombre = (data.nombre || '').toString().trim();
 
-        let birthday: string = '';
-        if (rawExtra.fechaNacimiento) {
-  birthday = rawExtra.fechaNacimiento;
-}
-
+        let birthday: string = data.fecha_nacimiento || '';
         if (!birthday && nombre) {
           birthday = getBirthdayFromCalendar(nombre);
         }
 
         const completeExtra: UserExtra = {
-          'Dpto Donde Labora': rawExtra['Dpto Donde Labora']?.toString() || '',
-          'ARL': rawExtra['ARL']?.toString() || '',
-          'Banco': rawExtra['Banco']?.toString() || '',
-          'CAJA DE COMPENSACION': rawExtra['CAJA DE COMPENSACION']?.toString() || '',
-          'EPS': rawExtra['EPS']?.toString() || '',
-          'FONDO DE PENSIONES': rawExtra['FONDO DE PENSIONES']?.toString() || '',
-          'Fecha Ingreso':
-            typeof rawExtra['Fecha Ingreso'] === 'number'
-              ? excelSerialToDate(rawExtra['Fecha Ingreso'])
-              : rawExtra['Fecha Ingreso']?.toString() || '',
-          'Fondo Cesantías': rawExtra['Fondo Cesantías']?.toString() || '',
-          'Cargo Empleado': rawExtra['Cargo Empleado']?.toString() || '',
-          'Número Cuenta': rawExtra['Número Cuenta']?.toString() || '',
-          'Tipo Cuenta': rawExtra['Tipo Cuenta']?.toString() || '',
-          'Tipo de Documento': rawExtra['Tipo de Documento']?.toString() || '',
-          'posicion': rawExtra['posicion']?.toString() || '',
+          'Dpto Donde Labora': data.departamento || '',
+          'ARL': data.arl || '',
+          'Banco': data.banco || '',
+          'CAJA DE COMPENSACION': data.caja_compensacion || '',
+          'EPS': data.eps || '',
+          'FONDO DE PENSIONES': data.fondo_pensiones || '',
+          'Fecha Ingreso': data.fecha_ingreso || '',
+          'Fondo Cesantías': data.fondo_cesantias || '',
+          'Cargo Empleado': data.cargo_empleado || '',
+          'Número Cuenta': data.numero_cuenta || '',
+          'Tipo Cuenta': data.tipo_cuenta || '',
+          'Tipo de Documento': data.tipo_documento || '',
+          'posicion': data.posicion || '',
           'fechaNacimiento': birthday,
-          'rol': (rawExtra['rol'] as 'user' | 'admin') || 'user',
+          'rol': (data.rol as 'user' | 'admin') || 'user',
         };
 
         return {
-  id: docSnap.id,
-  cedula: data.cedula || '',
-  nombre,
-  email: data.email || '',
-  password: data.password || '',
-  createdAt,
-  extra: completeExtra,
-};
+          id: data.id,
+          cedula: data.cedula || '',
+          nombre,
+          email: data.email || '',
+          createdAt,
+          extra: completeExtra,
+        };
       });
       setUsers(fetched);
     } catch (error) {
@@ -305,35 +261,50 @@ const Users: React.FC = () => {
 
   const updateUser = async () => {
     if (!editingUser) return;
-    
+
     const updatedPayload = {
-  cedula: formData.cedula,
-  nombre: formData.nombre,
-  extra: {
-    ...formData.extra,
-    'Fecha Ingreso': dateToExcelSerial(formData.extra['Fecha Ingreso']),
-  }
-};
+      id: editingUser.id,
+      cedula: formData.cedula,
+      nombre: formData.nombre,
+      departamento: formData.extra['Dpto Donde Labora'],
+      arl: formData.extra['ARL'],
+      banco: formData.extra['Banco'],
+      caja_compensacion: formData.extra['CAJA DE COMPENSACION'],
+      eps: formData.extra['EPS'],
+      fondo_pensiones: formData.extra['FONDO DE PENSIONES'],
+      fecha_ingreso: formData.extra['Fecha Ingreso'],
+      fondo_cesantias: formData.extra['Fondo Cesantías'],
+      cargo_empleado: formData.extra['Cargo Empleado'],
+      numero_cuenta: formData.extra['Número Cuenta'],
+      tipo_cuenta: formData.extra['Tipo Cuenta'],
+      tipo_documento: formData.extra['Tipo de Documento'],
+      posicion: formData.extra['posicion'],
+      fecha_nacimiento: formData.extra['fechaNacimiento'],
+      rol: formData.extra['rol'],
+    };
 
     try {
-      const userDocRef = doc(db, 'users', editingUser.id);
-      await updateDoc(userDocRef, updatedPayload);
-      
-      setUsers(prevUsers => 
-        prevUsers.map(user => 
-          user.id === editingUser.id 
-            ? { 
-                ...user, 
-                ...updatedPayload,
-                extra: {
-                  ...updatedPayload.extra,
-                  'Fecha Ingreso': formData.extra['Fecha Ingreso']
-                }
+      const res = await fetch('/api/users', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedPayload),
+      });
+
+      if (!res.ok) throw new Error('Error updating user');
+
+      setUsers(prevUsers =>
+        prevUsers.map(user =>
+          user.id === editingUser.id
+            ? {
+                ...user,
+                cedula: formData.cedula,
+                nombre: formData.nombre,
+                extra: { ...formData.extra },
               }
             : user
         )
       );
-      
+
       cancelEdit();
       alert("Usuario actualizado con éxito");
     } catch (error) {
@@ -349,7 +320,7 @@ const Users: React.FC = () => {
       const res = await fetch('/api/delete-user', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ uid })
+        body: JSON.stringify({ id: uid })
       });
 
       if (!res.ok) {
@@ -358,21 +329,11 @@ const Users: React.FC = () => {
         return;
       }
 
-      const calendarRef = collection(db, 'calendar');
-      const q = query(calendarRef, where('userId', '==', uid), where('type', '==', 'birthday'));
-      const querySnapshot = await getDocs(q);
-      
-      const deletePromises = querySnapshot.docs.map(async (docSnapshot) => {
-        await deleteDoc(doc(db, 'calendar', docSnapshot.id));
-      });
-      
-      await Promise.all(deletePromises);
-
       setUsers(prev => prev.filter(u => u.id !== uid));
-      
-      alert('Usuario y eventos de cumpleaños eliminados completamente');
+
+      alert('Usuario eliminado completamente');
     } catch (error) {
-      console.error('Error deleting user and calendar events:', error);
+      console.error('Error deleting user:', error);
       alert('Error al eliminar usuario. Por favor intente nuevamente.');
     }
   };

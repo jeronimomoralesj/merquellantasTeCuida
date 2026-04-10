@@ -9,9 +9,7 @@ import {
   Info,
   Clock
 } from 'lucide-react';
-import { addDoc, collection, doc, getDoc, serverTimestamp } from 'firebase/firestore';
-import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { auth, db } from '../../../firebase';
+import { useSession } from 'next-auth/react';
 
 interface VacacionesFormData {
   fechaInicio: string;
@@ -21,6 +19,7 @@ interface VacacionesFormData {
 }
 
 const VacacionesForm = () => {
+  const { data: session } = useSession();
   const [formData, setFormData] = useState<VacacionesFormData>({
     fechaInicio: '',
     fechaFin: '',
@@ -106,44 +105,42 @@ const VacacionesForm = () => {
     setIsSubmitting(true);
 
     try {
-      const user = auth.currentUser;
-      if (!user) {
+      if (!session) {
         setFormError('Debe iniciar sesión para enviar una solicitud');
         return;
       }
-      
-      const storage = getStorage();
+
       const file = formData.document as File;
-      const path = `solicitudes/${user.uid}/${Date.now()}_${file.name}`;
-      const fileRef = storageRef(storage, path);
-      const snap = await uploadBytes(fileRef, file);
-      const url = await getDownloadURL(snap.ref);
 
-      const userDoc = await getDoc(doc(db, 'users', user.uid));
-      const userData = userDoc.exists() ? userDoc.data() : {};
-      const { nombre, cedula } = userData;
+      // Upload to OneDrive
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('folder', 'vacaciones');
 
-      const solicitudData = {
-        userId: user.uid,
-        nombre: nombre || '',
-        cedula: cedula || '',
-        tipo: 'vacaciones',
-        estado: 'pendiente',
-        fechaInicio: formData.fechaInicio,
-        fechaFin: formData.fechaFin,
-        diasVacaciones: diasVacaciones,
-        description: formData.description,
-        documentName: file.name,
-        documentUrl: url,
-        createdAt: serverTimestamp(),
-      };
+      const uploadRes = await fetch('/api/upload', { method: 'POST', body: fd });
+      if (!uploadRes.ok) throw new Error('Error al subir el documento');
+      const uploaded = await uploadRes.json();
 
-      await addDoc(collection(db, 'solicitudes'), solicitudData);
+      const res = await fetch('/api/solicitudes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tipo: 'vacaciones',
+          fechaInicio: formData.fechaInicio,
+          fechaFin: formData.fechaFin,
+          diasVacaciones,
+          description: formData.description,
+          documentName: uploaded.name,
+          documentUrl: uploaded.webUrl,
+        }),
+      });
 
-// Send email notification
-await sendEmailNotification(nombre || 'Usuario');
+      if (!res.ok) throw new Error('Error al crear solicitud');
 
-setSubmitted(true);
+      // Send email notification
+      await sendEmailNotification(session.user.nombre || 'Usuario');
+
+      setSubmitted(true);
 
     } catch (err) {
       console.error(err);

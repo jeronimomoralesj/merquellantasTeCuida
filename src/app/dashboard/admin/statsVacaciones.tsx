@@ -13,20 +13,18 @@ import {
   Download,
   Clock
 } from "lucide-react";
-import { collection, getDocs, query, Timestamp, where } from 'firebase/firestore';
-import { db } from '../../../firebase'; // Adjust path as needed
-
+import { escapeHtml } from '../../../lib/sanitize';
 interface VacacionesData {
   id: string;
   cedula: string;
-  createdAt?: Timestamp; 
+  created_at?: string;
   description: string;
-  diasVacaciones: number;
-  documentName: string;
-  documentUrl: string;
+  dias_vacaciones: number;
+  document_name: string;
+  document_url: string;
   estado: string;
-  fechaFin: string;
-  fechaInicio: string;
+  fecha_fin: string;
+  fecha_inicio: string;
   nombre: string;
   tipo: string;
   userId: string;
@@ -93,22 +91,9 @@ export default function StatsVacaciones({ isOpen, onClose }: StatsVacacionesProp
       setLoading(true);
       setError(null);
 
-      // Query solicitudes collection for tipo === 'vacaciones'
-      const solicitudesQuery = query(
-        collection(db, 'solicitudes'),
-        where('tipo', '==', 'vacaciones')
-      );
-      
-      const querySnapshot = await getDocs(solicitudesQuery);
-      const data: VacacionesData[] = [];
-
-      querySnapshot.forEach((doc) => {
-        const docData = doc.data();
-        data.push({
-          id: doc.id,
-          ...docData
-        } as VacacionesData);
-      });
+      const res = await fetch('/api/solicitudes?tipo=vacaciones');
+      if (!res.ok) throw new Error('Error fetching vacaciones data');
+      const data: VacacionesData[] = await res.json();
 
       setVacacionesData(data);
       calculateStatistics(data);
@@ -139,10 +124,10 @@ export default function StatsVacaciones({ isOpen, onClose }: StatsVacacionesProp
     let totalDias = 0;
 
     data.forEach((item) => {
-      const createdDate = item.createdAt?.toDate() || new Date();
+      const createdDate = item.created_at ? new Date(item.created_at) : new Date();
       const monthName = getMonthName(createdDate);
       const estado = item.estado?.toLowerCase() || 'pendiente';
-      const dias = item.diasVacaciones || 0;
+      const dias = item.dias_vacaciones || 0;
 
       // Monthly stats
       if (!monthlyStatsData[monthName]) {
@@ -262,7 +247,7 @@ export default function StatsVacaciones({ isOpen, onClose }: StatsVacacionesProp
             <tbody>
               ${Object.entries(monthlyStats).map(([month, stats]) => `
                 <tr>
-                  <td><strong>${month}</strong></td>
+                  <td><strong>${escapeHtml(month)}</strong></td>
                   <td>${stats.cantidad}</td>
                   <td>${stats.totalDias}</td>
                 </tr>
@@ -278,7 +263,7 @@ export default function StatsVacaciones({ isOpen, onClose }: StatsVacacionesProp
             <tbody>
               ${Object.entries(approvalRates).map(([month, stats]) => `
                 <tr>
-                  <td><strong>${month}</strong></td>
+                  <td><strong>${escapeHtml(month)}</strong></td>
                   <td style="color: #10b981;">${stats.aprobados}</td>
                   <td style="color: #ef4444;">${stats.rechazados}</td>
                   <td style="color: #f59e0b;">${stats.pendientes}</td>

@@ -2,18 +2,6 @@
 
 import React, { useEffect, useState } from "react";
 import {
-  collection,
-  getDocs,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  doc,
-  orderBy,
-  query,
-  writeBatch,
-} from "firebase/firestore";
-import { db } from "../../../firebase";
-import {
   Zap,
   Plus,
   Edit,
@@ -74,16 +62,17 @@ export default function QuickActionsAdmin() {
     if (!confirm("¿Crear las acciones rápidas por defecto?")) return;
     setSeeding(true);
     try {
-      const batch = writeBatch(db);
-      DEFAULT_ACTIONS.forEach((a) => {
-        const ref = doc(collection(db, "quickActions"));
-        batch.set(ref, a);
-      });
-      await batch.commit();
+      for (const a of DEFAULT_ACTIONS) {
+        await fetch('/api/quick-actions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(a),
+        });
+      }
       await load();
     } catch (e) {
       console.error(e);
-      alert("Error creando las acciones por defecto. Revisa las reglas de Firestore.");
+      alert("Error creando las acciones por defecto.");
     } finally {
       setSeeding(false);
     }
@@ -92,11 +81,10 @@ export default function QuickActionsAdmin() {
   const load = async () => {
     setLoading(true);
     try {
-      const q = query(collection(db, "quickActions"), orderBy("order", "asc"));
-      const snap = await getDocs(q);
-      setItems(
-        snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<QuickAction, "id">) }))
-      );
+      const res = await fetch('/api/quick-actions');
+      if (!res.ok) throw new Error('Error loading quick actions');
+      const data: QuickAction[] = await res.json();
+      setItems(data);
     } catch (e) {
       console.error("Error loading quickActions", e);
     } finally {
@@ -143,9 +131,17 @@ export default function QuickActionsAdmin() {
         active: !!form.active,
       };
       if (editingId) {
-        await updateDoc(doc(db, "quickActions", editingId), payload);
+        await fetch('/api/quick-actions', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: editingId, ...payload }),
+        });
       } else {
-        await addDoc(collection(db, "quickActions"), payload);
+        await fetch('/api/quick-actions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
       }
       cancel();
       await load();
@@ -161,7 +157,11 @@ export default function QuickActionsAdmin() {
     if (!id) return;
     if (!confirm("¿Eliminar esta acción rápida?")) return;
     try {
-      await deleteDoc(doc(db, "quickActions", id));
+      await fetch('/api/quick-actions', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      });
       await load();
     } catch (e) {
       console.error(e);

@@ -8,15 +8,9 @@ import {
   CheckCircle,
   Loader2,
 } from "lucide-react";
-import { collection, getDocs, query } from 'firebase/firestore';
-import { db } from '../../../firebase'; // Adjust path as needed
-
 interface MoodEntry {
   mood: string;
-  date: {
-    toMillis: () => number;
-    toDate: () => Date;
-  };
+  date: string;
 }
 
 interface SadWorker {
@@ -43,7 +37,7 @@ const hasConsecutiveSadMoods = (moodHistory: MoodEntry[], consecutiveCount = 3) 
     }
 
     // Sort by date descending (most recent first)
-    const sortedMoods = moodHistory.sort((a, b) => b.date.toMillis() - a.date.toMillis());
+    const sortedMoods = moodHistory.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     
     let consecutiveSadCount = 0;
     
@@ -93,48 +87,46 @@ const getAvatarColor = (index: number) => {
       setLoading(true);
       setError(null);
 
-      // Get all users from the 'users' collection
-      const usersQuery = query(collection(db, 'users'));
-      const usersSnapshot = await getDocs(usersQuery);
-      
-const sadWorkers: SadWorker[] = [];
+      const res = await fetch('/api/users');
+      if (!res.ok) throw new Error('Error fetching users');
+      const allUsers = await res.json();
 
-      usersSnapshot.forEach((doc) => {
-        const userData = doc.data();
-        const userId = doc.id;
-        
+      const sadWorkers: SadWorker[] = [];
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      allUsers.forEach((userData: any) => {
+        const userId = userData.id;
+
         // Check if user has mood history
         if (userData.moodHistory && Array.isArray(userData.moodHistory)) {
           const { hasConsecutive, count } = hasConsecutiveSadMoods(userData.moodHistory);
-          
+
           if (hasConsecutive) {
             sadWorkers.push({
               id: userId,
-              name: userData.nombre || userData.name || 'Usuario Sin Nombre',
-              position: userData.position || userData.cargo || 'Sin Cargo',
-              department: userData.department || userData.departamento || 'Sin Departamento',
+              name: userData.nombre || 'Usuario Sin Nombre',
+              position: userData.cargo_empleado || userData.posicion || 'Sin Cargo',
+              department: userData.departamento || 'Sin Departamento',
               consecutiveSadDays: count,
               avatar: getAvatarInitials(userData.nombre || userData.name || 'NN'),
               avatarColor: getAvatarColor(sadWorkers.length),
               email: userData.email || '',
-              lastMoodDate: userData.moodHistory[0]?.date?.toDate() || new Date()
+              lastMoodDate: userData.moodHistory[0]?.date ? new Date(userData.moodHistory[0].date) : new Date()
             });
           }
         }
         // Fallback: check single mood entry (for backward compatibility)
         else if (userData.mood && userData.mood.mood === 'triste') {
-          // If only single mood entry, we can't determine consecutive days
-          // but we can still flag users who are currently sad
           sadWorkers.push({
             id: userId,
-            name: userData.nombre || userData.name || 'Usuario Sin Nombre',
-            position: userData.position || userData.cargo || 'Sin Cargo',
-            department: userData.department || userData.departamento || 'Sin Departamento',
-            consecutiveSadDays: 1, // We only know they're currently sad
+            name: userData.nombre || 'Usuario Sin Nombre',
+            position: userData.cargo_empleado || userData.posicion || 'Sin Cargo',
+            department: userData.departamento || 'Sin Departamento',
+            consecutiveSadDays: 1,
             avatar: getAvatarInitials(userData.nombre || userData.name || 'NN'),
             avatarColor: getAvatarColor(sadWorkers.length),
             email: userData.email || '',
-            lastMoodDate: userData.mood.date?.toDate() || new Date()
+            lastMoodDate: userData.mood.date ? new Date(userData.mood.date) : new Date()
           });
         }
       });

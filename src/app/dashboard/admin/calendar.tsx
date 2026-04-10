@@ -13,10 +13,6 @@ import {
   Trash2,
 } from "lucide-react";
 
-// Firebase imports
-import { auth, db, storage } from '../../../firebase';
-import { collection, addDoc, serverTimestamp, getDocs, query, orderBy, deleteDoc, doc, updateDoc } from 'firebase/firestore';
-import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 
 interface CalendarEvent {
   id: string;
@@ -94,31 +90,27 @@ export default function CalendarCard() {
   const fetchEvents = async () => {
     try {
       setLoading(true);
-      
-      const eventsRef = collection(db, 'calendar');
-      const q = query(eventsRef, orderBy('date', 'asc'));
-      
-      const querySnapshot = await getDocs(q);
-      const fetchedEvents: CalendarEvent[] = [];
-      
-      querySnapshot.forEach((doc) => {
-        const eventData = doc.data();
-        const storedDate = eventData.date.toDate();
-        
-        fetchedEvents.push({
-          id: doc.id,
-          title: eventData.title || '',
-          description: eventData.description || '',
+
+      const res = await fetch('/api/calendar');
+      if (!res.ok) throw new Error('Error fetching events');
+      const events = await res.json();
+
+      const fetchedEvents: CalendarEvent[] = events.map((eventData: Record<string, unknown>) => {
+        const storedDate = new Date(eventData.date as string);
+        return {
+          id: eventData.id,
+          title: (eventData.title as string) || '',
+          description: (eventData.description as string) || '',
           date: addOneDayForDisplay(storedDate),
-          type: eventData.type || 'general',
-          image: eventData.image || '',
-          userId: eventData.userId || '',
-          createdAt: eventData.createdAt,
-          videoUrl: eventData.videoUrl || '',
-videoPath: eventData.videoPath || ''
-        });
+          type: (eventData.type as string) || 'general',
+          image: (eventData.image as string) || '',
+          userId: (eventData.user_id as string) || '',
+          createdAt: eventData.created_at,
+          videoUrl: (eventData.video_url as string) || '',
+          videoPath: (eventData.video_path as string) || ''
+        };
       });
-      
+
       setAllEvents(fetchedEvents);
     } catch (error) {
       console.error("Error fetching events:", error);
@@ -153,8 +145,8 @@ videoPath: eventData.videoPath || ''
   // Delete event function
   const deleteEvent = async (
   eventId: string,
-  imageUrl: string,
-  videoPath?: string
+  _imageUrl: string,
+  _videoPath?: string
 ) => {
   if (!window.confirm("¿Estás seguro de que quieres eliminar este evento?")) {
     return;
@@ -163,30 +155,12 @@ videoPath: eventData.videoPath || ''
   try {
     setDeletingEventId(eventId);
 
-    // 1️⃣ Eliminar documento de Firestore
-    await deleteDoc(doc(db, 'calendar', eventId));
+    await fetch('/api/calendar', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: eventId }),
+    });
 
-    // 2️⃣ Eliminar imagen (si existe y no es la default)
-    if (imageUrl && !imageUrl.includes('freepik') && !imageUrl.includes('istockphoto')) {
-      try {
-        const imageRef = storageRef(storage, imageUrl);
-        await deleteObject(imageRef);
-      } catch (error) {
-        console.log("Error deleting image (may not exist):", error);
-      }
-    }
-
-    // 3️⃣ Eliminar video (si existe)
-    if (videoPath) {
-      try {
-        const videoRef = storageRef(storage, videoPath);
-        await deleteObject(videoRef);
-      } catch (error) {
-        console.log("Error deleting video (may not exist):", error);
-      }
-    }
-
-    // 4️⃣ Refrescar eventos
     fetchEvents();
 
   } catch (error) {
@@ -199,7 +173,7 @@ videoPath: eventData.videoPath || ''
 
 const uploadBirthdayVideo = async (
   eventId: string,
-  userId: string,
+  _userId: string,
   oldVideoPath?: string
 ) => {
   const input = document.createElement("input");
@@ -210,13 +184,11 @@ const uploadBirthdayVideo = async (
     const file = input.files?.[0];
     if (!file) return;
 
-    // 1️⃣ Tamaño máximo (50MB)
     if (file.size > 50 * 1024 * 1024) {
       alert("El video no debe superar 50MB");
       return;
     }
 
-    // 2️⃣ Validar duración
     const video = document.createElement("video");
     video.preload = "metadata";
 
@@ -228,30 +200,24 @@ const uploadBirthdayVideo = async (
         return;
       }
 
-      // 3️⃣ Subida a Firebase
       try {
-        // Delete old video if it exists
-        if (oldVideoPath) {
-          try {
-            const oldVideoRef = storageRef(storage, oldVideoPath);
-            await deleteObject(oldVideoRef);
-            console.log("Old video deleted successfully");
-          } catch (error) {
-            console.log("Error deleting old video (may not exist):", error);
-          }
-        }
+        // Upload video via API
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('folder', 'calendar');
 
-        // Upload new video
-        const videoPath = `calendar/videos/${userId}/${Date.now()}_${file.name}`;
-        const videoRef = storageRef(storage, videoPath);
+        const uploadRes = await fetch('/api/upload', {
+          method: 'POST',
+          body: formData,
+        });
+        if (!uploadRes.ok) throw new Error('Upload failed');
+        const { url: videoUrl, path: videoPath } = await uploadRes.json();
 
-        await uploadBytes(videoRef, file);
-        const videoUrl = await getDownloadURL(videoRef);
-
-        // Update Firestore with new video info
-        await updateDoc(doc(db, "calendar", eventId), {
-          videoUrl,
-          videoPath,
+        // Update calendar event with new video info
+        await fetch('/api/calendar', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: eventId, videoUrl, videoPath }),
         });
 
         fetchEvents();
@@ -393,25 +359,25 @@ const uploadBirthdayVideo = async (
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-    
+
     try {
-      const user = auth.currentUser;
-      if (!user) throw new Error("Usuario no autenticado");
-      
       let imageUrl = "";
-      
+
       if (selectedImage) {
-        const path = `calendar/${user.uid}/${Date.now()}_${selectedImage.name}`;
-        const fileRef = storageRef(storage, path);
-        await uploadBytes(fileRef, selectedImage);
-        imageUrl = await getDownloadURL(fileRef);
+        const formData = new FormData();
+        formData.append('file', selectedImage);
+        formData.append('folder', 'calendar');
+        const uploadRes = await fetch('/api/upload', { method: 'POST', body: formData });
+        if (!uploadRes.ok) throw new Error('Image upload failed');
+        const uploadData = await uploadRes.json();
+        imageUrl = uploadData.url;
       } else if (newEvent.type === "birthday") {
         imageUrl = "https://img.freepik.com/vector-gratis/concepto-letras-feliz-cumpleanos_23-2148499329.jpg?semt=ais_hybrid&w=740&q=80";
       }
-      
+
       const inputDate = new Date(newEvent.date);
       const eventDate = subtractOneDayForStorage(inputDate);
-      
+
       if (newEvent.type === "birthday") {
         eventDate.setHours(0, 0, 0, 0);
       } else if (newEvent.time) {
@@ -423,22 +389,28 @@ const uploadBirthdayVideo = async (
       let videoPath = "";
 
       if (selectedVideo) {
-        videoPath = `calendar/videos/${user.uid}/${Date.now()}_${selectedVideo.name}`;
-        const videoRef = storageRef(storage, videoPath);
-        await uploadBytes(videoRef, selectedVideo);
-        videoUrl = await getDownloadURL(videoRef);
+        const formData = new FormData();
+        formData.append('file', selectedVideo);
+        formData.append('folder', 'calendar');
+        const uploadRes = await fetch('/api/upload', { method: 'POST', body: formData });
+        if (!uploadRes.ok) throw new Error('Video upload failed');
+        const uploadData = await uploadRes.json();
+        videoUrl = uploadData.url;
+        videoPath = uploadData.path;
       }
-      
-      await addDoc(collection(db, 'calendar'), {
-        title: newEvent.title,
-        date: eventDate,
-        description: newEvent.description,
-        type: newEvent.type,
-        image: imageUrl,
-        userId: user.uid,
-        createdAt: serverTimestamp(),
-        videoUrl,
-        videoPath
+
+      await fetch('/api/calendar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: newEvent.title,
+          date: eventDate.toISOString(),
+          description: newEvent.description,
+          type: newEvent.type,
+          image: imageUrl,
+          videoUrl,
+          videoPath
+        }),
       });
       
       setIsModalOpen(false);

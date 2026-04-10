@@ -12,21 +12,19 @@ import {
   AlertCircle,
   Download,
 } from "lucide-react";
-import { collection, getDocs, query, Timestamp, where } from 'firebase/firestore';
-import { db } from '../../../firebase'; // Adjust path as needed
-
+import { escapeHtml } from '../../../lib/sanitize';
 interface PermisosData {
   id: string;
   cedula: string;
-  createdAt?: Timestamp;
+  created_at?: string;
   description: string;
-  documentName: string;
-  documentUrl: string;
+  document_name: string;
+  document_url: string;
   estado: string;
   fecha: string;
   nombre: string;
-  tiempoFin: string;
-  tiempoInicio: string;
+  tiempo_fin: string;
+  tiempo_inicio: string;
   tipo: string;
   userId: string;
 }
@@ -114,22 +112,9 @@ export default function StatsPermisos({ isOpen, onClose }: StatsPermisosProps) {
       setLoading(true);
       setError(null);
 
-      // Query solicitudes collection for tipo === 'permiso'
-      const solicitudesQuery = query(
-        collection(db, 'solicitudes'),
-        where('tipo', '==', 'permiso')
-      );
-      
-      const querySnapshot = await getDocs(solicitudesQuery);
-      const data: PermisosData[] = [];
-
-      querySnapshot.forEach((doc) => {
-        const docData = doc.data();
-        data.push({
-          id: doc.id,
-          ...docData
-        } as PermisosData);
-      });
+      const res = await fetch('/api/solicitudes?tipo=permiso');
+      if (!res.ok) throw new Error('Error fetching permisos data');
+      const data: PermisosData[] = await res.json();
 
       setPermisosData(data);
       calculateStatistics(data);
@@ -160,10 +145,10 @@ export default function StatsPermisos({ isOpen, onClose }: StatsPermisosProps) {
     let totalHoras = 0;
 
     data.forEach((item) => {
-      const createdDate = item.createdAt?.toDate() || new Date();
+      const createdDate = item.created_at ? new Date(item.created_at) : new Date();
       const monthName = getMonthName(createdDate);
       const estado = item.estado?.toLowerCase() || 'pendiente';
-      const horas = calculateHours(item.tiempoInicio || '00:00', item.tiempoFin || '00:00');
+      const horas = calculateHours(item.tiempo_inicio || '00:00', item.tiempo_fin || '00:00');
 
       // Monthly stats
       if (!monthlyStatsData[monthName]) {
@@ -283,7 +268,7 @@ export default function StatsPermisos({ isOpen, onClose }: StatsPermisosProps) {
             <tbody>
               ${Object.entries(monthlyStats).map(([month, stats]) => `
                 <tr>
-                  <td><strong>${month}</strong></td>
+                  <td><strong>${escapeHtml(month)}</strong></td>
                   <td>${stats.cantidad}</td>
                   <td>${stats.totalHoras.toFixed(1)}</td>
                 </tr>
@@ -299,7 +284,7 @@ export default function StatsPermisos({ isOpen, onClose }: StatsPermisosProps) {
             <tbody>
               ${Object.entries(approvalRates).map(([month, stats]) => `
                 <tr>
-                  <td><strong>${month}</strong></td>
+                  <td><strong>${escapeHtml(month)}</strong></td>
                   <td style="color: #10b981;">${stats.aprobados}</td>
                   <td style="color: #ef4444;">${stats.rechazados}</td>
                   <td style="color: #f59e0b;">${stats.pendientes}</td>

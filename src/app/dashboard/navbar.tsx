@@ -1,56 +1,23 @@
 import React, { useState, useEffect } from 'react';
-import { Menu, X, User2, Home, FileText, ChevronDown, LogOut, HelpCircle, Palmtree, HeartPlus } from 'lucide-react';
-import { onAuthStateChanged, signOut }       from 'firebase/auth'
-import { doc, getDoc }              from 'firebase/firestore'
-import { auth, db }                 from '../../firebase'    // adjust to your path
-import { useRouter }         from 'next/navigation'
-
-// Type definition for user profile data
-interface UserProfile {
-  nombre: string;
-  rol: string;
-  antiguedad: number;
-}
-
-// Type definition for Firestore user document
-interface FirestoreUserData {
-  nombre: string;
-  rol: string;
-  antiguedad: number;
-  [key: string]: unknown; // Allow for additional fields
-}
+import { Menu, X, User2, Home, FileText, ChevronDown, LogOut, HelpCircle, Palmtree, HeartPlus, Landmark } from 'lucide-react';
+import { useSession, signOut } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 
 const DashboardNavbar = ({ activePage = 'home' }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
-  const router = useRouter()
-  const [profile, setProfile] = useState<UserProfile | null>(null)
+  const router = useRouter();
+  const { data: session } = useSession();
 
-    useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (u) => {
-      if (!u) return setProfile(null)
-      const snap = await getDoc(doc(db, 'users', u.uid))
-      if (snap.exists()) {
-        const data = snap.data() as FirestoreUserData
-        setProfile({
-          nombre: data.nombre,
-          rol:    data.rol,
-          antiguedad: data.antiguedad
-        })
-      }
-    })
-    return () => unsub()
-  }, [])
+  const profile = session ? {
+    nombre: session.user.nombre,
+    rol: session.user.rol,
+  } : null;
 
   const handleLogout = async () => {
-    try {
-      await signOut(auth)
-      router.push('/auth/login')
-    } catch (e) {
-      console.error("Logout failed:", e)
-    }
-  }
+    await signOut({ callbackUrl: '/auth/login' });
+  };
 
   useEffect(() => {
     const handleScroll = () => {
@@ -78,6 +45,7 @@ const DashboardNavbar = ({ activePage = 'home' }) => {
     { id: 'permisos', href: '/dashboard/solicitud', icon: <Palmtree size={18} />, label: 'Permisos' },
     { id: 'documentos', href: '/dashboard/documents', icon: <FileText size={18} />, label: 'Documentos' },
     { id: 'pqrsf', href: '/dashboard/pqrsf', icon: <HelpCircle size={18} />, label: 'PQRSF' },
+    { id: 'fondo', href: '/dashboard/fondo', icon: <Landmark size={18} />, label: 'Fondo' },
   ];
 
   return (
@@ -96,9 +64,9 @@ const DashboardNavbar = ({ activePage = 'home' }) => {
                 {isMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
               </button>
               <a href="/dashboard" className="flex items-center">
-                <img 
-                  src="https://www.merquellantas.com/assets/images/logo/Logo-Merquellantas.png" 
-                  alt="Merquellantas Logo" 
+                <img
+                  src="https://www.merquellantas.com/assets/images/logo/Logo-Merquellantas.png"
+                  alt="Merquellantas Logo"
                   className="h-8 sm:h-10 w-auto"
                 />
               </a>
@@ -108,12 +76,12 @@ const DashboardNavbar = ({ activePage = 'home' }) => {
             <div className="hidden md:flex items-center justify-center flex-1 ml-10">
               <div className="flex space-x-1">
                 {navItems.map(item => (
-                  <NavItem 
+                  <NavItem
                     key={item.id}
-                    href={item.href} 
-                    icon={item.icon} 
-                    label={item.label} 
-                    active={activePage === item.id} 
+                    href={item.href}
+                    icon={item.icon}
+                    label={item.label}
+                    active={activePage === item.id}
                   />
                 ))}
               </div>
@@ -166,12 +134,12 @@ const DashboardNavbar = ({ activePage = 'home' }) => {
           <div className="md:hidden bg-white border-t border-gray-100 shadow-lg animate-fadeIn">
             <div className="py-3 px-2 space-y-1">
               {navItems.map(item => (
-                <MobileNavItem 
+                <MobileNavItem
                   key={item.id}
-                  href={item.href} 
-                  icon={item.icon} 
-                  label={item.label} 
-                  active={activePage === item.id} 
+                  href={item.href}
+                  icon={item.icon}
+                  label={item.label}
+                  active={activePage === item.id}
                 />
               ))}
             </div>
