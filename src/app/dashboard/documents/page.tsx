@@ -56,7 +56,7 @@ export default function DocumentsPage() {
       if (!res.ok) throw new Error('Failed to fetch documents');
       const data = await res.json();
       const docs: Document[] = (data.documents ?? data).map((d: Record<string, unknown>) => ({
-        id: d.id,
+        id: (d._id ?? d.id) as string,
         name: d.name,
         category: d.category,
         dateUploaded: d.date_uploaded || d.dateUploaded,

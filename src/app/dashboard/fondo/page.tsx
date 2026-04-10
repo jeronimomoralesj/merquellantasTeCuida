@@ -340,10 +340,14 @@ function CicloActualTab() {
   );
 
   const filtered = useMemo(
-    () =>
-      rows.filter((r) =>
-        r.nombre.toLowerCase().includes(filter.toLowerCase())
-      ),
+    () => {
+      const q = filter.toLowerCase().trim();
+      if (!q) return rows;
+      return rows.filter((r) =>
+        r.nombre.toLowerCase().includes(q) ||
+        (r.cedula || '').toLowerCase().includes(q)
+      );
+    },
     [rows, filter]
   );
 
@@ -401,7 +405,7 @@ function CicloActualTab() {
             />
             <input
               type="text"
-              placeholder="Filtrar por nombre..."
+              placeholder="Filtrar por nombre o cédula..."
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
               className="pl-9 pr-4 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff9900]/40 focus:border-[#ff9900] w-56"
@@ -773,7 +777,7 @@ function BuscarAfiliadoTab() {
             />
             <input
               type="text"
-              placeholder="Nombre del afiliado..."
+              placeholder="Buscar por nombre o cédula..."
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSearch()}
@@ -1185,7 +1189,7 @@ function NuevoAfiliadoTab() {
               />
               <input
                 type="text"
-                placeholder="Nombre del usuario..."
+                placeholder="Buscar por nombre o cédula..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleSearch()}

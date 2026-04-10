@@ -43,8 +43,14 @@ export async function DELETE(req: NextRequest) {
   }
 
   const { id } = await req.json();
+  if (!id || typeof id !== 'string' || !ObjectId.isValid(id)) {
+    return NextResponse.json({ error: 'ID inválido' }, { status: 400 });
+  }
   const db = await getDb();
-  await db.collection('documentos').deleteOne({ _id: new ObjectId(id) });
+  const result = await db.collection('documentos').deleteOne({ _id: new ObjectId(id) });
+  if (result.deletedCount === 0) {
+    return NextResponse.json({ error: 'Documento no encontrado' }, { status: 404 });
+  }
 
   return NextResponse.json({ success: true });
 }

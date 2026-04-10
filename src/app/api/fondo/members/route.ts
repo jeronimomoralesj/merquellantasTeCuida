@@ -3,35 +3,106 @@ import { getDb } from '../../../../lib/db';
 import { ObjectId } from 'mongodb';
 import { auth } from '../../../../lib/auth';
 
-// GET /api/fondo/members — list all fondo members (fondo/admin) or own membership (user)
-export async function GET() {
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// GET /api/fondo/members — list/search members or users
+export async function GET(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
 
   const db = await getDb();
+  const { searchParams } = new URL(req.url);
+  const search = searchParams.get('search');
+  const searchUsers = searchParams.get('search_users');
 
-  if (session.user.rol === 'fondo' || session.user.rol === 'admin') {
-    const members = await db.collection('fondo_members').aggregate([
-      {
-        $lookup: {
-          from: 'users',
-          let: { uid: '$user_id' },
-          pipeline: [
-            { $match: { $expr: { $eq: [{ $toString: '$_id' }, '$$uid'] } } },
-            { $project: { nombre: 1, cedula: 1, email: 1, cargo_empleado: 1, departamento: 1 } },
-          ],
-          as: 'user',
-        },
-      },
-      { $unwind: { path: '$user', preserveNullAndEmptyArrays: true } },
-      { $sort: { 'user.nombre': 1 } },
-    ]).toArray();
-    return NextResponse.json(members);
+  // Regular users only see themselves
+  if (session.user.rol !== 'fondo' && session.user.rol !== 'admin') {
+    const member = await db.collection('fondo_members').findOne({ user_id: session.user.id });
+    return NextResponse.json(member || null);
   }
 
-  // Regular user: own membership only
-  const member = await db.collection('fondo_members').findOne({ user_id: session.user.id });
-  return NextResponse.json(member || null);
+  // search_users: search all users (regardless of fondo membership) — used for enrollment
+  if (searchUsers) {
+    const term = searchUsers.trim();
+    const regex = new RegExp(escapeRegex(term), 'i');
+    const users = await db.collection('users').find(
+      {
+        $or: [
+          { nombre: regex },
+          { cedula: regex },
+        ],
+      },
+      { projection: { nombre: 1, cedula: 1, email: 1, cargo_empleado: 1, departamento: 1 } }
+    ).limit(20).toArray();
+
+    return NextResponse.json(
+      users.map((u) => ({
+        id: u._id.toString(),
+        nombre: u.nombre,
+        cedula: u.cedula,
+        email: u.email,
+        cargo_empleado: u.cargo_empleado,
+        departamento: u.departamento,
+      }))
+    );
+  }
+
+  // Build the aggregation pipeline for members
+  const pipeline: Record<string, unknown>[] = [
+    {
+      $lookup: {
+        from: 'users',
+        let: { uid: '$user_id' },
+        pipeline: [
+          { $match: { $expr: { $eq: [{ $toString: '$_id' }, '$$uid'] } } },
+          { $project: { nombre: 1, cedula: 1, email: 1, cargo_empleado: 1, departamento: 1 } },
+        ],
+        as: 'user',
+      },
+    },
+    { $unwind: { path: '$user', preserveNullAndEmptyArrays: true } },
+  ];
+
+  // search: filter members by user name or cedula
+  if (search) {
+    const term = search.trim();
+    const regex = new RegExp(escapeRegex(term), 'i');
+    pipeline.push({
+      $match: {
+        $or: [
+          { 'user.nombre': regex },
+          { 'user.cedula': regex },
+        ],
+      },
+    });
+  }
+
+  pipeline.push({ $sort: { 'user.nombre': 1 } });
+
+  const members = await db.collection('fondo_members').aggregate(pipeline).toArray();
+
+  // Flatten so the frontend gets nombre/cedula at top level
+  const flattened = members.map((m) => ({
+    id: m._id.toString(),
+    user_id: m.user_id,
+    nombre: m.user?.nombre || '',
+    cedula: m.user?.cedula || '',
+    email: m.user?.email || '',
+    cargo_empleado: m.user?.cargo_empleado || '',
+    departamento: m.user?.departamento || '',
+    frecuencia: m.frecuencia,
+    monto_aporte: m.monto_aporte,
+    saldo_permanente: m.saldo_permanente || 0,
+    saldo_social: m.saldo_social || 0,
+    saldo_actividad: m.saldo_actividad || 0,
+    saldo_intereses: m.saldo_intereses || 0,
+    fecha_afiliacion: m.fecha_afiliacion,
+    activo: m.activo,
+  }));
+
+  return NextResponse.json(flattened);
 }
 
 // POST /api/fondo/members — enroll user in fondo (fondo/admin)
