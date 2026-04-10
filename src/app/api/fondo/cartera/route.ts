@@ -9,7 +9,7 @@ function getInterestRate(numCuotas: number): number {
   return 1.3;
 }
 
-// GET /api/fondo/cartera?user_id=X
+// GET /api/fondo/cartera?user_id=X&estado=pendiente
 export async function GET(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
@@ -18,55 +18,71 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const userId = searchParams.get('user_id');
   const creditoId = searchParams.get('credito_id');
+  const estado = searchParams.get('estado');
 
   const filter: Record<string, unknown> = {};
-  if (session.user.rol === 'user') {
-    filter.user_id = session.user.id;
+  if (session.user.rol === 'user' || session.user.rol === 'admin') {
+    if (!userId) {
+      filter.user_id = session.user.id;
+    } else {
+      filter.user_id = userId;
+    }
   } else if (userId) {
+    // fondo: filter by user_id if provided, otherwise return all
     filter.user_id = userId;
   }
   if (creditoId) filter.credito_id = creditoId;
+  if (estado) filter.estado = estado;
 
   const results = await db.collection('fondo_cartera')
-    .find(filter).sort({ fecha_desembolso: -1 }).toArray();
+    .find(filter).sort({ created_at: -1 }).toArray();
   return NextResponse.json(results);
 }
 
-// POST /api/fondo/cartera — create a new loan (fondo/admin)
+// POST /api/fondo/cartera — create or request a loan
+// - user/admin without admin powers: creates a request (estado='pendiente')
+// - fondo: creates an active loan immediately
 export async function POST(req: NextRequest) {
   const session = await auth();
-  if (!session || (session.user.rol !== 'fondo' && session.user.rol !== 'admin')) {
-    return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
-  }
+  if (!session) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
 
   const body = await req.json();
-  if (!body.user_id || !body.credito_id || !body.valor_prestamo || !body.numero_cuotas) {
-    return NextResponse.json({ error: 'Campos requeridos faltantes' }, { status: 400 });
+  const valorPrestamo = Number(body.valor_prestamo || 0);
+  const numCuotas = Number(body.numero_cuotas || 0);
+
+  if (!valorPrestamo || valorPrestamo <= 0) {
+    return NextResponse.json({ error: 'Valor del préstamo inválido' }, { status: 400 });
+  }
+  if (!numCuotas || numCuotas <= 0 || numCuotas > 60) {
+    return NextResponse.json({ error: 'Número de cuotas inválido (1-60)' }, { status: 400 });
   }
 
-  const numCuotas = Number(body.numero_cuotas);
-  const valorPrestamo = Number(body.valor_prestamo);
   const tasaInteres = getInterestRate(numCuotas);
-
-  // Calculate total interest
   const totalInteres = Math.round(valorPrestamo * (tasaInteres / 100) * numCuotas * 100) / 100;
 
-  const fechaDesembolso = body.fecha_desembolso ? new Date(body.fecha_desembolso) : new Date();
-  const fechaCuota1 = body.fecha_cuota_1 ? new Date(body.fecha_cuota_1) : new Date();
-
-  // Calculate fecha_termina based on cuotas
-  const fechaTermina = new Date(fechaCuota1);
-  fechaTermina.setMonth(fechaTermina.getMonth() + numCuotas);
+  const isFondo = session.user.rol === 'fondo';
+  // Regular users always request for themselves
+  const targetUserId = isFondo && body.user_id ? body.user_id : session.user.id;
 
   const db = await getDb();
 
-  const result = await db.collection('fondo_cartera').insertOne({
-    user_id: body.user_id,
-    credito_id: body.credito_id,
+  // Generate a credito_id for direct creations
+  const creditoIdAuto = isFondo
+    ? (body.credito_id || `CR-${Date.now().toString().slice(-8)}`)
+    : null;
+
+  const fechaCuota1 = body.fecha_cuota_1 ? new Date(body.fecha_cuota_1) : new Date();
+  const fechaTermina = new Date(fechaCuota1);
+  fechaTermina.setMonth(fechaTermina.getMonth() + numCuotas);
+
+  const doc = {
+    user_id: targetUserId,
+    credito_id: creditoIdAuto,
     tasa_interes: tasaInteres,
-    fecha_desembolso: fechaDesembolso,
-    fecha_cuota_1: fechaCuota1,
-    fecha_termina: fechaTermina,
+    fecha_solicitud: new Date(),
+    fecha_desembolso: isFondo ? (body.fecha_desembolso ? new Date(body.fecha_desembolso) : new Date()) : null,
+    fecha_cuota_1: isFondo ? fechaCuota1 : null,
+    fecha_termina: isFondo ? fechaTermina : null,
     valor_prestamo: valorPrestamo,
     numero_cuotas: numCuotas,
     cuotas_pagadas: 0,
@@ -74,35 +90,99 @@ export async function POST(req: NextRequest) {
     saldo_capital: valorPrestamo,
     saldo_interes: totalInteres,
     saldo_total: valorPrestamo + totalInteres,
-    estado: 'activo',
+    estado: isFondo ? 'activo' : 'pendiente',
+    motivo_solicitud: body.motivo_solicitud || null,
+    motivo_respuesta: null,
     pagos: [],
+    created_by: session.user.id,
     created_at: new Date(),
-  });
+  };
+
+  const result = await db.collection('fondo_cartera').insertOne(doc);
 
   return NextResponse.json({ success: true, id: result.insertedId.toString() });
 }
 
-// PUT /api/fondo/cartera — record a payment on a loan
+// PUT /api/fondo/cartera — multiple actions:
+//   action='pago' → record a payment (fondo only)
+//   action='aprobar' → approve a pending request (fondo only)
+//   action='rechazar' → reject a pending request (fondo only)
 export async function PUT(req: NextRequest) {
   const session = await auth();
-  if (!session || (session.user.rol !== 'fondo' && session.user.rol !== 'admin')) {
+  if (!session || session.user.rol !== 'fondo') {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
   }
 
   const body = await req.json();
-  if (!body.cartera_id || !body.monto_total) {
-    return NextResponse.json({ error: 'cartera_id y monto_total requeridos' }, { status: 400 });
+  const action = body.action || 'pago';
+
+  if (!body.cartera_id || !ObjectId.isValid(body.cartera_id)) {
+    return NextResponse.json({ error: 'cartera_id requerido' }, { status: 400 });
   }
 
   const db = await getDb();
   const cartera = await db.collection('fondo_cartera').findOne({ _id: new ObjectId(body.cartera_id) });
   if (!cartera) return NextResponse.json({ error: 'Crédito no encontrado' }, { status: 404 });
 
+  // ----- APROBAR a pending request -----
+  if (action === 'aprobar') {
+    if (cartera.estado !== 'pendiente') {
+      return NextResponse.json({ error: 'Solo se pueden aprobar solicitudes pendientes' }, { status: 400 });
+    }
+
+    const fechaCuota1 = body.fecha_cuota_1 ? new Date(body.fecha_cuota_1) : new Date();
+    const fechaTermina = new Date(fechaCuota1);
+    fechaTermina.setMonth(fechaTermina.getMonth() + cartera.numero_cuotas);
+    const creditoId = body.credito_id || `CR-${Date.now().toString().slice(-8)}`;
+
+    await db.collection('fondo_cartera').updateOne(
+      { _id: new ObjectId(body.cartera_id) },
+      {
+        $set: {
+          estado: 'activo',
+          credito_id: creditoId,
+          fecha_desembolso: new Date(),
+          fecha_cuota_1: fechaCuota1,
+          fecha_termina: fechaTermina,
+          aprobado_por: session.user.id,
+          aprobado_at: new Date(),
+        },
+      }
+    );
+
+    return NextResponse.json({ success: true });
+  }
+
+  // ----- RECHAZAR a pending request -----
+  if (action === 'rechazar') {
+    await db.collection('fondo_cartera').updateOne(
+      { _id: new ObjectId(body.cartera_id) },
+      {
+        $set: {
+          estado: 'rechazado',
+          motivo_respuesta: body.motivo_respuesta || null,
+          aprobado_por: session.user.id,
+          aprobado_at: new Date(),
+        },
+      }
+    );
+
+    return NextResponse.json({ success: true });
+  }
+
+  // ----- PAGO (default) -----
+  if (cartera.estado !== 'activo') {
+    return NextResponse.json({ error: 'Solo se pueden pagar créditos activos' }, { status: 400 });
+  }
+
+  if (!body.monto_total) {
+    return NextResponse.json({ error: 'monto_total requerido' }, { status: 400 });
+  }
+
   const montoTotal = Number(body.monto_total);
   const montoCapital = Number(body.monto_capital || 0);
   const montoInteres = Number(body.monto_interes || 0);
 
-  // Calculate expected payment per cuota
   const cuotaEsperada = cartera.numero_cuotas > 0
     ? Math.round((cartera.valor_prestamo + cartera.saldo_interes) / cartera.numero_cuotas * 100) / 100
     : 0;
@@ -115,7 +195,7 @@ export async function PUT(req: NextRequest) {
     monto_total: montoTotal,
     monto_esperado: cuotaEsperada,
     diferencia: Math.round((montoTotal - cuotaEsperada) * 100) / 100,
-    flagged: Math.abs(montoTotal - cuotaEsperada) > 1, // flag if differs by more than $1
+    flagged: Math.abs(montoTotal - cuotaEsperada) > 1,
   };
 
   const newSaldoCapital = Math.max(0, cartera.saldo_capital - montoCapital);
@@ -123,7 +203,6 @@ export async function PUT(req: NextRequest) {
   const newCuotasPagadas = cartera.cuotas_pagadas + 1;
   const newCuotasRestantes = Math.max(0, cartera.cuotas_restantes - 1);
 
-  // Recalculate fecha_termina based on remaining cuotas
   const newFechaTermina = new Date(cartera.fecha_cuota_1);
   newFechaTermina.setMonth(newFechaTermina.getMonth() + newCuotasPagadas + newCuotasRestantes);
 

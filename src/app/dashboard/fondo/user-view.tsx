@@ -23,6 +23,7 @@ import {
   Receipt,
   BarChart3,
   RefreshCw,
+  X,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 
@@ -73,7 +74,8 @@ interface Credito {
   credito_id?: string;
   valor_prestamo: number;
   tasa_interes: number;
-  fecha_desembolso: string;
+  fecha_desembolso: string | null;
+  fecha_solicitud?: string;
   numero_cuotas: number;
   cuotas_pagadas: number;
   cuotas_restantes: number;
@@ -81,7 +83,18 @@ interface Credito {
   saldo_capital: number;
   saldo_interes: number;
   estado: string;
+  motivo_solicitud?: string | null;
+  motivo_respuesta?: string | null;
   pagos: Pago[];
+}
+
+interface RetiroSolicitud {
+  _id: string;
+  monto: number;
+  motivo?: string | null;
+  estado: 'pendiente' | 'aprobado' | 'rechazado';
+  fecha_solicitud: string;
+  motivo_respuesta?: string | null;
 }
 
 interface FondoData {
@@ -92,6 +105,7 @@ interface FondoData {
   aportes: Aporte[];
   actividad: Actividad[];
   cartera: Credito[];
+  retiros?: RetiroSolicitud[];
 }
 
 type TabKey = "estado" | "actividades" | "cartera";
@@ -104,6 +118,17 @@ export default function FondoUserView() {
   const [activeTab, setActiveTab] = useState<TabKey>("estado");
   const [expandedCredits, setExpandedCredits] = useState<Record<string, boolean>>({});
   const [reinvestAmount, setReinvestAmount] = useState("");
+
+  // Request modals
+  const [showCreditoForm, setShowCreditoForm] = useState(false);
+  const [showRetiroForm, setShowRetiroForm] = useState(false);
+  const [creditoValor, setCreditoValor] = useState("");
+  const [creditoCuotas, setCreditoCuotas] = useState("12");
+  const [creditoMotivo, setCreditoMotivo] = useState("");
+  const [retiroMonto, setRetiroMonto] = useState("");
+  const [retiroMotivo, setRetiroMotivo] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   const formatCurrency = (val: number): string => {
     return new Intl.NumberFormat("es-CO", {
@@ -126,7 +151,7 @@ export default function FondoUserView() {
     }
   };
 
-  const formatShortDate = (d: string | undefined): string => {
+  const formatShortDate = (d: string | undefined | null): string => {
     if (!d) return "-";
     try {
       return new Date(d).toLocaleDateString("es-ES", {
@@ -333,34 +358,38 @@ export default function FondoUserView() {
         </div>
       </div>
 
-      {/* Retirement Info */}
-      {retiro.elegible ? (
-        <div className="bg-green-50 border border-green-200 rounded-2xl p-5">
+      {/* Action buttons: request loan + request withdrawal (if eligible) */}
+      <div className="flex flex-wrap gap-3">
+        <button
+          onClick={() => setShowCreditoForm(true)}
+          className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-[#ff9900] text-black font-bold hover:bg-[#ffae33] transition shadow-lg shadow-[#ff9900]/20"
+        >
+          <CreditCard className="w-5 h-5" />
+          Solicitar Crédito
+        </button>
+        {retiro.elegible && (
+          <button
+            onClick={() => setShowRetiroForm(true)}
+            className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-emerald-600 text-white font-bold hover:bg-emerald-700 transition shadow-lg shadow-emerald-200"
+          >
+            <ArrowDownCircle className="w-5 h-5" />
+            Solicitar Retiro (máx {formatCurrency(retiro.max_retiro_anual)})
+          </button>
+        )}
+      </div>
+
+      {/* Pending requests notice */}
+      {data.retiros && data.retiros.filter(r => r.estado === 'pendiente').length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4">
           <div className="flex items-start gap-3">
-            <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
-              <CheckCircle className="w-5 h-5 text-green-600" />
-            </div>
-            <div>
-              <h3 className="font-semibold text-green-800 text-sm">Elegible para retiro</h3>
-              <p className="text-xs text-green-700 mt-1">
-                Llevas {retiro.anos_afiliacion} anos afiliado. Puedes retirar hasta{" "}
-                <span className="font-bold">{formatCurrency(retiro.max_retiro_anual)}</span> este ano.
-              </p>
-            </div>
-          </div>
-        </div>
-      ) : (
-        <div className="bg-blue-50 border border-blue-200 rounded-2xl p-5">
-          <div className="flex items-start gap-3">
-            <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-              <Info className="w-5 h-5 text-blue-600" />
-            </div>
-            <div>
-              <h3 className="font-semibold text-blue-800 text-sm">Retiro aun no disponible</h3>
-              <p className="text-xs text-blue-700 mt-1">
-                Elegible para retiro despues de 3 anos ({3 - retiro.anos_afiliacion} anos restantes).
-                Llevas {retiro.anos_afiliacion} {retiro.anos_afiliacion === 1 ? "ano" : "anos"} afiliado.
-              </p>
+            <Clock className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <h3 className="font-semibold text-amber-800 text-sm">Solicitud de retiro pendiente</h3>
+              {data.retiros.filter(r => r.estado === 'pendiente').map(r => (
+                <p key={r._id} className="text-xs text-amber-700 mt-1">
+                  Has solicitado retirar {formatCurrency(r.monto)} el {formatDate(r.fecha_solicitud)}.
+                </p>
+              ))}
             </div>
           </div>
         </div>
@@ -619,6 +648,205 @@ export default function FondoUserView() {
           )}
         </div>
       </div>
+
+      {/* Solicitar Crédito Modal */}
+      {showCreditoForm && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
+            <div className="p-6 border-b border-gray-100 flex items-center justify-between">
+              <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                <CreditCard className="w-5 h-5 text-[#ff9900]" />
+                Solicitar Crédito
+              </h3>
+              <button
+                onClick={() => { setShowCreditoForm(false); setFormError(null); }}
+                className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Valor del préstamo (COP)</label>
+                <input
+                  type="number"
+                  min={1}
+                  value={creditoValor}
+                  onChange={(e) => setCreditoValor(e.target.value)}
+                  className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff9900]/40 focus:border-[#ff9900]"
+                  placeholder="Ej: 5000000"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Número de cuotas</label>
+                <select
+                  value={creditoCuotas}
+                  onChange={(e) => setCreditoCuotas(e.target.value)}
+                  className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff9900]/40 focus:border-[#ff9900] bg-white"
+                >
+                  <option value="6">6 cuotas — 1% interés mensual</option>
+                  <option value="12">12 cuotas — 1% interés mensual</option>
+                  <option value="18">18 cuotas — 1.2% interés mensual</option>
+                  <option value="24">24 cuotas — 1.2% interés mensual</option>
+                  <option value="36">36 cuotas — 1.3% interés mensual</option>
+                  <option value="48">48 cuotas — 1.3% interés mensual</option>
+                  <option value="60">60 cuotas — 1.3% interés mensual</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Motivo (opcional)</label>
+                <textarea
+                  rows={3}
+                  value={creditoMotivo}
+                  onChange={(e) => setCreditoMotivo(e.target.value)}
+                  className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff9900]/40 focus:border-[#ff9900] resize-y"
+                  placeholder="¿Para qué necesitas el crédito?"
+                />
+              </div>
+              {formError && (
+                <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">
+                  {formError}
+                </div>
+              )}
+            </div>
+            <div className="p-6 border-t border-gray-100 flex justify-end gap-3">
+              <button
+                onClick={() => { setShowCreditoForm(false); setFormError(null); }}
+                className="px-4 py-2 rounded-xl text-gray-700 bg-gray-100 hover:bg-gray-200 font-medium"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={async () => {
+                  setSubmitting(true);
+                  setFormError(null);
+                  try {
+                    const res = await fetch('/api/fondo/cartera', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        valor_prestamo: Number(creditoValor),
+                        numero_cuotas: Number(creditoCuotas),
+                        motivo_solicitud: creditoMotivo || null,
+                      }),
+                    });
+                    if (!res.ok) {
+                      const d = await res.json();
+                      throw new Error(d.error || 'Error');
+                    }
+                    setShowCreditoForm(false);
+                    setCreditoValor("");
+                    setCreditoCuotas("12");
+                    setCreditoMotivo("");
+                    fetchData();
+                  } catch (err) {
+                    setFormError(err instanceof Error ? err.message : 'Error');
+                  } finally {
+                    setSubmitting(false);
+                  }
+                }}
+                disabled={submitting || !creditoValor || Number(creditoValor) <= 0}
+                className="px-5 py-2 rounded-xl bg-[#ff9900] text-black font-bold hover:bg-[#ffae33] disabled:opacity-50 disabled:cursor-not-allowed transition"
+              >
+                {submitting ? "Enviando..." : "Enviar solicitud"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Solicitar Retiro Modal */}
+      {showRetiroForm && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
+            <div className="p-6 border-b border-gray-100 flex items-center justify-between">
+              <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                <ArrowDownCircle className="w-5 h-5 text-emerald-600" />
+                Solicitar Retiro
+              </h3>
+              <button
+                onClick={() => { setShowRetiroForm(false); setFormError(null); }}
+                className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800">
+                Llevas {retiro.anos_afiliacion} años afiliado. Puedes retirar hasta{" "}
+                <strong>{formatCurrency(retiro.max_retiro_anual)}</strong> este año.
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Monto a retirar (COP)</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={retiro.max_retiro_anual}
+                  value={retiroMonto}
+                  onChange={(e) => setRetiroMonto(e.target.value)}
+                  className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500"
+                  placeholder="Ej: 1000000"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Motivo (opcional)</label>
+                <textarea
+                  rows={3}
+                  value={retiroMotivo}
+                  onChange={(e) => setRetiroMotivo(e.target.value)}
+                  className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500 resize-y"
+                  placeholder="¿Por qué necesitas retirar?"
+                />
+              </div>
+              {formError && (
+                <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">
+                  {formError}
+                </div>
+              )}
+            </div>
+            <div className="p-6 border-t border-gray-100 flex justify-end gap-3">
+              <button
+                onClick={() => { setShowRetiroForm(false); setFormError(null); }}
+                className="px-4 py-2 rounded-xl text-gray-700 bg-gray-100 hover:bg-gray-200 font-medium"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={async () => {
+                  setSubmitting(true);
+                  setFormError(null);
+                  try {
+                    const res = await fetch('/api/fondo/retiros', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        monto: Number(retiroMonto),
+                        motivo: retiroMotivo || null,
+                      }),
+                    });
+                    if (!res.ok) {
+                      const d = await res.json();
+                      throw new Error(d.error || 'Error');
+                    }
+                    setShowRetiroForm(false);
+                    setRetiroMonto("");
+                    setRetiroMotivo("");
+                    fetchData();
+                  } catch (err) {
+                    setFormError(err instanceof Error ? err.message : 'Error');
+                  } finally {
+                    setSubmitting(false);
+                  }
+                }}
+                disabled={submitting || !retiroMonto || Number(retiroMonto) <= 0}
+                className="px-5 py-2 rounded-xl bg-emerald-600 text-white font-bold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
+              >
+                {submitting ? "Enviando..." : "Enviar solicitud"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

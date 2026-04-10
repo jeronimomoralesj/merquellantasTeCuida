@@ -21,11 +21,12 @@ export async function GET(req: NextRequest) {
     userId = requestedUserId || session.user.id;
   }
 
-  const [member, aportes, actividad, cartera] = await Promise.all([
+  const [member, aportes, actividad, cartera, retiros] = await Promise.all([
     db.collection('fondo_members').findOne({ user_id: userId }),
     db.collection('fondo_aportes').find({ user_id: userId }).sort({ fecha_ejecucion: -1 }).toArray(),
     db.collection('fondo_actividad').find({ user_id: userId }).sort({ fecha: -1 }).toArray(),
-    db.collection('fondo_cartera').find({ user_id: userId }).sort({ fecha_desembolso: -1 }).toArray(),
+    db.collection('fondo_cartera').find({ user_id: userId }).sort({ created_at: -1 }).toArray(),
+    db.collection('fondo_retiros').find({ user_id: userId }).sort({ fecha_solicitud: -1 }).toArray(),
   ]);
 
   // Calculate retirement eligibility (3 years)
@@ -63,5 +64,6 @@ export async function GET(req: NextRequest) {
     aportes,
     actividad,
     cartera,
+    retiros,
   });
 }

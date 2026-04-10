@@ -151,10 +151,11 @@ const estadoBadge = (estado: string) => {
 /*  Tabs                                                               */
 /* ------------------------------------------------------------------ */
 
-type TabId = "ciclo" | "historial" | "buscar" | "nuevo" | "csv";
+type TabId = "ciclo" | "solicitudes" | "historial" | "buscar" | "nuevo" | "csv";
 
 const tabs: { id: TabId; label: string; icon: React.ReactNode }[] = [
   { id: "ciclo", label: "Ciclo Actual", icon: <DollarSign size={16} /> },
+  { id: "solicitudes", label: "Solicitudes", icon: <CreditCard size={16} /> },
   { id: "historial", label: "Historial Ciclos", icon: <History size={16} /> },
   { id: "buscar", label: "Buscar Afiliado", icon: <Search size={16} /> },
   { id: "nuevo", label: "Nuevo Afiliado", icon: <UserPlus size={16} /> },
@@ -273,6 +274,7 @@ export default function FondoPage() {
 
           {/* Tab content */}
           {activeTab === "ciclo" && <CicloActualTab />}
+          {activeTab === "solicitudes" && <SolicitudesTab />}
           {activeTab === "historial" && <HistorialTab />}
           {activeTab === "buscar" && <BuscarAfiliadoTab />}
           {activeTab === "nuevo" && <NuevoAfiliadoTab />}
@@ -1586,6 +1588,424 @@ function CargarCsvTab() {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+/* ================================================================== */
+/*  SOLICITUDES TAB — pending credit requests + retiros                */
+/* ================================================================== */
+
+interface PendingCredito {
+  _id: string;
+  user_id: string;
+  valor_prestamo: number;
+  numero_cuotas: number;
+  tasa_interes: number;
+  motivo_solicitud?: string | null;
+  fecha_solicitud: string;
+  estado: string;
+}
+
+interface PendingRetiro {
+  _id: string;
+  user_id: string;
+  nombre: string;
+  cedula: string;
+  monto: number;
+  motivo?: string | null;
+  fecha_solicitud: string;
+  estado: string;
+}
+
+interface UserLite {
+  _id: string;
+  nombre: string;
+  cedula: string;
+}
+
+function SolicitudesTab() {
+  const [pendingCreditos, setPendingCreditos] = useState<PendingCredito[]>([]);
+  const [pendingRetiros, setPendingRetiros] = useState<PendingRetiro[]>([]);
+  const [userMap, setUserMap] = useState<Record<string, UserLite>>({});
+  const [loading, setLoading] = useState(true);
+  const [processingId, setProcessingId] = useState<string | null>(null);
+  const [error, setError] = useState("");
+
+  // Manual creation form
+  const [showManual, setShowManual] = useState(false);
+  const [manualSearch, setManualSearch] = useState("");
+  const [manualResults, setManualResults] = useState<UserLite[]>([]);
+  const [manualUser, setManualUser] = useState<UserLite | null>(null);
+  const [manualValor, setManualValor] = useState("");
+  const [manualCuotas, setManualCuotas] = useState("12");
+  const [manualCreating, setManualCreating] = useState(false);
+
+  const loadAll = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const [cRes, rRes, uRes] = await Promise.all([
+        fetch("/api/fondo/cartera?estado=pendiente"),
+        fetch("/api/fondo/retiros?estado=pendiente"),
+        fetch("/api/fondo/members"),
+      ]);
+
+      const credArr: PendingCredito[] = cRes.ok ? await cRes.json() : [];
+      const retArr: PendingRetiro[] = rRes.ok ? await rRes.json() : [];
+      const members: { user_id: string; nombre: string; cedula: string }[] = uRes.ok ? await uRes.json() : [];
+
+      setPendingCreditos(credArr);
+      setPendingRetiros(retArr);
+
+      // Build user lookup
+      const map: Record<string, UserLite> = {};
+      for (const m of members) {
+        map[m.user_id] = { _id: m.user_id, nombre: m.nombre, cedula: m.cedula };
+      }
+      setUserMap(map);
+    } catch {
+      setError("Error al cargar las solicitudes");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { loadAll(); }, [loadAll]);
+
+  const handleAprobarCredito = async (id: string) => {
+    setProcessingId(id);
+    try {
+      const res = await fetch("/api/fondo/cartera", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cartera_id: id, action: "aprobar" }),
+      });
+      if (res.ok) await loadAll();
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const handleRechazarCredito = async (id: string) => {
+    const motivo = prompt("Motivo del rechazo (opcional):") || "";
+    setProcessingId(id);
+    try {
+      const res = await fetch("/api/fondo/cartera", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cartera_id: id, action: "rechazar", motivo_respuesta: motivo }),
+      });
+      if (res.ok) await loadAll();
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const handleAprobarRetiro = async (id: string) => {
+    setProcessingId(id);
+    try {
+      const res = await fetch("/api/fondo/retiros", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, action: "aprobar" }),
+      });
+      if (res.ok) await loadAll();
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const handleRechazarRetiro = async (id: string) => {
+    const motivo = prompt("Motivo del rechazo (opcional):") || "";
+    setProcessingId(id);
+    try {
+      const res = await fetch("/api/fondo/retiros", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, action: "rechazar", motivo_respuesta: motivo }),
+      });
+      if (res.ok) await loadAll();
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const searchManualUser = async () => {
+    if (!manualSearch.trim()) return;
+    try {
+      const res = await fetch(`/api/fondo/members?search_users=${encodeURIComponent(manualSearch.trim())}`);
+      if (res.ok) {
+        const data = await res.json();
+        setManualResults(Array.isArray(data) ? data.map((u: { id: string; nombre: string; cedula: string }) => ({ _id: u.id, nombre: u.nombre, cedula: u.cedula })) : []);
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  const createManualCredito = async () => {
+    if (!manualUser || !manualValor) return;
+    setManualCreating(true);
+    try {
+      const res = await fetch("/api/fondo/cartera", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id: manualUser._id,
+          valor_prestamo: Number(manualValor),
+          numero_cuotas: Number(manualCuotas),
+        }),
+      });
+      if (res.ok) {
+        setShowManual(false);
+        setManualUser(null);
+        setManualValor("");
+        setManualSearch("");
+        setManualResults([]);
+        await loadAll();
+      }
+    } finally {
+      setManualCreating(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex justify-center py-16">
+        <div className="animate-spin h-8 w-8 border-4 border-[#ff9900] border-t-transparent rounded-full" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {error && (
+        <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">{error}</div>
+      )}
+
+      {/* Manual creation */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 sm:p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+            <CreditCard size={20} className="text-[#ff9900]" />
+            Crear crédito manual
+          </h2>
+          <button
+            onClick={() => setShowManual((v) => !v)}
+            className="text-sm font-semibold text-[#ff9900] hover:text-orange-700"
+          >
+            {showManual ? "Cerrar" : "Crear nuevo"}
+          </button>
+        </div>
+        {showManual && (
+          <div className="space-y-4">
+            <div className="flex gap-2">
+              <input
+                type="text"
+                placeholder="Buscar usuario por nombre o cédula..."
+                value={manualSearch}
+                onChange={(e) => setManualSearch(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && searchManualUser()}
+                className="flex-1 rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff9900]/40 focus:border-[#ff9900]"
+              />
+              <button
+                onClick={searchManualUser}
+                className="px-4 py-2.5 rounded-xl bg-[#ff9900] text-black font-semibold text-sm hover:bg-[#ffae33]"
+              >
+                Buscar
+              </button>
+            </div>
+            {manualResults.length > 0 && !manualUser && (
+              <div className="border border-gray-200 rounded-xl divide-y max-h-48 overflow-y-auto">
+                {manualResults.map((u) => (
+                  <button
+                    key={u._id}
+                    onClick={() => { setManualUser(u); setManualResults([]); }}
+                    className="w-full text-left px-4 py-2.5 hover:bg-gray-50 text-sm"
+                  >
+                    <div className="font-medium text-gray-900">{u.nombre}</div>
+                    <div className="text-xs text-gray-500">CC: {u.cedula}</div>
+                  </button>
+                ))}
+              </div>
+            )}
+            {manualUser && (
+              <div className="p-3 rounded-xl bg-orange-50 border border-orange-200 flex items-center justify-between">
+                <div className="text-sm">
+                  <span className="font-semibold">{manualUser.nombre}</span>
+                  <span className="ml-2 text-gray-500">CC: {manualUser.cedula}</span>
+                </div>
+                <button onClick={() => setManualUser(null)} className="text-xs text-gray-500 hover:text-gray-700">Cambiar</button>
+              </div>
+            )}
+            {manualUser && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Valor del préstamo</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={manualValor}
+                    onChange={(e) => setManualValor(e.target.value)}
+                    className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff9900]/40 focus:border-[#ff9900]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Número de cuotas</label>
+                  <select
+                    value={manualCuotas}
+                    onChange={(e) => setManualCuotas(e.target.value)}
+                    className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#ff9900]/40 focus:border-[#ff9900]"
+                  >
+                    <option value="6">6 (1%)</option>
+                    <option value="12">12 (1%)</option>
+                    <option value="18">18 (1.2%)</option>
+                    <option value="24">24 (1.2%)</option>
+                    <option value="36">36 (1.3%)</option>
+                    <option value="48">48 (1.3%)</option>
+                    <option value="60">60 (1.3%)</option>
+                  </select>
+                </div>
+              </div>
+            )}
+            {manualUser && (
+              <button
+                onClick={createManualCredito}
+                disabled={manualCreating || !manualValor}
+                className="w-full px-4 py-2.5 rounded-xl bg-emerald-600 text-white font-bold hover:bg-emerald-700 disabled:opacity-50"
+              >
+                {manualCreating ? "Creando..." : "Crear crédito"}
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Pending credit requests */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="p-5 border-b border-gray-100">
+          <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+            <CreditCard size={20} className="text-[#ff9900]" />
+            Solicitudes de Crédito ({pendingCreditos.length})
+          </h2>
+        </div>
+        {pendingCreditos.length === 0 ? (
+          <div className="p-8 text-center text-sm text-gray-400">No hay solicitudes de crédito pendientes.</div>
+        ) : (
+          <div className="divide-y divide-gray-100">
+            {pendingCreditos.map((c) => {
+              const u = userMap[c.user_id];
+              return (
+                <div key={c._id} className="p-5">
+                  <div className="flex items-start justify-between gap-4 mb-3">
+                    <div>
+                      <p className="font-bold text-gray-900">{u?.nombre || "Usuario no encontrado"}</p>
+                      {u && <p className="text-xs text-gray-500">CC: {u.cedula}</p>}
+                    </div>
+                    <span className="text-xs text-gray-400">{new Date(c.fecha_solicitud).toLocaleDateString("es-CO")}</span>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
+                    <div>
+                      <p className="text-xs text-gray-500">Valor</p>
+                      <p className="font-semibold text-gray-900">{fmt(c.valor_prestamo)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500">Cuotas</p>
+                      <p className="font-semibold text-gray-900">{c.numero_cuotas}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500">Tasa</p>
+                      <p className="font-semibold text-gray-900">{c.tasa_interes}%</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500">Total a pagar</p>
+                      <p className="font-semibold text-gray-900">
+                        {fmt(c.valor_prestamo + (c.valor_prestamo * (c.tasa_interes / 100) * c.numero_cuotas))}
+                      </p>
+                    </div>
+                  </div>
+                  {c.motivo_solicitud && (
+                    <div className="mb-3 p-3 bg-gray-50 rounded-lg text-sm text-gray-700">
+                      <span className="font-semibold text-xs uppercase text-gray-500">Motivo: </span>
+                      {c.motivo_solicitud}
+                    </div>
+                  )}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleAprobarCredito(c._id)}
+                      disabled={processingId === c._id}
+                      className="flex-1 px-4 py-2 rounded-xl bg-emerald-600 text-white font-semibold text-sm hover:bg-emerald-700 disabled:opacity-50 inline-flex items-center justify-center gap-1.5"
+                    >
+                      <Check size={16} /> Aprobar
+                    </button>
+                    <button
+                      onClick={() => handleRechazarCredito(c._id)}
+                      disabled={processingId === c._id}
+                      className="flex-1 px-4 py-2 rounded-xl bg-red-100 text-red-700 font-semibold text-sm hover:bg-red-200 disabled:opacity-50 inline-flex items-center justify-center gap-1.5"
+                    >
+                      <X size={16} /> Rechazar
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Pending retiros */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="p-5 border-b border-gray-100">
+          <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+            <Wallet size={20} className="text-emerald-600" />
+            Solicitudes de Retiro ({pendingRetiros.length})
+          </h2>
+        </div>
+        {pendingRetiros.length === 0 ? (
+          <div className="p-8 text-center text-sm text-gray-400">No hay solicitudes de retiro pendientes.</div>
+        ) : (
+          <div className="divide-y divide-gray-100">
+            {pendingRetiros.map((r) => (
+              <div key={r._id} className="p-5">
+                <div className="flex items-start justify-between gap-4 mb-3">
+                  <div>
+                    <p className="font-bold text-gray-900">{r.nombre}</p>
+                    <p className="text-xs text-gray-500">CC: {r.cedula}</p>
+                  </div>
+                  <span className="text-xs text-gray-400">{new Date(r.fecha_solicitud).toLocaleDateString("es-CO")}</span>
+                </div>
+                <div className="mb-3">
+                  <p className="text-xs text-gray-500">Monto a retirar</p>
+                  <p className="text-2xl font-bold text-emerald-700">{fmt(r.monto)}</p>
+                </div>
+                {r.motivo && (
+                  <div className="mb-3 p-3 bg-gray-50 rounded-lg text-sm text-gray-700">
+                    <span className="font-semibold text-xs uppercase text-gray-500">Motivo: </span>
+                    {r.motivo}
+                  </div>
+                )}
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleAprobarRetiro(r._id)}
+                    disabled={processingId === r._id}
+                    className="flex-1 px-4 py-2 rounded-xl bg-emerald-600 text-white font-semibold text-sm hover:bg-emerald-700 disabled:opacity-50 inline-flex items-center justify-center gap-1.5"
+                  >
+                    <Check size={16} /> Aprobar
+                  </button>
+                  <button
+                    onClick={() => handleRechazarRetiro(r._id)}
+                    disabled={processingId === r._id}
+                    className="flex-1 px-4 py-2 rounded-xl bg-red-100 text-red-700 font-semibold text-sm hover:bg-red-200 disabled:opacity-50 inline-flex items-center justify-center gap-1.5"
+                  >
+                    <X size={16} /> Rechazar
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
