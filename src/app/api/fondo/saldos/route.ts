@@ -9,14 +9,16 @@ export async function GET(req: NextRequest) {
 
   const db = await getDb();
   const { searchParams } = new URL(req.url);
-  let userId = searchParams.get('user_id');
+  const requestedUserId = searchParams.get('user_id');
 
+  // Regular users can only see their own data — ignore any user_id param
+  // Admin/fondo can pass a user_id to look up another user
+  // If no user_id is provided, default to the logged-in user's own data
+  let userId: string;
   if (session.user.rol === 'user') {
     userId = session.user.id;
-  }
-
-  if (!userId) {
-    return NextResponse.json({ error: 'user_id requerido' }, { status: 400 });
+  } else {
+    userId = requestedUserId || session.user.id;
   }
 
   const [member, aportes, actividad, cartera] = await Promise.all([
