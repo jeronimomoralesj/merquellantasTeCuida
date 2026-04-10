@@ -3,19 +3,28 @@ import { getDb } from '../../../lib/db';
 import { ObjectId } from 'mongodb';
 import { auth } from '../../../lib/auth';
 
-// GET /api/pqrsf — list all (admin)
+// GET /api/pqrsf — list PQRSFs (admin sees all, user sees own)
 export async function GET(req: NextRequest) {
   const session = await auth();
-  if (!session || session.user.rol !== 'admin') {
-    return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
-  }
+  if (!session) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
   const limitParam = searchParams.get('limit');
   const limit = Math.max(1, Math.min(parseInt(limitParam!) || 50, 500));
 
   const db = await getDb();
-  const results = await db.collection('pqrsf').find({}).sort({ created_at: -1 }).limit(limit).toArray();
+
+  if (session.user.rol === 'admin') {
+    const results = await db.collection('pqrsf').find({}).sort({ created_at: -1 }).limit(limit).toArray();
+    return NextResponse.json(results);
+  }
+
+  // Regular users see only their own PQRSFs
+  const results = await db.collection('pqrsf')
+    .find({ user_id: session.user.id })
+    .sort({ created_at: -1 })
+    .limit(limit)
+    .toArray();
   return NextResponse.json(results);
 }
 
@@ -50,8 +59,46 @@ export async function POST(req: NextRequest) {
     is_anonymous: !!body.isAnonymous,
     nombre: user?.nombre || null,
     cedula: user?.cedula || null,
+    respuesta: null,
+    respondido_por: null,
+    respondido_at: null,
     created_at: new Date(),
   });
 
   return NextResponse.json({ success: true, id: result.insertedId.toString() });
+}
+
+// PUT /api/pqrsf — admin responds to a PQRSF
+export async function PUT(req: NextRequest) {
+  const session = await auth();
+  if (!session || session.user.rol !== 'admin') {
+    return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+  }
+
+  const { id, respuesta } = await req.json();
+
+  if (!id || !ObjectId.isValid(id)) {
+    return NextResponse.json({ error: 'ID inválido' }, { status: 400 });
+  }
+  if (!respuesta || typeof respuesta !== 'string' || !respuesta.trim()) {
+    return NextResponse.json({ error: 'La respuesta es requerida' }, { status: 400 });
+  }
+
+  const db = await getDb();
+  const result = await db.collection('pqrsf').updateOne(
+    { _id: new ObjectId(id) },
+    {
+      $set: {
+        respuesta: respuesta.trim().slice(0, 5000),
+        respondido_por: session.user.id,
+        respondido_at: new Date(),
+      },
+    }
+  );
+
+  if (result.matchedCount === 0) {
+    return NextResponse.json({ error: 'PQRSF no encontrado' }, { status: 404 });
+  }
+
+  return NextResponse.json({ success: true });
 }

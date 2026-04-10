@@ -1,11 +1,21 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import DashboardNavbar from '../navbar';
-import { X, Send, Check, AlertCircle } from 'lucide-react';
+import { X, Send, Check, AlertCircle, History, MessageSquare, CheckCircle, Clock, Calendar } from 'lucide-react';
 import { useSession } from 'next-auth/react';
 
 type PqrsfType = 'Pregunta' | 'Queja' | 'Reclamo' | 'Sugerencia' | 'Felicitación';
+
+interface MyPQRSF {
+  _id: string;
+  type: string;
+  message: string;
+  is_anonymous: boolean;
+  created_at: string;
+  respuesta?: string | null;
+  respondido_at?: string | null;
+}
 
 export default function PqrsfPage() {
   const { data: session } = useSession();
@@ -17,6 +27,46 @@ export default function PqrsfPage() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
+
+  // My PQRSF history
+  const [myPqrsf, setMyPqrsf] = useState<MyPQRSF[]>([]);
+  const [loadingMy, setLoadingMy] = useState(true);
+
+  const fetchMyPqrsf = useCallback(async () => {
+    if (!session) return;
+    setLoadingMy(true);
+    try {
+      const res = await fetch('/api/pqrsf?limit=100');
+      if (res.ok) {
+        const data: MyPQRSF[] = await res.json();
+        setMyPqrsf(data);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setLoadingMy(false);
+    }
+  }, [session]);
+
+  useEffect(() => {
+    fetchMyPqrsf();
+  }, [fetchMyPqrsf]);
+
+  const formatDate = (date: Date) =>
+    new Intl.DateTimeFormat('es-CO', {
+      year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+    }).format(date);
+
+  const getTypeColor = (t: string) => {
+    const colors: Record<string, string> = {
+      'Pregunta': 'bg-blue-100 text-blue-800',
+      'Queja': 'bg-red-100 text-red-800',
+      'Reclamo': 'bg-orange-100 text-orange-800',
+      'Sugerencia': 'bg-green-100 text-green-800',
+      'Felicitación': 'bg-purple-100 text-purple-800',
+    };
+    return colors[t] || 'bg-gray-100 text-gray-800';
+  };
 
   const handleAnonymousToggle = () => {
     if (!isAnonymous) setShowConfirm(true);
@@ -78,6 +128,7 @@ export default function PqrsfPage() {
       }
 
       setSubmitted(true);
+      fetchMyPqrsf();
     } catch (err) {
       console.error(err);
       const errorMessage = err instanceof Error ? err.message : 'Error al enviar. Intenta de nuevo.';
@@ -218,6 +269,79 @@ export default function PqrsfPage() {
               </button>
             </div>
           </form>
+        </div>
+
+        {/* Mis PQRSF History */}
+        <div className="max-w-2xl mx-auto mt-8 bg-white p-6 sm:p-8 rounded-2xl shadow-lg border border-gray-100">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-xl sm:text-2xl font-bold text-gray-900 flex items-center gap-2">
+              <History className="h-6 w-6 text-amber-500" />
+              Mis PQRSF
+            </h2>
+            <span className="text-sm text-gray-500">{myPqrsf.length} {myPqrsf.length === 1 ? 'registro' : 'registros'}</span>
+          </div>
+
+          {loadingMy ? (
+            <div className="py-8 text-center text-gray-400">Cargando...</div>
+          ) : myPqrsf.length === 0 ? (
+            <div className="py-10 text-center text-gray-400">
+              <MessageSquare className="h-10 w-10 mx-auto mb-2 opacity-50" />
+              <p className="text-sm">Aún no has enviado ninguna PQRSF.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {myPqrsf.map((p) => (
+                <div key={p._id} className="border border-gray-200 rounded-xl p-4 hover:border-amber-200 hover:bg-amber-50/30 transition-colors">
+                  <div className="flex items-center justify-between mb-2 gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${getTypeColor(p.type)}`}>
+                        {p.type}
+                      </span>
+                      {p.is_anonymous && (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-200">
+                          Enviado como anónimo
+                        </span>
+                      )}
+                      {p.respuesta ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-700 border border-emerald-200">
+                          <CheckCircle className="h-3 w-3" />
+                          Respondido
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gray-100 text-gray-600 border border-gray-200">
+                          <Clock className="h-3 w-3" />
+                          En espera
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-xs text-gray-400 flex items-center gap-1 flex-shrink-0">
+                      <Calendar className="h-3 w-3" />
+                      {formatDate(new Date(p.created_at))}
+                    </span>
+                  </div>
+
+                  <p className="text-sm text-gray-700 whitespace-pre-wrap mb-3">{p.message}</p>
+
+                  {p.respuesta && (
+                    <div className="mt-3 p-3 bg-emerald-50 rounded-lg border border-emerald-200">
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <CheckCircle className="h-4 w-4 text-emerald-600" />
+                        <span className="text-xs font-semibold text-emerald-800 uppercase tracking-wider">
+                          Respuesta del Administrador
+                        </span>
+                        {p.respondido_at && (
+                          <span className="text-xs text-emerald-600/70">
+                            • {formatDate(new Date(p.respondido_at))}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-sm text-gray-800 whitespace-pre-wrap">{p.respuesta}</p>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
