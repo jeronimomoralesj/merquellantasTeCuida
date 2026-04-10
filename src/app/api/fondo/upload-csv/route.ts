@@ -28,8 +28,8 @@ function parseAmount(raw: string | undefined): number {
   return isNaN(n) ? 0 : n;
 }
 
-// Parse a CSV line respecting quoted fields, semicolon separator
-function parseCsvLine(line: string): string[] {
+// Parse a CSV line respecting quoted fields, with configurable separator
+function parseCsvLine(line: string, sep: string): string[] {
   const result: string[] = [];
   let current = '';
   let inQuotes = false;
@@ -43,7 +43,7 @@ function parseCsvLine(line: string): string[] {
       } else {
         inQuotes = !inQuotes;
       }
-    } else if (ch === ';' && !inQuotes) {
+    } else if (ch === sep && !inQuotes) {
       result.push(current);
       current = '';
     } else {
@@ -51,7 +51,37 @@ function parseCsvLine(line: string): string[] {
     }
   }
   result.push(current);
-  return result.map((s) => s.trim());
+  return result.map((s) => s.replace(/^"(.*)"$/, '$1').trim());
+}
+
+// Auto-detect the most likely CSV separator from the first line
+function detectSeparator(line: string): string {
+  const counts: Record<string, number> = {
+    ';': (line.match(/;/g) || []).length,
+    ',': (line.match(/,/g) || []).length,
+    '\t': (line.match(/\t/g) || []).length,
+    '|': (line.match(/\|/g) || []).length,
+  };
+  let best = ';';
+  let max = 0;
+  for (const [sep, count] of Object.entries(counts)) {
+    if (count > max) {
+      max = count;
+      best = sep;
+    }
+  }
+  return best;
+}
+
+// Normalize a header: strip BOM, accents, quotes, lowercase, trim
+function normalizeHeader(s: string): string {
+  return s
+    .replace(/^\ufeff/, '') // strip UTF-8 BOM
+    .replace(/^"(.*)"$/, '$1') // strip surrounding quotes
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // strip accents
+    .toUpperCase()
+    .trim();
 }
 
 export async function POST(req: NextRequest) {
@@ -68,24 +98,48 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Archivo CSV requerido' }, { status: 400 });
     }
 
-    const text = await file.text();
+    let text = await file.text();
+    // Strip UTF-8 BOM if present
+    if (text.charCodeAt(0) === 0xfeff) {
+      text = text.slice(1);
+    }
+
     const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
 
     if (lines.length < 2) {
       return NextResponse.json({ error: 'CSV vacío o sin datos' }, { status: 400 });
     }
 
+    // Auto-detect separator
+    const separator = detectSeparator(lines[0]);
+
     // Parse header to find column indices
-    const headers = parseCsvLine(lines[0]).map((h) => h.toUpperCase().trim());
-    const cedulaIdx = headers.findIndex((h) => h === 'CEDULA' || h === 'CÉDULA');
-    const acumuladoIdx = headers.findIndex((h) => h === 'ACUMULADO');
-    const nombreIdx = headers.findIndex((h) => h === 'NOMBRE');
+    const rawHeaders = parseCsvLine(lines[0], separator);
+    const headers = rawHeaders.map(normalizeHeader);
+
+    const cedulaIdx = headers.findIndex(
+      (h) => h === 'CEDULA' || h === 'CC' || h === 'DOCUMENTO' || h === 'IDENTIFICACION'
+    );
+    const acumuladoIdx = headers.findIndex(
+      (h) => h === 'ACUMULADO' || h === 'TOTAL' || h === 'SALDO'
+    );
+    const nombreIdx = headers.findIndex((h) => h === 'NOMBRE' || h === 'NOMBRES');
 
     if (cedulaIdx === -1) {
-      return NextResponse.json({ error: 'Columna CEDULA no encontrada' }, { status: 400 });
+      return NextResponse.json(
+        {
+          error: `Columna CEDULA no encontrada. Encabezados detectados: ${headers.join(', ')}. Separador detectado: "${separator === '\t' ? 'TAB' : separator}"`,
+        },
+        { status: 400 }
+      );
     }
     if (acumuladoIdx === -1) {
-      return NextResponse.json({ error: 'Columna ACUMULADO no encontrada' }, { status: 400 });
+      return NextResponse.json(
+        {
+          error: `Columna ACUMULADO no encontrada. Encabezados detectados: ${headers.join(', ')}`,
+        },
+        { status: 400 }
+      );
     }
 
     const db = await getDb();
@@ -98,7 +152,7 @@ export async function POST(req: NextRequest) {
     const erroresList: { cedula: string; razon: string }[] = [];
 
     for (let i = 1; i < lines.length; i++) {
-      const cols = parseCsvLine(lines[i]);
+      const cols = parseCsvLine(lines[i], separator);
       const cedulaRaw = cols[cedulaIdx];
       if (!cedulaRaw) continue;
 
