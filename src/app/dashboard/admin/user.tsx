@@ -242,7 +242,7 @@ const Users: React.FC = () => {
         };
 
         return {
-          id: data.id,
+          id: (data._id || data.id || '').toString(),
           cedula: data.cedula || '',
           nombre,
           email: data.email || '',
