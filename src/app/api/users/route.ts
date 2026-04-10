@@ -42,50 +42,54 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
   }
 
-  const body = await req.json();
-  if (!body.cedula || !body.nombre) {
-    return NextResponse.json({ error: 'Cédula y nombre son requeridos' }, { status: 400 });
+  try {
+    const body = await req.json();
+    if (!body.cedula || !body.nombre) {
+      return NextResponse.json({ error: 'Cédula y nombre son requeridos' }, { status: 400 });
+    }
+
+    const db = await getDb();
+    const cedula = String(body.cedula);
+    const email = body.email || `${cedula}@merque.com`;
+    const password = cedula.slice(-8);
+    const passwordHash = await bcrypt.hash(password, 10);
+    const safeRol = VALID_ROLES.has(body.rol) ? body.rol : 'user';
+
+    const doc = {
+      cedula,
+      email,
+      nombre: body.nombre,
+      posicion: body.posicion || null,
+      rol: safeRol,
+      passwordHash,
+      departamento: body.departamento || null,
+      eps: body.eps || null,
+      banco: body.banco || null,
+      caja_compensacion: body.caja_compensacion || null,
+      fondo_pensiones: body.fondo_pensiones || null,
+      arl: body.arl || null,
+      fecha_ingreso: body.fecha_ingreso || null,
+      fondo_cesantias: body.fondo_cesantias || null,
+      cargo_empleado: body.cargo_empleado || null,
+      numero_cuenta: body.numero_cuenta || null,
+      tipo_cuenta: body.tipo_cuenta || null,
+      tipo_documento: body.tipo_documento || null,
+      fecha_nacimiento: body.fecha_nacimiento || null,
+    };
+
+    const result = await db.collection('users').updateOne(
+      { cedula },
+      { $set: doc, $setOnInsert: { created_at: new Date() } },
+      { upsert: true }
+    );
+
+    const id = result.upsertedId?.toString() || (await db.collection('users').findOne({ cedula }))?._id?.toString();
+
+    return NextResponse.json({ success: true, id, email });
+  } catch (err) {
+    console.error('Create user error:', err);
+    return NextResponse.json({ error: 'Error al crear usuario' }, { status: 500 });
   }
-
-  const db = await getDb();
-  const cedula = String(body.cedula);
-  const email = body.email || `${cedula}@merque.com`;
-  const password = cedula.slice(-8);
-  const passwordHash = await bcrypt.hash(password, 10);
-  const safeRol = body.rol === 'admin' ? 'admin' : 'user';
-
-  const doc = {
-    cedula,
-    email,
-    nombre: body.nombre,
-    posicion: body.posicion || null,
-    rol: safeRol,
-    passwordHash,
-    departamento: body.departamento || null,
-    eps: body.eps || null,
-    banco: body.banco || null,
-    caja_compensacion: body.caja_compensacion || null,
-    fondo_pensiones: body.fondo_pensiones || null,
-    arl: body.arl || null,
-    fecha_ingreso: body.fecha_ingreso || null,
-    fondo_cesantias: body.fondo_cesantias || null,
-    cargo_empleado: body.cargo_empleado || null,
-    numero_cuenta: body.numero_cuenta || null,
-    tipo_cuenta: body.tipo_cuenta || null,
-    tipo_documento: body.tipo_documento || null,
-    fecha_nacimiento: body.fecha_nacimiento || null,
-    created_at: new Date(),
-  };
-
-  const result = await db.collection('users').updateOne(
-    { cedula },
-    { $set: doc, $setOnInsert: { created_at: new Date() } },
-    { upsert: true }
-  );
-
-  const id = result.upsertedId?.toString() || (await db.collection('users').findOne({ cedula }))?._id?.toString();
-
-  return NextResponse.json({ success: true, id, email });
 }
 
 // PUT /api/users — update user
