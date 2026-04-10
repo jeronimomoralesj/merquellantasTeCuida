@@ -1,8 +1,10 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from 'react';
+import Image from 'next/image';
+import { motion, AnimatePresence } from 'framer-motion';
 import DashboardNavbar from '../navbar';
-import { X, Send, Check, AlertCircle, History, MessageSquare, CheckCircle, Clock, Calendar } from 'lucide-react';
+import { X, Send, AlertCircle, History, MessageSquare, CheckCircle, Clock, Calendar, Sparkles } from 'lucide-react';
 import { useSession } from 'next-auth/react';
 
 type PqrsfType = 'Pregunta' | 'Queja' | 'Reclamo' | 'Sugerencia' | 'Felicitación';
@@ -138,26 +140,128 @@ export default function PqrsfPage() {
     }
   };
 
-  // Success screen after submission
+  // Success screen after submission — animated Merquito celebration
   if (submitted) {
     return (
       <>
         <DashboardNavbar activePage="pqrsf" />
-        <div className="pt-20 min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 flex items-center justify-center px-4 text-black">
-          <div className="bg-white p-8 rounded-2xl shadow-lg text-center max-w-md w-full border border-gray-100">
-            <div className="mx-auto w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-6">
-              <Check size={32} className="text-green-600" />
+        <div className="pt-20 min-h-screen bg-gradient-to-b from-amber-50 via-orange-50 to-white flex items-center justify-center px-4 py-10 text-black overflow-hidden relative">
+          {/* Decorative floating particles */}
+          <AnimatePresence>
+            {[...Array(12)].map((_, i) => (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, y: 0, x: 0, scale: 0 }}
+                animate={{
+                  opacity: [0, 1, 0],
+                  y: [-20, -120 - Math.random() * 100],
+                  x: [0, (Math.random() - 0.5) * 200],
+                  scale: [0, 1, 0.5],
+                  rotate: [0, Math.random() * 360],
+                }}
+                transition={{
+                  duration: 3 + Math.random() * 2,
+                  repeat: Infinity,
+                  delay: i * 0.3,
+                  ease: "easeOut",
+                }}
+                className="absolute top-1/2 left-1/2 pointer-events-none"
+              >
+                <Sparkles className={`h-${4 + (i % 3)} w-${4 + (i % 3)} text-[#ff9900]`} />
+              </motion.div>
+            ))}
+          </AnimatePresence>
+
+          <motion.div
+            initial={{ opacity: 0, scale: 0.8, y: 30 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+            className="relative bg-white p-8 sm:p-10 rounded-3xl shadow-2xl text-center max-w-lg w-full border border-amber-100 z-10"
+          >
+            {/* Glow behind merquito */}
+            <div className="relative w-40 h-40 mx-auto mb-6">
+              <motion.div
+                animate={{
+                  scale: [1, 1.15, 1],
+                  opacity: [0.4, 0.7, 0.4],
+                }}
+                transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
+                className="absolute inset-0 bg-[#ff9900] rounded-full blur-2xl"
+              />
+              <motion.div
+                initial={{ scale: 0, rotate: -180 }}
+                animate={{ scale: 1, rotate: 0 }}
+                transition={{
+                  type: "spring",
+                  stiffness: 200,
+                  damping: 15,
+                  delay: 0.2,
+                }}
+                className="relative w-full h-full"
+              >
+                <motion.div
+                  animate={{
+                    y: [0, -8, 0],
+                  }}
+                  transition={{
+                    duration: 2.5,
+                    repeat: Infinity,
+                    ease: "easeInOut",
+                  }}
+                  className="w-full h-full"
+                >
+                  <Image
+                    src="/merquito.jpeg"
+                    alt="Merquito - Mascota Merquellantas"
+                    width={160}
+                    height={160}
+                    priority
+                    className="rounded-full ring-4 ring-[#ff9900] shadow-xl object-cover w-full h-full"
+                  />
+                </motion.div>
+              </motion.div>
             </div>
-            <h2 className="text-2xl font-semibold mb-3">¡Enviado con éxito!</h2>
-            <p className="mb-6 text-gray-600">Tu {type.toLowerCase()} ha sido registrada correctamente. Gracias por tu aporte.</p>
-            <button
+
+            <motion.h2
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.5, duration: 0.5 }}
+              className="text-2xl sm:text-3xl font-extrabold text-gray-900 mb-3"
+            >
+              ¡Gracias por tus <span className="text-[#ff9900]">aportes</span>!
+            </motion.h2>
+
+            <motion.p
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.7, duration: 0.5 }}
+              className="text-gray-600 leading-relaxed mb-2 text-sm sm:text-base"
+            >
+              Merquellantas se está reinventando y lo estamos haciendo de la mano tuya.
+            </motion.p>
+
+            <motion.p
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.9, duration: 0.5 }}
+              className="text-gray-600 leading-relaxed mb-8 text-sm sm:text-base"
+            >
+              No dudes en comentarnos cualquier idea o problema y nos aseguraremos que todo se haga de la mejor forma.
+            </motion.p>
+
+            <motion.button
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 1.1, duration: 0.5 }}
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
               onClick={() => setSubmitted(false)}
-              className="px-6 py-3 bg-gradient-to-r from-amber-500 to-amber-600 text-white rounded-full hover:from-amber-600 hover:to-amber-700 transition shadow-md flex items-center justify-center gap-2 w-full sm:w-auto mx-auto"
+              className="px-6 py-3 bg-gradient-to-r from-[#ff9900] to-amber-500 text-black font-bold rounded-full hover:shadow-lg hover:shadow-[#ff9900]/40 transition-all flex items-center justify-center gap-2 w-full sm:w-auto mx-auto"
             >
               <Send size={18} />
-              Enviar otro
-            </button>
-          </div>
+              Enviar otra PQRSF
+            </motion.button>
+          </motion.div>
         </div>
       </>
     );
