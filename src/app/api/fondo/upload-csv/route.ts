@@ -98,10 +98,29 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Archivo CSV requerido' }, { status: 400 });
     }
 
-    let text = await file.text();
-    // Strip UTF-8 BOM if present
-    if (text.charCodeAt(0) === 0xfeff) {
-      text = text.slice(1);
+    // Read raw bytes first so we can try different encodings
+    const buffer = Buffer.from(await file.arrayBuffer());
+
+    // Detect UTF-8 BOM
+    const hasBom = buffer.length >= 3 && buffer[0] === 0xef && buffer[1] === 0xbb && buffer[2] === 0xbf;
+    const bytes = hasBom ? buffer.subarray(3) : buffer;
+
+    // Try UTF-8 strict first; fall back to Windows-1252 (Excel's default)
+    let text: string;
+    try {
+      const utf8Decoder = new TextDecoder('utf-8', { fatal: true });
+      text = utf8Decoder.decode(bytes);
+    } catch {
+      const winDecoder = new TextDecoder('windows-1252');
+      text = winDecoder.decode(bytes);
+    }
+
+    // Detect mojibake — UTF-8 decode succeeded but content looks wrong
+    // (e.g. "BOGOT√Å" instead of "BOGOTÁ"). Common pattern: lots of √ characters.
+    const mojibakeCount = (text.match(/[√Ãâ¬]/g) || []).length;
+    if (mojibakeCount > 5) {
+      const winDecoder = new TextDecoder('windows-1252');
+      text = winDecoder.decode(bytes);
     }
 
     const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);

@@ -104,6 +104,7 @@ interface Credito {
 
 interface SearchUser {
   id: string;
+  user_id?: string;
   nombre: string;
   cedula: string;
 }
@@ -796,9 +797,11 @@ function BuscarAfiliadoTab() {
     setActividades([]);
     setCreditos([]);
     try {
-      // The /api/fondo/saldos endpoint returns ALL data in one response:
-      // { member, saldos, retiro, aportes, actividad, cartera }
-      const sRes = await fetch(`/api/fondo/saldos?user_id=${user.id}`);
+      // The /api/fondo/saldos endpoint expects the USER id (not member id).
+      // SearchUser.id from /api/fondo/members?search comes back as the member's _id,
+      // but the result also has user_id. From /api/fondo/members?search_users it's the user's _id.
+      const userId = user.user_id || user.id;
+      const sRes = await fetch(`/api/fondo/saldos?user_id=${userId}`);
       if (sRes.ok) {
         const data = await sRes.json();
         if (data.saldos) setSaldos(data.saldos);
