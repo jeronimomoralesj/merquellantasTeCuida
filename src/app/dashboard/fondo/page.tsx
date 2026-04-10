@@ -482,8 +482,8 @@ function CicloActualTab() {
                       }
                       className="rounded-lg border border-gray-200 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff9900]/40 focus:border-[#ff9900] bg-white"
                     >
-                      <option value="quincenal">Quincenal</option>
-                      <option value="mensual">Mensual</option>
+                      <option value="quincenal">Quincenal (cada 15 dias)</option>
+                      <option value="mensual">Mensual (cada mes)</option>
                     </select>
                   </td>
                   <td className="px-4 py-3 text-right">
@@ -773,17 +773,27 @@ function BuscarAfiliadoTab() {
   const toggleSection = (key: string) =>
     setOpenSections((p) => ({ ...p, [key]: !p[key] }));
 
+  const [searched, setSearched] = useState(false);
+
   const handleSearch = async () => {
     if (!query.trim()) return;
     setSearching(true);
     setSelected(null);
+    setResults([]);
+    setSearched(true);
     try {
       const res = await fetch(
-        `/api/fondo/members?search=${encodeURIComponent(query)}`
+        `/api/fondo/members?search=${encodeURIComponent(query.trim())}`
       );
       if (res.ok) {
-        setResults(await res.json());
+        const data = await res.json();
+        setResults(Array.isArray(data) ? data : []);
+      } else {
+        setResults([]);
       }
+    } catch (err) {
+      console.error('Search error:', err);
+      setResults([]);
     } finally {
       setSearching(false);
     }
@@ -852,7 +862,7 @@ function BuscarAfiliadoTab() {
         </div>
 
         {/* Results */}
-        {results.length > 0 && !selected && (
+        {!selected && results.length > 0 && (
           <div className="mt-4 divide-y divide-gray-100 rounded-xl border border-gray-200 overflow-hidden">
             {results.map((u) => (
               <button
@@ -861,12 +871,29 @@ function BuscarAfiliadoTab() {
                 className="w-full flex items-center justify-between px-4 py-3 hover:bg-[#ff9900]/[0.04] transition-colors text-left"
               >
                 <div>
-                  <p className="font-medium text-gray-900">{u.nombre}</p>
-                  <p className="text-xs text-gray-500">CC: {u.cedula}</p>
+                  <p className="font-medium text-gray-900">{u.nombre || 'Sin nombre'}</p>
+                  <p className="text-xs text-gray-500">CC: {u.cedula || '—'}</p>
                 </div>
                 <ChevronRight size={16} className="text-gray-400" />
               </button>
             ))}
+          </div>
+        )}
+
+        {/* Loading state */}
+        {!selected && searching && (
+          <div className="mt-4 p-6 rounded-xl border border-gray-200 text-center text-sm text-gray-500 flex items-center justify-center gap-2">
+            <div className="animate-spin h-4 w-4 border-2 border-[#ff9900] border-t-transparent rounded-full" />
+            Buscando...
+          </div>
+        )}
+
+        {/* Empty state after a search */}
+        {!selected && !searching && searched && results.length === 0 && (
+          <div className="mt-4 p-6 rounded-xl border border-dashed border-gray-200 text-center text-sm text-gray-500">
+            No se encontraron afiliados con ese criterio.
+            <br />
+            <span className="text-xs text-gray-400">Solo se buscan usuarios afiliados al fondo. Para crear una nueva afiliación usa la pestaña &quot;Nuevo Afiliado&quot;.</span>
           </div>
         )}
       </div>
