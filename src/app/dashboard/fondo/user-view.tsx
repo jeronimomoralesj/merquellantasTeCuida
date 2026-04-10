@@ -124,6 +124,7 @@ export default function FondoUserView() {
   const [showRetiroForm, setShowRetiroForm] = useState(false);
   const [creditoValor, setCreditoValor] = useState("");
   const [creditoCuotas, setCreditoCuotas] = useState("12");
+  const [creditoFrecuencia, setCreditoFrecuencia] = useState<"quincenal" | "mensual">("mensual");
   const [creditoMotivo, setCreditoMotivo] = useState("");
   const [retiroMonto, setRetiroMonto] = useState("");
   const [retiroMotivo, setRetiroMotivo] = useState("");
@@ -544,12 +545,22 @@ export default function FondoUserView() {
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
-                          <span className={`text-xs px-3 py-1 rounded-full font-medium ${
+                          <span className={`text-xs px-3 py-1 rounded-full font-medium border ${
                             credit.estado === "activo"
-                              ? "bg-blue-100 text-blue-700 border border-blue-200"
-                              : "bg-green-100 text-green-700 border border-green-200"
+                              ? "bg-blue-100 text-blue-700 border-blue-200"
+                              : credit.estado === "pendiente"
+                                ? "bg-amber-100 text-amber-800 border-amber-300"
+                                : credit.estado === "rechazado"
+                                  ? "bg-red-100 text-red-700 border-red-200"
+                                  : "bg-green-100 text-green-700 border-green-200"
                           }`}>
-                            {credit.estado === "activo" ? "Activo" : "Pagado"}
+                            {credit.estado === "activo"
+                              ? "Activo"
+                              : credit.estado === "pendiente"
+                                ? "Pendiente de aprobación"
+                                : credit.estado === "rechazado"
+                                  ? "Rechazado"
+                                  : "Pagado"}
                           </span>
                           {expandedCredits[credit._id] ? (
                             <ChevronUp className="w-5 h-5 text-gray-400" />
@@ -562,6 +573,25 @@ export default function FondoUserView() {
                       {/* Expanded Content */}
                       {expandedCredits[credit._id] && (
                         <div className="p-5 space-y-5">
+                          {credit.estado === "pendiente" && (
+                            <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-800 flex items-center gap-2">
+                              <Clock className="w-4 h-4" />
+                              Tu solicitud está esperando aprobación del fondo. Te notificaremos cuando haya una respuesta.
+                            </div>
+                          )}
+                          {credit.estado === "rechazado" && credit.motivo_respuesta && (
+                            <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-xs text-red-800">
+                              <p className="font-semibold mb-1">Motivo del rechazo:</p>
+                              <p>{credit.motivo_respuesta}</p>
+                            </div>
+                          )}
+                          {credit.motivo_solicitud && (
+                            <div className="p-3 rounded-lg bg-gray-50 border border-gray-200 text-xs text-gray-700">
+                              <p className="font-semibold mb-1 text-gray-500 uppercase tracking-wider text-[10px]">Motivo de la solicitud</p>
+                              <p>{credit.motivo_solicitud}</p>
+                            </div>
+                          )}
+
                           {/* Credit Details Grid */}
                           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                             <div className="bg-gray-50 rounded-lg p-3">
@@ -574,7 +604,9 @@ export default function FondoUserView() {
                             </div>
                             <div className="bg-gray-50 rounded-lg p-3">
                               <p className="text-xs text-gray-500">Fecha Desembolso</p>
-                              <p className="text-sm font-semibold text-gray-800">{formatShortDate(credit.fecha_desembolso)}</p>
+                              <p className="text-sm font-semibold text-gray-800">
+                                {credit.fecha_desembolso ? formatShortDate(credit.fecha_desembolso) : "Pendiente"}
+                              </p>
                             </div>
                             <div className="bg-gray-50 rounded-lg p-3">
                               <p className="text-xs text-gray-500">Cuotas Pagadas</p>
@@ -652,20 +684,27 @@ export default function FondoUserView() {
       {/* Solicitar Crédito Modal */}
       {showCreditoForm && (() => {
         const valor = Number(creditoValor) || 0;
-        const cuotas = Math.max(1, Math.min(60, Number(creditoCuotas) || 0));
-        const tasa = cuotas <= 12 ? 1.0 : cuotas <= 24 ? 1.2 : 1.3;
-        const interesPorCuota = Math.round(valor * (tasa / 100) * 100) / 100;
+        const cuotas = Math.max(1, Math.min(120, Number(creditoCuotas) || 0));
+        // Interest rate uses cuotas-as-months equivalent.
+        // For quincenal payments, divide cuotas by 2 to compare monthly term.
+        const cuotasComoMeses = creditoFrecuencia === "quincenal" ? cuotas / 2 : cuotas;
+        const tasa = cuotasComoMeses <= 12 ? 1.0 : cuotasComoMeses <= 24 ? 1.2 : 1.3;
+        // For quincenal, the monthly interest is split across 2 quincenal payments
+        const tasaPorPeriodo = creditoFrecuencia === "quincenal" ? tasa / 2 : tasa;
+        const interesPorCuota = Math.round(valor * (tasaPorPeriodo / 100) * 100) / 100;
         const capitalPorCuota = cuotas > 0 ? Math.round((valor / cuotas) * 100) / 100 : 0;
         const cuotaMensual = capitalPorCuota + interesPorCuota;
         const totalInteres = interesPorCuota * cuotas;
         const totalAPagar = valor + totalInteres;
         const showSchedule = valor > 0 && cuotas > 0;
 
-        // Build payment schedule
+        // Build payment schedule (each row = one payment based on chosen frequency)
         const today = new Date();
+        const daysBetween = creditoFrecuencia === "quincenal" ? 15 : 30;
         const schedule = showSchedule
           ? Array.from({ length: cuotas }, (_, i) => {
-              const fecha = new Date(today.getFullYear(), today.getMonth() + i + 1, today.getDate());
+              const fecha = new Date(today);
+              fecha.setDate(fecha.getDate() + daysBetween * (i + 1));
               const saldoRestante = Math.max(0, totalAPagar - cuotaMensual * (i + 1));
               return {
                 num: i + 1,
@@ -707,19 +746,49 @@ export default function FondoUserView() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Número de cuotas (1-60)</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Número de cuotas (1-120)</label>
                   <input
                     type="number"
                     min={1}
-                    max={60}
+                    max={120}
                     value={creditoCuotas}
                     onChange={(e) => setCreditoCuotas(e.target.value)}
                     className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff9900]/40 focus:border-[#ff9900]"
                     placeholder="Ej: 15"
                   />
                   <p className="text-[10px] text-gray-500 mt-1">
-                    ≤12 cuotas: 1% mensual · ≤24: 1.2% · &gt;24: 1.3%
+                    ≤12 meses: 1% mensual · ≤24: 1.2% · &gt;24: 1.3%
                   </p>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Frecuencia de pago</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setCreditoFrecuencia("quincenal")}
+                    className={`px-4 py-3 rounded-xl border-2 text-sm font-semibold transition ${
+                      creditoFrecuencia === "quincenal"
+                        ? "border-[#ff9900] bg-orange-50 text-orange-900"
+                        : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+                    }`}
+                  >
+                    Cada 15 días
+                    <span className="block text-[10px] font-normal text-gray-500 mt-0.5">Quincenal</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCreditoFrecuencia("mensual")}
+                    className={`px-4 py-3 rounded-xl border-2 text-sm font-semibold transition ${
+                      creditoFrecuencia === "mensual"
+                        ? "border-[#ff9900] bg-orange-50 text-orange-900"
+                        : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+                    }`}
+                  >
+                    Cada 30 días
+                    <span className="block text-[10px] font-normal text-gray-500 mt-0.5">Mensual</span>
+                  </button>
                 </div>
               </div>
 
@@ -812,6 +881,7 @@ export default function FondoUserView() {
                       body: JSON.stringify({
                         valor_prestamo: Number(creditoValor),
                         numero_cuotas: Number(creditoCuotas),
+                        frecuencia_pago: creditoFrecuencia,
                         motivo_solicitud: creditoMotivo || null,
                       }),
                     });
@@ -822,6 +892,7 @@ export default function FondoUserView() {
                     setShowCreditoForm(false);
                     setCreditoValor("");
                     setCreditoCuotas("12");
+                    setCreditoFrecuencia("mensual");
                     setCreditoMotivo("");
                     fetchData();
                   } catch (err) {

@@ -301,10 +301,38 @@ function CicloActualTab() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch("/api/fondo/members");
-        if (!res.ok) throw new Error("Error cargando miembros");
-        const data: FondoMember[] = await res.json();
+        // Fetch members AND all active credits in parallel
+        const [memRes, cartRes] = await Promise.all([
+          fetch("/api/fondo/members"),
+          fetch("/api/fondo/cartera?estado=activo"),
+        ]);
+        if (!memRes.ok) throw new Error("Error cargando miembros");
+        const data: FondoMember[] = await memRes.json();
         setMembers(data);
+
+        // Build map: user_id → total expected payment for this period
+        // For each active credit, calculate cuota = (valor + total_interes) / numero_cuotas
+        // Sum across all active credits for that user
+        const debtByUser = new Map<string, number>();
+        if (cartRes.ok) {
+          const credits: Array<{
+            user_id: string;
+            valor_prestamo: number;
+            tasa_interes: number;
+            numero_cuotas: number;
+            cuotas_restantes: number;
+            saldo_total: number;
+            frecuencia_pago?: string;
+          }> = await cartRes.json();
+
+          for (const c of credits) {
+            if (c.cuotas_restantes <= 0) continue;
+            // Cuota per period = saldo_total / cuotas_restantes (auto-adjusts to over/under payments)
+            const cuota = Math.round(c.saldo_total / c.cuotas_restantes);
+            debtByUser.set(c.user_id, (debtByUser.get(c.user_id) || 0) + cuota);
+          }
+        }
+
         setRows(
           data.map((m) => ({
             user_id: m.user_id,
@@ -315,7 +343,7 @@ function CicloActualTab() {
             permanente: +(m.monto_aporte * 0.9).toFixed(0),
             social: +(m.monto_aporte * 0.1).toFixed(0),
             actividad: 0,
-            credito_pago: 0,
+            credito_pago: debtByUser.get(m.user_id) || 0,
           }))
         );
       } catch {

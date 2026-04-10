@@ -3,9 +3,11 @@ import { getDb } from '../../../../lib/db';
 import { ObjectId } from 'mongodb';
 import { auth } from '../../../../lib/auth';
 
-function getInterestRate(numCuotas: number): number {
-  if (numCuotas <= 12) return 1.0;
-  if (numCuotas <= 24) return 1.2;
+function getInterestRate(numCuotas: number, frecuencia: string): number {
+  // Convert quincenal cuotas to equivalent months for the rate brackets
+  const cuotasComoMeses = frecuencia === 'quincenal' ? numCuotas / 2 : numCuotas;
+  if (cuotasComoMeses <= 12) return 1.0;
+  if (cuotasComoMeses <= 24) return 1.2;
   return 1.3;
 }
 
@@ -49,36 +51,40 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const valorPrestamo = Number(body.valor_prestamo || 0);
   const numCuotas = Number(body.numero_cuotas || 0);
+  const frecuenciaPago = body.frecuencia_pago === 'quincenal' ? 'quincenal' : 'mensual';
 
   if (!valorPrestamo || valorPrestamo <= 0) {
     return NextResponse.json({ error: 'Valor del préstamo inválido' }, { status: 400 });
   }
-  if (!numCuotas || numCuotas <= 0 || numCuotas > 60) {
-    return NextResponse.json({ error: 'Número de cuotas inválido (1-60)' }, { status: 400 });
+  if (!numCuotas || numCuotas <= 0 || numCuotas > 120) {
+    return NextResponse.json({ error: 'Número de cuotas inválido (1-120)' }, { status: 400 });
   }
 
-  const tasaInteres = getInterestRate(numCuotas);
-  const totalInteres = Math.round(valorPrestamo * (tasaInteres / 100) * numCuotas * 100) / 100;
+  const tasaMensual = getInterestRate(numCuotas, frecuenciaPago);
+  // For quincenal, half of monthly rate per period; for mensual, full rate per period
+  const tasaPorPeriodo = frecuenciaPago === 'quincenal' ? tasaMensual / 2 : tasaMensual;
+  const totalInteres = Math.round(valorPrestamo * (tasaPorPeriodo / 100) * numCuotas * 100) / 100;
 
   const isFondo = session.user.rol === 'fondo';
-  // Regular users always request for themselves
   const targetUserId = isFondo && body.user_id ? body.user_id : session.user.id;
 
   const db = await getDb();
 
-  // Generate a credito_id for direct creations
   const creditoIdAuto = isFondo
     ? (body.credito_id || `CR-${Date.now().toString().slice(-8)}`)
     : null;
 
   const fechaCuota1 = body.fecha_cuota_1 ? new Date(body.fecha_cuota_1) : new Date();
   const fechaTermina = new Date(fechaCuota1);
-  fechaTermina.setMonth(fechaTermina.getMonth() + numCuotas);
+  // Increment by days based on frecuencia
+  const daysPerCuota = frecuenciaPago === 'quincenal' ? 15 : 30;
+  fechaTermina.setDate(fechaTermina.getDate() + daysPerCuota * numCuotas);
 
   const doc = {
     user_id: targetUserId,
     credito_id: creditoIdAuto,
-    tasa_interes: tasaInteres,
+    tasa_interes: tasaMensual,
+    frecuencia_pago: frecuenciaPago,
     fecha_solicitud: new Date(),
     fecha_desembolso: isFondo ? (body.fecha_desembolso ? new Date(body.fecha_desembolso) : new Date()) : null,
     fecha_cuota_1: isFondo ? fechaCuota1 : null,
@@ -132,7 +138,8 @@ export async function PUT(req: NextRequest) {
 
     const fechaCuota1 = body.fecha_cuota_1 ? new Date(body.fecha_cuota_1) : new Date();
     const fechaTermina = new Date(fechaCuota1);
-    fechaTermina.setMonth(fechaTermina.getMonth() + cartera.numero_cuotas);
+    const daysPerCuota = cartera.frecuencia_pago === 'quincenal' ? 15 : 30;
+    fechaTermina.setDate(fechaTermina.getDate() + daysPerCuota * cartera.numero_cuotas);
     const creditoId = body.credito_id || `CR-${Date.now().toString().slice(-8)}`;
 
     await db.collection('fondo_cartera').updateOne(
