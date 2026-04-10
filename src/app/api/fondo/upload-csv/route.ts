@@ -283,22 +283,26 @@ export async function POST(req: NextRequest) {
         creados++;
       }
 
-      // Replace any previous "Saldo inicial CSV" aporte for this user, then insert the new one
-      // so Estado de Cuenta always shows the current accumulated balance.
+      // Replace any previous "Saldo inicial CSV" aporte for this user, then insert the new one.
+      // The saldo_inicial is dated as the FIRST DAY OF THE CURRENT MONTH so all uploads
+      // share the same period. Future movements (every 15 days) get their own period.
+      // The user's fecha_afiliacion is preserved separately on the member document.
       await db.collection('fondo_aportes').deleteMany({ user_id: userId, tipo: 'saldo_inicial' });
 
       if (acumulado > 0) {
+        const now = new Date();
+        const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const periodoActual = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
         await db.collection('fondo_aportes').insertOne({
           user_id: userId,
-          periodo: fechaAfiliacion
-            ? `${fechaAfiliacion.getFullYear()}-${String(fechaAfiliacion.getMonth() + 1).padStart(2, '0')}`
-            : new Date().toISOString().slice(0, 7),
+          periodo: periodoActual,
           monto_total: acumulado,
           monto_permanente: permanente,
           monto_social: social,
           frecuencia: 'historico',
           tipo: 'saldo_inicial',
-          fecha_ejecucion: fechaAfiliacion || new Date(),
+          fecha_ejecucion: firstOfMonth,
           descripcion: 'Saldo inicial cargado desde CSV',
           created_at: new Date(),
         });

@@ -43,6 +43,16 @@ interface PendingRequest {
   motivoRespuesta?: string;
 }
 
+interface MyPqrsf {
+  _id: string;
+  type: string;
+  message: string;
+  is_anonymous: boolean;
+  created_at: string;
+  respuesta?: string | null;
+  respondido_at?: string | null;
+}
+
 interface UserProfile {
   nombre: string;
   rol: string;
@@ -81,6 +91,10 @@ const [currentEventIndex, setCurrentEventIndex] = useState(0);
   // Pending requests state
   const [pendingRequests, setPendingRequests] = useState<PendingRequest[]>([]);
   const [loadingRequests, setLoadingRequests] = useState(true);
+
+  // My PQRSF state
+  const [myPqrsf, setMyPqrsf] = useState<MyPqrsf[]>([]);
+  const [loadingMyPqrsf, setLoadingMyPqrsf] = useState(true);
 
   // Profile state
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -236,6 +250,31 @@ const getEventStatus = (event: CalendarEvent) => {
     }
 
     fetchRequests();
+  }, [sessionStatus]);
+
+  // Fetch user's PQRSF history
+  useEffect(() => {
+    if (sessionStatus !== 'authenticated') return;
+    let mounted = true;
+
+    async function fetchMyPqrsf() {
+      setLoadingMyPqrsf(true);
+      try {
+        const res = await fetch('/api/pqrsf?limit=100');
+        if (!mounted) return;
+        if (res.ok) {
+          const data = await res.json();
+          setMyPqrsf(Array.isArray(data) ? data : []);
+        }
+      } catch {
+        if (mounted) setMyPqrsf([]);
+      } finally {
+        if (mounted) setLoadingMyPqrsf(false);
+      }
+    }
+
+    fetchMyPqrsf();
+    return () => { mounted = false; };
   }, [sessionStatus]);
 
 // Normaliza una fecha de cumpleaños al próximo cumpleaños válido
@@ -1230,6 +1269,93 @@ useEffect(() => {
                     </div>
                   );
                 })()}
+
+                {/* Mis PQRSF */}
+                <div className="bg-white rounded-2xl shadow-sm p-6 border border-gray-100 hover:shadow-md transition-shadow duration-300 relative overflow-hidden">
+                  <div className="absolute top-0 left-0 w-1 h-full bg-amber-500" />
+                  <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-lg font-bold text-gray-900 flex items-center">
+                      <MessageSquare className="h-5 w-5 mr-2 text-amber-500" />
+                      Mis PQRSF
+                    </h2>
+                    <a
+                      href="/dashboard/pqrsf"
+                      className="text-xs font-semibold text-amber-600 hover:text-amber-800"
+                    >
+                      Nueva PQRSF →
+                    </a>
+                  </div>
+
+                  <div className="space-y-3">
+                    {loadingMyPqrsf ? (
+                      [1, 2].map(i => (
+                        <div key={i} className="h-14 rounded-xl bg-gray-100 animate-pulse" />
+                      ))
+                    ) : myPqrsf.length === 0 ? (
+                      <p className="text-sm text-gray-500 text-center py-6">
+                        Aún no has enviado ninguna PQRSF.
+                      </p>
+                    ) : (
+                      myPqrsf.slice(0, 5).map(p => {
+                        const dt = new Date(p.created_at);
+                        const hasResponse = !!p.respuesta;
+                        const accentClass = hasResponse ? 'border-l-emerald-500' : 'border-l-amber-500';
+                        const typeColors: Record<string, string> = {
+                          'Pregunta': 'bg-blue-100 text-blue-700',
+                          'Queja': 'bg-red-100 text-red-700',
+                          'Reclamo': 'bg-orange-100 text-orange-700',
+                          'Sugerencia': 'bg-green-100 text-green-700',
+                          'Felicitación': 'bg-purple-100 text-purple-700',
+                        };
+                        return (
+                          <div
+                            key={p._id}
+                            className={`border border-gray-100 border-l-4 ${accentClass} rounded-xl p-4 hover:shadow-sm transition-all`}
+                          >
+                            <div className="flex justify-between items-start gap-2 mb-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${typeColors[p.type] || 'bg-gray-100 text-gray-700'}`}>
+                                  {p.type}
+                                </span>
+                                {p.is_anonymous && (
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-200">
+                                    Anónimo
+                                  </span>
+                                )}
+                                {hasResponse ? (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-700 border border-emerald-200">
+                                    <CheckCircle className="h-3 w-3" />
+                                    Respondido
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gray-100 text-gray-600 border border-gray-200">
+                                    <Clock className="h-3 w-3" />
+                                    En espera
+                                  </span>
+                                )}
+                              </div>
+                              <span className="text-[10px] text-gray-400 flex-shrink-0">
+                                {dt.toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })}
+                              </span>
+                            </div>
+                            <p className="text-sm text-gray-700 mt-2 line-clamp-2">{p.message}</p>
+                            {hasResponse && p.respuesta && (
+                              <div className="mt-3 p-3 bg-emerald-50 rounded-lg border border-emerald-100">
+                                <div className="flex items-center gap-1.5 mb-1">
+                                  <CheckCircle className="h-3 w-3 text-emerald-600" />
+                                  <span className="text-[10px] font-semibold text-emerald-800 uppercase tracking-wider">
+                                    Respuesta
+                                  </span>
+                                </div>
+                                <p className="text-xs text-gray-800 line-clamp-3">{p.respuesta}</p>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
 
                 {/* Salario emocional section */}
             </div>
