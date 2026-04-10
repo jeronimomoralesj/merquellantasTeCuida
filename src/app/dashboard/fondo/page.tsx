@@ -23,6 +23,7 @@ import {
   Landmark,
 } from "lucide-react";
 import DashboardNavbar from "../navbar";
+import FondoUserView from "./user-view";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -165,17 +166,17 @@ export default function FondoPage() {
     );
   }
 
-  if (!session || session.user.rol !== "fondo") {
+  if (!session) {
+    return null;
+  }
+
+  // Non-fondo users see their own fondo data (read-only user view)
+  if (session.user.rol !== "fondo") {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center p-8">
-          <ShieldAlert className="h-16 w-16 text-red-400 mx-auto mb-4" />
-          <h1 className="text-2xl font-bold text-gray-800 mb-2">
-            Acceso denegado
-          </h1>
-          <p className="text-gray-600">
-            No tienes permisos para acceder al panel del fondo.
-          </p>
+      <div className="min-h-screen bg-gray-50">
+        <DashboardNavbar activePage="fondo" />
+        <div className="pt-20">
+          <FondoUserView />
         </div>
       </div>
     );

@@ -532,7 +532,14 @@ useEffect(() => {
         )}
 
         {/* Fondo manager view — redirect to fondo panel */}
-        {userRole === "fondo" && adminView && (() => { router.push('/dashboard/fondo'); return null; })()}
+        {userRole === "fondo" && adminView && (
+          <main className="pt-20 sm:pt-24 text-center">
+            <a href="/dashboard/fondo" className="inline-flex items-center gap-2 px-6 py-3 bg-[#ff9900] text-black font-bold rounded-xl hover:bg-[#ffae33] transition">
+              <LayoutDashboard className="h-5 w-5" />
+              Ir al Panel del Fondo
+            </a>
+          </main>
+        )}
 
         {/* Main user content (hidden when admin/fondo is in panel view) */}
         {!((userRole === "admin" || userRole === "fondo") && adminView) && (
