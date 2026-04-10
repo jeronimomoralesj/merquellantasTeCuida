@@ -227,7 +227,7 @@ export default function FondoUserView() {
   const { saldos, retiro, interest_alert, aportes, actividad, cartera } = data;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 text-gray-900">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

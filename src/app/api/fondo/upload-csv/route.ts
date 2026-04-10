@@ -184,15 +184,25 @@ export async function POST(req: NextRequest) {
       const division = divisionIdx !== -1 ? cols[divisionIdx]?.trim() : '';
       const pagaduria = pagaduriaIdx !== -1 ? cols[pagaduriaIdx]?.trim() : '';
 
-      // Parse fecha_afiliacion
+      // Parse fecha_afiliacion (handles "26/01/2022 11:51:45 a. m." and "10/9/24" formats)
       let fechaAfiliacion: Date | null = null;
       if (fechaAfilIdx !== -1 && cols[fechaAfilIdx]) {
-        const datePart = cols[fechaAfilIdx].split(' ')[0]; // strip time
-        // Try DD/MM/YYYY first (Colombian format), then ISO
-        const ddmmyyyy = datePart.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-        if (ddmmyyyy) {
-          fechaAfiliacion = new Date(parseInt(ddmmyyyy[3]), parseInt(ddmmyyyy[2]) - 1, parseInt(ddmmyyyy[1]));
+        const raw = cols[fechaAfilIdx].trim();
+        // Take just the date part — anything before the first space
+        const datePart = raw.split(/\s+/)[0];
+
+        // Match DD/MM/YYYY or DD/MM/YY or D/M/YY etc.
+        const m = datePart.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+        if (m) {
+          const day = parseInt(m[1], 10);
+          const month = parseInt(m[2], 10);
+          let year = parseInt(m[3], 10);
+          // 2-digit year: assume 2000s if <50, 1900s if >=50
+          if (year < 100) year += year < 50 ? 2000 : 1900;
+          const d = new Date(year, month - 1, day);
+          if (!isNaN(d.getTime())) fechaAfiliacion = d;
         } else {
+          // Fallback: try direct parse
           const d = new Date(datePart);
           if (!isNaN(d.getTime())) fechaAfiliacion = d;
         }
@@ -252,6 +262,27 @@ export async function POST(req: NextRequest) {
           created_at: new Date(),
         });
         creados++;
+      }
+
+      // Replace any previous "Saldo inicial CSV" aporte for this user, then insert the new one
+      // so Estado de Cuenta always shows the current accumulated balance.
+      await db.collection('fondo_aportes').deleteMany({ user_id: userId, tipo: 'saldo_inicial' });
+
+      if (acumulado > 0) {
+        await db.collection('fondo_aportes').insertOne({
+          user_id: userId,
+          periodo: fechaAfiliacion
+            ? `${fechaAfiliacion.getFullYear()}-${String(fechaAfiliacion.getMonth() + 1).padStart(2, '0')}`
+            : new Date().toISOString().slice(0, 7),
+          monto_total: acumulado,
+          monto_permanente: permanente,
+          monto_social: social,
+          frecuencia: 'historico',
+          tipo: 'saldo_inicial',
+          fecha_ejecucion: fechaAfiliacion || new Date(),
+          descripcion: 'Saldo inicial cargado desde CSV',
+          created_at: new Date(),
+        });
       }
     }
 

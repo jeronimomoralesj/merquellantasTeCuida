@@ -178,9 +178,9 @@ export default function FondoPage() {
   // Non-fondo users see their own fondo data (read-only user view)
   if (session.user.rol !== "fondo") {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-gray-50 text-gray-900">
         <DashboardNavbar activePage="fondo" />
-        <div className="pt-20">
+        <div className="pt-20 text-gray-900">
           <FondoUserView />
         </div>
       </div>
@@ -188,11 +188,11 @@ export default function FondoPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 text-gray-900">
       <DashboardNavbar activePage="fondo" />
 
-      <div className="pt-20 px-4 sm:px-6 lg:px-8 pb-12">
-        <div className="max-w-7xl mx-auto">
+      <div className="pt-20 px-4 sm:px-6 lg:px-8 pb-12 text-gray-900">
+        <div className="max-w-7xl mx-auto text-gray-900">
           {/* HERO */}
           <section className="relative mb-8 overflow-hidden rounded-3xl bg-black text-white shadow-xl">
             <div
