@@ -16,7 +16,7 @@ export async function GET() {
 // POST /api/documentos — create document record (admin)
 export async function POST(req: NextRequest) {
   const session = await auth();
-  if (!session || session.user.rol !== 'admin') {
+  if (!session || (session.user.rol !== 'admin' && session.user.rol !== 'fondo')) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
   }
 
@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
 // DELETE /api/documentos — delete document (admin)
 export async function DELETE(req: NextRequest) {
   const session = await auth();
-  if (!session || session.user.rol !== 'admin') {
+  if (!session || (session.user.rol !== 'admin' && session.user.rol !== 'fondo')) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
   }
 

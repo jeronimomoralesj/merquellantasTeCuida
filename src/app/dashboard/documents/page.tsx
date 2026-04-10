@@ -204,7 +204,7 @@ export default function DocumentsPage() {
     }
   };
 
-  const isAdmin = userRole === "admin";
+  const canManage = userRole === "admin" || userRole === "fondo";
 
   return (
     <div className="min-h-screen bg-white">
@@ -221,7 +221,7 @@ export default function DocumentsPage() {
           </div>
 
           {/* Admin Section */}
-          {isAdmin && (
+          {canManage && (
             <div className="bg-gradient-to-r from-[#ff9900] to-[#e68a00] rounded-xl shadow-xl p-6 mb-6">
               <div className="flex items-center justify-between">
                 <div>
@@ -311,7 +311,7 @@ export default function DocumentsPage() {
                           </span>
                         </div>
                       </div>
-                      {isAdmin && (
+                      {canManage && (
                         <button
                           onClick={() => handleDelete(doc)}
                           className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
