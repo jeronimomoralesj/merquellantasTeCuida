@@ -26,7 +26,7 @@ interface UserExtra {
   'Tipo de Documento': string;
   'posicion': string;
   'fechaNacimiento': string;
-  'rol': 'user' | 'admin';
+  'rol': 'user' | 'admin' | 'fondo';
 }
 
 interface User {
@@ -238,7 +238,7 @@ const Users: React.FC = () => {
           'Tipo de Documento': data.tipo_documento || '',
           'posicion': data.posicion || '',
           'fechaNacimiento': birthday,
-          'rol': (data.rol as 'user' | 'admin') || 'user',
+          'rol': (data.rol as 'user' | 'admin' | 'fondo') || 'user',
         };
 
         return {
@@ -562,12 +562,13 @@ const Users: React.FC = () => {
                   <select
   value={formData.extra.rol}
   onChange={e =>
-    handleInputChange('rol', e.target.value as 'user' | 'admin')
+    handleInputChange('rol', e.target.value as 'user' | 'admin' | 'fondo')
   }
   className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
 >
                     <option value="user">Usuario</option>
                     <option value="admin">Administrador</option>
+                    <option value="fondo">Fondo</option>
                   </select>
                 </div>
               </div>
@@ -707,7 +708,8 @@ const Users: React.FC = () => {
                 ) : (
                   filteredUsers.map(user => {
                     const age = calculateAge(user.extra?.['fechaNacimiento']);
-                    const isAdmin = user.extra?.rol === 'admin';
+                    const userRol = user.extra?.rol || 'user';
+                    const isSpecialRole = userRol === 'admin' || userRol === 'fondo';
                     const initials = (user.nombre || 'U U')
                       .split(' ')
                       .map(p => p[0])
@@ -715,20 +717,24 @@ const Users: React.FC = () => {
                       .slice(0, 2)
                       .join('')
                       .toUpperCase();
+                    const rolBadge: Record<string, { bg: string; label: string }> = {
+                      admin: { bg: 'bg-black text-[#ff9900]', label: 'Admin' },
+                      fondo: { bg: 'bg-emerald-700 text-white', label: 'Fondo' },
+                    };
                     return (
                       <tr key={user.id} className="hover:bg-[#ff9900]/5 transition-colors">
                         <td className="px-5 py-4">
                           <div className="flex items-center gap-3">
                             <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xs font-bold flex-shrink-0 ${
-                              isAdmin ? 'bg-black text-[#ff9900]' : 'bg-[#ff9900]/10 text-[#ff9900]'
+                              isSpecialRole ? (userRol === 'admin' ? 'bg-black text-[#ff9900]' : 'bg-emerald-700 text-white') : 'bg-[#ff9900]/10 text-[#ff9900]'
                             }`}>
                               {initials}
                             </div>
                             <div className="min-w-0">
                               <div className="flex items-center gap-1.5">
                                 <p className="text-sm font-bold text-gray-900 truncate">{user.nombre || 'Sin nombre'}</p>
-                                {isAdmin && (
-                                  <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-black text-[#ff9900] uppercase">Admin</span>
+                                {isSpecialRole && rolBadge[userRol] && (
+                                  <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${rolBadge[userRol].bg}`}>{rolBadge[userRol].label}</span>
                                 )}
                               </div>
                               <p className="text-xs text-gray-500">CC {user.cedula}</p>
