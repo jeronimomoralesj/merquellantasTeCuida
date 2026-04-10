@@ -459,16 +459,23 @@ function CicloActualTab() {
     return (row.aporte || 0) + (row.actividad || 0) + creditTotal;
   };
 
+  // In ajustes_admin mode, only show users who actually have budget adjustments
+  const isAjustesMode = existingCiclo?.estado === "ajustes_admin";
+  const visibleRows = useMemo(() => {
+    if (!isAjustesMode) return rows;
+    return rows.filter((r) => budgetMap[r.user_id] !== undefined);
+  }, [rows, isAjustesMode, budgetMap]);
+
   const filtered = useMemo(
     () => {
       const q = filter.toLowerCase().trim();
-      if (!q) return rows;
-      return rows.filter((r) =>
+      if (!q) return visibleRows;
+      return visibleRows.filter((r) =>
         r.nombre.toLowerCase().includes(q) ||
         (r.cedula || "").toLowerCase().includes(q)
       );
     },
-    [rows, filter]
+    [visibleRows, filter]
   );
 
   const handleSubmit = async () => {
@@ -492,9 +499,10 @@ function CicloActualTab() {
         throw new Error(body.error || "Error al enviar el ciclo");
       }
       setSuccess(true);
-      // Mark cycle as existing now
+      // Mark cycle as existing now — if we were in ajustes_admin mode this is now aprobado
       const data = await res.json();
-      setExistingCiclo({ ...existingCiclo, _id: data.id, estado: "enviado_admin", periodo, movimientos: rows, created_at: new Date().toISOString() });
+      const newEstado = isAjustesMode ? "aprobado" : "enviado_admin";
+      setExistingCiclo({ ...existingCiclo, _id: data.id, estado: newEstado, periodo, movimientos: rows, created_at: new Date().toISOString() });
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Error desconocido");
     } finally {
@@ -537,8 +545,6 @@ function CicloActualTab() {
       </div>
     );
   }
-
-  const isAjustesMode = existingCiclo?.estado === "ajustes_admin";
 
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
@@ -585,15 +591,15 @@ function CicloActualTab() {
             ) : (
               <Send size={16} />
             )}
-            {isAjustesMode ? "Reenviar al administrador" : "Aprobar y Enviar"}
+            {isAjustesMode ? "Aprobar y aplicar" : "Aprobar y Enviar"}
           </button>
         </div>
       </div>
 
       {isAjustesMode && (
         <div className="mx-5 mt-4 p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-sm">
-          <p className="font-semibold mb-1">El administrador ajustó los presupuestos.</p>
-          <p className="text-xs">Los presupuestos máximos por usuario aparecen en la columna &quot;Presupuesto admin&quot;. Redistribuye el dinero entre las categorías sin sobrepasar el presupuesto y reenvía.</p>
+          <p className="font-semibold mb-1">El administrador ajustó los presupuestos de estos usuarios.</p>
+          <p className="text-xs">Solo se muestran los usuarios cuyo presupuesto cambió. Redistribuye el dinero entre las categorías sin sobrepasar el presupuesto. Al aprobar, los movimientos se aplicarán inmediatamente sin pasar por el administrador.</p>
         </div>
       )}
 
@@ -605,7 +611,7 @@ function CicloActualTab() {
       )}
       {success && (
         <div className="mx-5 mt-4 p-3 rounded-xl bg-green-50 border border-green-200 text-green-700 text-sm flex items-center gap-2">
-          <Check size={16} /> Ciclo enviado exitosamente al administrador.
+          <Check size={16} /> {isAjustesMode ? "Ciclo aprobado y aplicado correctamente." : "Ciclo enviado exitosamente al administrador."}
         </div>
       )}
 
