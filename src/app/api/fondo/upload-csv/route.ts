@@ -195,7 +195,7 @@ export async function POST(req: NextRequest) {
           user_id: userId,
           fecha_afiliacion: new Date(),
           activo: true,
-          frecuencia: 'mensual',
+          frecuencia: 'quincenal',
           monto_aporte: 0,
           saldo_permanente: permanente,
           saldo_social: social,
