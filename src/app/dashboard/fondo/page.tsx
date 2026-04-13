@@ -2047,6 +2047,8 @@ function SolicitudesTab() {
   const [manualUser, setManualUser] = useState<UserLite | null>(null);
   const [manualValor, setManualValor] = useState("");
   const [manualCuotas, setManualCuotas] = useState("12");
+  const [manualFrecuencia, setManualFrecuencia] = useState<"mensual" | "quincenal">("mensual");
+  const [manualExtraPago, setManualExtraPago] = useState("");
   const [manualCreating, setManualCreating] = useState(false);
 
   const loadAll = useCallback(async () => {
@@ -2163,6 +2165,7 @@ function SolicitudesTab() {
           user_id: manualUser._id,
           valor_prestamo: Number(manualValor),
           numero_cuotas: Number(manualCuotas),
+          frecuencia_pago: manualFrecuencia,
         }),
       });
       if (res.ok) {
@@ -2247,45 +2250,173 @@ function SolicitudesTab() {
                 <button onClick={() => setManualUser(null)} className="text-xs text-gray-500 hover:text-gray-700">Cambiar</button>
               </div>
             )}
-            {manualUser && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Valor del préstamo</label>
-                  <input
-                    type="number"
-                    min={1}
-                    value={manualValor}
-                    onChange={(e) => setManualValor(e.target.value)}
-                    className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff9900]/40 focus:border-[#ff9900]"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Número de cuotas</label>
-                  <select
-                    value={manualCuotas}
-                    onChange={(e) => setManualCuotas(e.target.value)}
-                    className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#ff9900]/40 focus:border-[#ff9900]"
+            {manualUser && (() => {
+              const valor = Number(manualValor) || 0;
+              const cuotas = Math.max(1, Math.min(120, Number(manualCuotas) || 0));
+              const cuotasComoMeses = manualFrecuencia === "quincenal" ? cuotas / 2 : cuotas;
+              const tasa = cuotasComoMeses <= 12 ? 1.0 : cuotasComoMeses <= 24 ? 1.2 : 1.3;
+              const tasaPorPeriodo = (manualFrecuencia === "quincenal" ? tasa / 2 : tasa) / 100;
+              const showSchedule = valor > 0 && cuotas > 0;
+
+              // Standard amortization
+              const cuotaFija = showSchedule
+                ? tasaPorPeriodo === 0
+                  ? valor / cuotas
+                  : valor * (tasaPorPeriodo * Math.pow(1 + tasaPorPeriodo, cuotas)) / (Math.pow(1 + tasaPorPeriodo, cuotas) - 1)
+                : 0;
+
+              const extraPago = Number(manualExtraPago) || 0;
+              const pagoReal = Math.max(cuotaFija, cuotaFija + extraPago);
+
+              // Build schedule with optional extra payment
+              type SchedRow = { num: number; saldoInicial: number; cuota: number; interes: number; capital: number; saldoFinal: number };
+              const schedule: SchedRow[] = [];
+              if (showSchedule) {
+                let balance = valor;
+                for (let i = 0; i < cuotas && balance > 0; i++) {
+                  const interes = Math.round(balance * tasaPorPeriodo * 100) / 100;
+                  let pago = Math.round(pagoReal * 100) / 100;
+                  let capital = pago - interes;
+                  if (capital > balance || i === cuotas - 1) {
+                    capital = Math.round(balance * 100) / 100;
+                    pago = capital + interes;
+                  }
+                  const saldoFinal = Math.max(0, Math.round((balance - capital) * 100) / 100);
+                  schedule.push({ num: i + 1, saldoInicial: Math.round(balance * 100) / 100, cuota: pago, interes, capital, saldoFinal });
+                  balance = saldoFinal;
+                }
+              }
+
+              const totalInteres = schedule.reduce((s, r) => s + r.interes, 0);
+              const totalAPagar = schedule.reduce((s, r) => s + r.cuota, 0);
+
+              return (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Valor del préstamo (COP)</label>
+                      <input
+                        type="number"
+                        min={1}
+                        value={manualValor}
+                        onChange={(e) => setManualValor(e.target.value)}
+                        className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff9900]/40 focus:border-[#ff9900]"
+                        placeholder="Ej: 5000000"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Número de cuotas (1-120)</label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={120}
+                        value={manualCuotas}
+                        onChange={(e) => setManualCuotas(e.target.value)}
+                        className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff9900]/40 focus:border-[#ff9900]"
+                        placeholder="Ej: 12"
+                      />
+                      <p className="text-[9px] text-gray-500 mt-0.5">
+                        ≤12m: 1% · ≤24m: 1.2% · &gt;24m: 1.3%
+                      </p>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Frecuencia de pago</label>
+                      <select
+                        value={manualFrecuencia}
+                        onChange={(e) => setManualFrecuencia(e.target.value as "mensual" | "quincenal")}
+                        className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#ff9900]/40 focus:border-[#ff9900]"
+                      >
+                        <option value="mensual">Mensual (30 días)</option>
+                        <option value="quincenal">Quincenal (15 días)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Summary + extra payment */}
+                  {showSchedule && (
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 p-4 rounded-xl bg-orange-50 border border-orange-100">
+                      <div>
+                        <p className="text-[10px] font-semibold text-orange-700 uppercase">Tasa</p>
+                        <p className="text-sm font-bold text-gray-900">{tasa}% mensual</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-semibold text-orange-700 uppercase">Cuota fija</p>
+                        <p className="text-sm font-bold text-gray-900">{fmt(Math.round(cuotaFija))}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-semibold text-orange-700 uppercase">Total intereses</p>
+                        <p className="text-sm font-bold text-gray-900">{fmt(Math.round(totalInteres))}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-semibold text-orange-700 uppercase">Total a pagar</p>
+                        <p className="text-sm font-bold text-gray-900">{fmt(Math.round(totalAPagar))}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-semibold text-orange-700 uppercase">Cuotas reales</p>
+                        <p className="text-sm font-bold text-gray-900">{schedule.length}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {showSchedule && (
+                    <div>
+                      <div className="flex items-end gap-3 mb-2">
+                        <div className="flex-1">
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Pago extra por cuota (opcional)</label>
+                          <input
+                            type="number"
+                            min={0}
+                            value={manualExtraPago}
+                            onChange={(e) => setManualExtraPago(e.target.value)}
+                            className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff9900]/40 focus:border-[#ff9900]"
+                            placeholder="0"
+                          />
+                        </div>
+                        {extraPago > 0 && (
+                          <div className="pb-1 text-xs text-emerald-700 font-semibold">
+                            Pago real: {fmt(Math.round(pagoReal))} · Terminas en {schedule.length} cuotas en vez de {cuotas}
+                          </div>
+                        )}
+                      </div>
+                      <div className="border border-gray-200 rounded-xl overflow-hidden max-h-64 overflow-y-auto">
+                        <table className="w-full text-xs">
+                          <thead className="bg-gray-50 sticky top-0">
+                            <tr className="text-left text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
+                              <th className="px-3 py-2">#</th>
+                              <th className="px-3 py-2 text-right">Saldo inicial</th>
+                              <th className="px-3 py-2 text-right">Cuota</th>
+                              <th className="px-3 py-2 text-right">Interés</th>
+                              <th className="px-3 py-2 text-right">Capital</th>
+                              <th className="px-3 py-2 text-right">Saldo final</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100">
+                            {schedule.map((row) => (
+                              <tr key={row.num} className="hover:bg-gray-50">
+                                <td className="px-3 py-1.5 font-medium text-gray-700">{row.num}</td>
+                                <td className="px-3 py-1.5 text-right font-mono text-gray-600">{fmt(row.saldoInicial)}</td>
+                                <td className="px-3 py-1.5 text-right font-mono font-semibold text-gray-900">{fmt(row.cuota)}</td>
+                                <td className="px-3 py-1.5 text-right font-mono text-gray-700">{fmt(row.interes)}</td>
+                                <td className="px-3 py-1.5 text-right font-mono text-gray-700">{fmt(row.capital)}</td>
+                                <td className="px-3 py-1.5 text-right font-mono text-gray-500">{fmt(row.saldoFinal)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  <button
+                    onClick={createManualCredito}
+                    disabled={manualCreating || !manualValor}
+                    className="w-full px-4 py-2.5 rounded-xl bg-emerald-600 text-white font-bold hover:bg-emerald-700 disabled:opacity-50"
                   >
-                    <option value="6">6 (1%)</option>
-                    <option value="12">12 (1%)</option>
-                    <option value="18">18 (1.2%)</option>
-                    <option value="24">24 (1.2%)</option>
-                    <option value="36">36 (1.3%)</option>
-                    <option value="48">48 (1.3%)</option>
-                    <option value="60">60 (1.3%)</option>
-                  </select>
-                </div>
-              </div>
-            )}
-            {manualUser && (
-              <button
-                onClick={createManualCredito}
-                disabled={manualCreating || !manualValor}
-                className="w-full px-4 py-2.5 rounded-xl bg-emerald-600 text-white font-bold hover:bg-emerald-700 disabled:opacity-50"
-              >
-                {manualCreating ? "Creando..." : "Crear crédito"}
-              </button>
-            )}
+                    {manualCreating ? "Creando..." : "Crear crédito"}
+                  </button>
+                </>
+              );
+            })()}
           </div>
         )}
       </div>
