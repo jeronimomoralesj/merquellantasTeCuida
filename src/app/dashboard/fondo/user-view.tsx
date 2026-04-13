@@ -148,9 +148,9 @@ function FondoIncentiveLanding() {
       desc: "Accede a creditos desde el 1% mensual, mucho mas bajo que cualquier banco o tarjeta de credito.",
     },
     {
-      icon: Shield,
-      title: "Tu plata, siempre disponible",
-      desc: "Puedes solicitar retiros de tu ahorro cuando lo necesites. Tu dinero no queda atrapado.",
+      icon: Users,
+      title: "Una comunidad que crece",
+      desc: "Mas de 66 companeros ya hacen parte del fondo. Entre mas somos, mas beneficios podemos ofrecer.",
     },
     {
       icon: TrendingUp,
@@ -191,36 +191,15 @@ function FondoIncentiveLanding() {
         </div>
       </div>
 
-      {/* Live stats */}
+      {/* Live stat */}
       {stats && stats.total_afiliados > 0 && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div className="bg-white rounded-2xl border border-gray-100 p-4 text-center shadow-sm">
-            <div className="w-9 h-9 rounded-full bg-orange-100 flex items-center justify-center mx-auto mb-2">
-              <Users className="w-4.5 h-4.5 text-[#ff9900]" />
-            </div>
-            <p className="text-xl font-extrabold text-gray-900">{stats.total_afiliados}+</p>
-            <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Afiliados activos</p>
+        <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm flex items-center gap-4">
+          <div className="w-12 h-12 rounded-full bg-orange-100 flex items-center justify-center flex-shrink-0">
+            <Users className="w-6 h-6 text-[#ff9900]" />
           </div>
-          <div className="bg-white rounded-2xl border border-gray-100 p-4 text-center shadow-sm">
-            <div className="w-9 h-9 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-2">
-              <PiggyBank className="w-4.5 h-4.5 text-emerald-600" />
-            </div>
-            <p className="text-xl font-extrabold text-gray-900">{fmt(stats.promedio_ahorro)}</p>
-            <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Ahorro promedio</p>
-          </div>
-          <div className="bg-white rounded-2xl border border-gray-100 p-4 text-center shadow-sm">
-            <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center mx-auto mb-2">
-              <Wallet className="w-4.5 h-4.5 text-blue-600" />
-            </div>
-            <p className="text-xl font-extrabold text-gray-900">{fmt(stats.total_ahorrado)}</p>
-            <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Total ahorrado</p>
-          </div>
-          <div className="bg-white rounded-2xl border border-gray-100 p-4 text-center shadow-sm">
-            <div className="w-9 h-9 rounded-full bg-purple-100 flex items-center justify-center mx-auto mb-2">
-              <CreditCard className="w-4.5 h-4.5 text-purple-600" />
-            </div>
-            <p className="text-xl font-extrabold text-gray-900">{stats.creditos_activos}</p>
-            <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Creditos activos</p>
+          <div>
+            <p className="text-3xl font-extrabold text-gray-900">{stats.total_afiliados}+</p>
+            <p className="text-sm font-semibold text-gray-500">Afiliados activos en Merquellantas</p>
           </div>
         </div>
       )}
