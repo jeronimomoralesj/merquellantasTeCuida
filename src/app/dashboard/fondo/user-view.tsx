@@ -24,6 +24,10 @@ import {
   BarChart3,
   RefreshCw,
   X,
+  Users,
+  Shield,
+  Sparkles,
+  Target,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 
@@ -109,6 +113,192 @@ interface FondoData {
 }
 
 type TabKey = "estado" | "actividades" | "cartera";
+
+const fmt = (n: number) =>
+  new Intl.NumberFormat("es-CO", {
+    style: "currency",
+    currency: "COP",
+    minimumFractionDigits: 0,
+  }).format(n);
+
+function FondoIncentiveLanding() {
+  const [stats, setStats] = useState<{
+    total_afiliados: number;
+    promedio_ahorro: number;
+    total_ahorrado: number;
+    creditos_activos: number;
+  } | null>(null);
+
+  useEffect(() => {
+    fetch("/api/fondo/stats")
+      .then((r) => (r.ok ? r.json() : null))
+      .then(setStats)
+      .catch(() => {});
+  }, []);
+
+  const benefits = [
+    {
+      icon: PiggyBank,
+      title: "Ahorro programado",
+      desc: "Tu ahorro se descuenta automaticamente de tu nomina. Sin esfuerzo, tu plata crece cada quincena.",
+    },
+    {
+      icon: CreditCard,
+      title: "Creditos con tasas bajas",
+      desc: "Accede a creditos desde el 1% mensual, mucho mas bajo que cualquier banco o tarjeta de credito.",
+    },
+    {
+      icon: Shield,
+      title: "Tu plata, siempre disponible",
+      desc: "Puedes solicitar retiros de tu ahorro cuando lo necesites. Tu dinero no queda atrapado.",
+    },
+    {
+      icon: TrendingUp,
+      title: "Rendimientos anuales",
+      desc: "Cada noviembre recibes intereses sobre tu ahorro permanente. Tu plata trabaja por ti.",
+    },
+  ];
+
+  return (
+    <div className="max-w-3xl mx-auto py-8 px-4 space-y-6">
+      {/* Hero */}
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800 text-white p-8 sm:p-10">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 opacity-30"
+          style={{
+            backgroundImage:
+              "radial-gradient(circle at 20% 30%, #ff9900 0, transparent 50%), radial-gradient(circle at 80% 80%, #ff9900 0, transparent 40%)",
+          }}
+        />
+        <div className="relative">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="w-10 h-10 rounded-full bg-[#ff9900]/20 flex items-center justify-center">
+              <Landmark className="w-5 h-5 text-[#ff9900]" />
+            </div>
+            <span className="text-xs font-semibold uppercase tracking-wider text-[#ff9900]">
+              Fondo de Empleados
+            </span>
+          </div>
+          <h1 className="text-2xl sm:text-3xl font-extrabold leading-tight mb-3">
+            Tus companeros ya estan{" "}
+            <span className="text-[#ff9900]">ahorrando</span>
+          </h1>
+          <p className="text-sm sm:text-base text-white/70 max-w-lg">
+            El fondo de empleados de Merquellantas te ayuda a ahorrar sin pensarlo,
+            acceder a creditos con tasas muy bajas y tener un respaldo financiero real.
+          </p>
+        </div>
+      </div>
+
+      {/* Live stats */}
+      {stats && stats.total_afiliados > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="bg-white rounded-2xl border border-gray-100 p-4 text-center shadow-sm">
+            <div className="w-9 h-9 rounded-full bg-orange-100 flex items-center justify-center mx-auto mb-2">
+              <Users className="w-4.5 h-4.5 text-[#ff9900]" />
+            </div>
+            <p className="text-xl font-extrabold text-gray-900">{stats.total_afiliados}+</p>
+            <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Afiliados activos</p>
+          </div>
+          <div className="bg-white rounded-2xl border border-gray-100 p-4 text-center shadow-sm">
+            <div className="w-9 h-9 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-2">
+              <PiggyBank className="w-4.5 h-4.5 text-emerald-600" />
+            </div>
+            <p className="text-xl font-extrabold text-gray-900">{fmt(stats.promedio_ahorro)}</p>
+            <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Ahorro promedio</p>
+          </div>
+          <div className="bg-white rounded-2xl border border-gray-100 p-4 text-center shadow-sm">
+            <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center mx-auto mb-2">
+              <Wallet className="w-4.5 h-4.5 text-blue-600" />
+            </div>
+            <p className="text-xl font-extrabold text-gray-900">{fmt(stats.total_ahorrado)}</p>
+            <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Total ahorrado</p>
+          </div>
+          <div className="bg-white rounded-2xl border border-gray-100 p-4 text-center shadow-sm">
+            <div className="w-9 h-9 rounded-full bg-purple-100 flex items-center justify-center mx-auto mb-2">
+              <CreditCard className="w-4.5 h-4.5 text-purple-600" />
+            </div>
+            <p className="text-xl font-extrabold text-gray-900">{stats.creditos_activos}</p>
+            <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Creditos activos</p>
+          </div>
+        </div>
+      )}
+
+      {/* Social proof */}
+      <div className="bg-gradient-to-r from-orange-50 to-amber-50 rounded-2xl border border-orange-200 p-6">
+        <div className="flex items-start gap-3 mb-4">
+          <Sparkles className="w-5 h-5 text-[#ff9900] mt-0.5 flex-shrink-0" />
+          <div>
+            <p className="font-bold text-gray-900 text-sm mb-1">Historias reales de tus companeros</p>
+            <p className="text-xs text-gray-500">Casos anonimos de afiliados al fondo</p>
+          </div>
+        </div>
+        <div className="space-y-3">
+          <div className="bg-white/80 rounded-xl p-4 border border-orange-100">
+            <p className="text-sm text-gray-700 italic leading-relaxed">
+              &ldquo;Llevo 2 anos ahorrando en el fondo y ya tengo mas de $4 millones
+              ahorrados. Lo mejor es que ni lo siento porque se descuenta directo de la
+              nomina. Cuando necesite un prestamo para una emergencia, me lo aprobaron
+              en dias y la tasa fue mucho mas baja que la del banco.&rdquo;
+            </p>
+            <p className="text-[10px] text-gray-400 mt-2 font-semibold uppercase tracking-wider">
+              — Colaborador anonimo, area operativa
+            </p>
+          </div>
+          <div className="bg-white/80 rounded-xl p-4 border border-orange-100">
+            <p className="text-sm text-gray-700 italic leading-relaxed">
+              &ldquo;Pedi un credito para la matricula de mi hijo y me salio al 1% mensual.
+              En el banco me pedian casi el triple. El fondo me ha ayudado a planificar
+              mejor mis finanzas.&rdquo;
+            </p>
+            <p className="text-[10px] text-gray-400 mt-2 font-semibold uppercase tracking-wider">
+              — Colaborador anonimo, area administrativa
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Benefits grid */}
+      <div>
+        <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+          <Target className="w-5 h-5 text-[#ff9900]" />
+          Beneficios del fondo
+        </h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {benefits.map((b) => (
+            <div
+              key={b.title}
+              className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm hover:shadow-md hover:border-orange-200 transition-all"
+            >
+              <div className="w-10 h-10 rounded-xl bg-orange-50 flex items-center justify-center mb-3">
+                <b.icon className="w-5 h-5 text-[#ff9900]" />
+              </div>
+              <h3 className="font-bold text-gray-900 text-sm mb-1">{b.title}</h3>
+              <p className="text-xs text-gray-500 leading-relaxed">{b.desc}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* CTA */}
+      <div className="bg-white rounded-2xl border-2 border-dashed border-orange-300 p-8 text-center">
+        <div className="w-14 h-14 rounded-full bg-orange-100 flex items-center justify-center mx-auto mb-4">
+          <Landmark className="w-7 h-7 text-[#ff9900]" />
+        </div>
+        <h3 className="text-lg font-bold text-gray-900 mb-2">Quieres afiliarte?</h3>
+        <p className="text-sm text-gray-500 max-w-md mx-auto mb-4">
+          Comunicate con el area de bienestar o con el administrador del fondo.
+          La afiliacion es rapida y tu ahorro empieza desde la siguiente nomina.
+        </p>
+        <div className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#ff9900] text-white font-semibold text-sm shadow-md shadow-[#ff9900]/25">
+          <Sparkles className="w-4 h-4" />
+          Habla con Bienestar para afiliarte
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function FondoUserView() {
   const { data: session } = useSession();
@@ -233,21 +423,9 @@ export default function FondoUserView() {
     );
   }
 
-  // Not a fondo member
+  // Not a fondo member — show incentive landing page
   if (!data?.member) {
-    return (
-      <div className="max-w-2xl mx-auto py-12 px-4">
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-10 text-center">
-          <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
-            <PiggyBank className="w-8 h-8 text-gray-400" />
-          </div>
-          <h2 className="text-xl font-semibold text-gray-700 mb-2">No estas afiliado al fondo</h2>
-          <p className="text-sm text-gray-500 max-w-md mx-auto">
-            Actualmente no tienes una cuenta activa en el fondo de empleados. Si deseas afiliarte, comunicate con el area de bienestar.
-          </p>
-        </div>
-      </div>
-    );
+    return <FondoIncentiveLanding />;
   }
 
   const { saldos, retiro, interest_alert, aportes, actividad, cartera } = data;
