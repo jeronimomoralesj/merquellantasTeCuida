@@ -531,7 +531,7 @@ export default function FondoUserView() {
             className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-emerald-600 text-white font-bold hover:bg-emerald-700 transition shadow-lg shadow-emerald-200"
           >
             <ArrowDownCircle className="w-5 h-5" />
-            Solicitar Retiro (máx {formatCurrency(retiro.max_retiro_anual)})
+            Solicitar Retiro
           </button>
         )}
       </div>
@@ -1092,10 +1092,6 @@ export default function FondoUserView() {
               </button>
             </div>
             <div className="p-6 space-y-4">
-              <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800">
-                Llevas {retiro.anos_afiliacion} años afiliado. Puedes retirar hasta{" "}
-                <strong>{formatCurrency(retiro.max_retiro_anual)}</strong> este año.
-              </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Monto a retirar (COP)</label>
                 <input
