@@ -137,16 +137,22 @@ function parseCreditRows(text: string): ParsedCredit[] {
     let cuota_valor = 0, numero_cuotas = 0, tasa = 0, saldo = 0, valor_inicial = 0;
 
     // comma tokens in order: cuota_valor, tasa, saldo, valor_inicial
+    // But pdfjs may reorder columns, so after extracting we ensure valor_inicial >= saldo
     if (commaTokens.length >= 4) {
       cuota_valor = parseColNumber(commaTokens[0].raw);
       tasa = parseFloat(commaTokens[1].raw.replace(/\./g, '').replace(',', '.')) || 0;
-      saldo = parseColNumber(commaTokens[2].raw);
-      valor_inicial = parseColNumber(commaTokens[3].raw);
+      const lastTwo = [parseColNumber(commaTokens[2].raw), parseColNumber(commaTokens[3].raw)];
+      // valor_inicial is always >= saldo (original amount >= remaining balance)
+      valor_inicial = Math.max(...lastTwo);
+      saldo = Math.min(...lastTwo);
     } else if (commaTokens.length >= 2) {
       cuota_valor = parseColNumber(commaTokens[0].raw);
       tasa = parseFloat(commaTokens[1].raw.replace(/\./g, '').replace(',', '.')) || 0;
-      if (commaTokens.length >= 3) saldo = parseColNumber(commaTokens[2].raw);
-      if (commaTokens.length >= 4) valor_inicial = parseColNumber(commaTokens[3].raw);
+      if (commaTokens.length === 3) {
+        // Only one big number — could be saldo or valor_inicial
+        saldo = parseColNumber(commaTokens[2].raw);
+        valor_inicial = saldo;
+      }
     }
 
     // numero_cuotas: the integer that appears between cuota_valor and tasa positions
@@ -240,6 +246,19 @@ export async function POST(req: NextRequest) {
       const fechaTermina = cr.fecha_primera_cuota ? new Date(cr.fecha_primera_cuota) : new Date();
       fechaTermina.setDate(fechaTermina.getDate() + daysPerCuota * cr.numero_cuotas);
 
+      // Estimate cuotas_pagadas from fecha_primera_cuota to today
+      let cuotasPagadas = 0;
+      if (cr.fecha_primera_cuota) {
+        const now = new Date();
+        const diffMs = now.getTime() - cr.fecha_primera_cuota.getTime();
+        const diffDays = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
+        cuotasPagadas = Math.min(cr.numero_cuotas, Math.floor(diffDays / daysPerCuota));
+      }
+      const cuotasRestantes = Math.max(0, cr.numero_cuotas - cuotasPagadas);
+
+      // valor_prestamo = VR INICIAL; if 0, estimate from saldo
+      const valorPrestamo = cr.valor_inicial > 0 ? cr.valor_inicial : cr.saldo;
+
       // Check if credit_id already exists for this user
       const existing = await carteraCol.findOne({
         user_id: userId,
@@ -247,7 +266,6 @@ export async function POST(req: NextRequest) {
       });
 
       if (existing) {
-        // Update existing credit
         await carteraCol.updateOne(
           { _id: existing._id },
           {
@@ -257,8 +275,10 @@ export async function POST(req: NextRequest) {
               fecha_desembolso: cr.fecha_desembolso,
               fecha_cuota_1: cr.fecha_primera_cuota,
               fecha_termina: fechaTermina,
-              valor_prestamo: cr.valor_inicial,
+              valor_prestamo: valorPrestamo,
               numero_cuotas: cr.numero_cuotas,
+              cuotas_pagadas: cuotasPagadas,
+              cuotas_restantes: cuotasRestantes,
               saldo_capital: cr.saldo,
               saldo_total: cr.saldo,
               cuota_valor: cr.cuota_valor,
@@ -269,7 +289,6 @@ export async function POST(req: NextRequest) {
         updated++;
         processed.push({ credit_id: cr.credit_id, cedula: cr.cedula, name: cr.name, action: 'actualizado' });
       } else {
-        // Create new credit
         await carteraCol.insertOne({
           user_id: userId,
           credito_id: cr.credit_id,
@@ -279,10 +298,10 @@ export async function POST(req: NextRequest) {
           fecha_desembolso: cr.fecha_desembolso,
           fecha_cuota_1: cr.fecha_primera_cuota,
           fecha_termina: fechaTermina,
-          valor_prestamo: cr.valor_inicial,
+          valor_prestamo: valorPrestamo,
           numero_cuotas: cr.numero_cuotas,
-          cuotas_pagadas: 0,
-          cuotas_restantes: cr.numero_cuotas,
+          cuotas_pagadas: cuotasPagadas,
+          cuotas_restantes: cuotasRestantes,
           saldo_capital: cr.saldo,
           saldo_interes: 0,
           saldo_total: cr.saldo,
