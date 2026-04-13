@@ -276,7 +276,7 @@ export default function SolicitudesCard() {
 
         // Process cesantias
         const ces: RequestData[] = cesData.map((data) => ({
-          id: data.cedula ? (data as unknown as { id: string }).id : (data as unknown as { id: string }).id,
+          id: String((data as unknown as Record<string, unknown>)._id || (data as unknown as Record<string, unknown>).id || ''),
           title: "Solicitud de Cesantías",
           employee: data.nombre,
           date: data.created_at,
@@ -310,7 +310,7 @@ export default function SolicitudesCard() {
           }
 
           return {
-            id: (data as unknown as { id: string }).id,
+            id: String((data as unknown as Record<string, unknown>)._id || (data as unknown as Record<string, unknown>).id || ''),
             title: `Solicitud de ${typ}`,
             employee: data.nombre,
             date: data.created_at,
