@@ -110,6 +110,9 @@ const [currentEventIndex, setCurrentEventIndex] = useState(0);
 
 const [todayEventsCount, setTodayEventsCount] = useState(0);
 const [additionalTodayEvents, setAdditionalTodayEvents] = useState<CalendarEvent[]>([]);
+const [showTodayPopup, setShowTodayPopup] = useState(false);
+const [todayPopupEvents, setTodayPopupEvents] = useState<CalendarEvent[]>([]);
+const [popupAnimating, setPopupAnimating] = useState(false);
 
 // Helper function to add one day to a date
 const addOneDay = (date: Date) => {
@@ -371,6 +374,17 @@ useEffect(() => {
 
       setNextEvent(events.length > 0 ? events[0] : null);
       setUpcomingEvents(events);
+
+      // Show popup for today's events (once per session)
+      if (todayEvents.length > 0 && typeof window !== 'undefined') {
+        const key = `todayPopupShown_${new Date().toDateString()}`;
+        if (!sessionStorage.getItem(key)) {
+          sessionStorage.setItem(key, '1');
+          setTodayPopupEvents(todayEvents);
+          setShowTodayPopup(true);
+          setTimeout(() => setPopupAnimating(true), 50);
+        }
+      }
     } catch (error) {
       console.error('Error fetching next events:', error);
       setNextEvent(null);
@@ -544,6 +558,107 @@ useEffect(() => {
       <div className="min-h-screen bg-gray-50">
         <DashboardNavbar />
         <GeminiChat />
+
+        {/* Today's event popup */}
+        {showTodayPopup && todayPopupEvents.length > 0 && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <div
+              className={`relative bg-white rounded-3xl shadow-2xl max-w-lg w-full overflow-hidden transition-all duration-500 ${
+                popupAnimating ? 'opacity-100 scale-100 translate-y-0' : 'opacity-0 scale-90 translate-y-8'
+              }`}
+            >
+              {/* Close button */}
+              <button
+                onClick={() => { setPopupAnimating(false); setTimeout(() => setShowTodayPopup(false), 300); }}
+                className="absolute top-4 right-4 z-10 p-2 rounded-full bg-white/80 hover:bg-white shadow-md transition-all"
+              >
+                <X className="w-5 h-5 text-gray-600" />
+              </button>
+
+              {/* Merquito header */}
+              <div className="bg-gradient-to-r from-[#ff9900] to-[#ffb347] p-6 flex items-center gap-4">
+                <div className={`flex-shrink-0 transition-all duration-700 ${popupAnimating ? 'translate-x-0 opacity-100' : '-translate-x-12 opacity-0'}`}>
+                  <Image
+                    src="/merquito.jpeg"
+                    alt="Merquito"
+                    width={72}
+                    height={72}
+                    className="rounded-full border-4 border-white shadow-lg"
+                  />
+                </div>
+                <div className={`transition-all duration-700 delay-200 ${popupAnimating ? 'translate-x-0 opacity-100' : 'translate-x-8 opacity-0'}`}>
+                  <p className="text-white/80 text-sm font-medium">Merquito te recuerda</p>
+                  <h2 className="text-white text-xl font-extrabold">Hoy hay algo especial</h2>
+                </div>
+              </div>
+
+              {/* Events list */}
+              <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
+                {todayPopupEvents.map((evt, idx) => {
+                  const isBday = evt.type === 'cumpleaños' || evt.type === 'birthday' || evt.title.toLowerCase().includes('cumpleaños');
+                  return (
+                    <div
+                      key={idx}
+                      className={`rounded-2xl overflow-hidden border transition-all duration-500 ${
+                        popupAnimating ? 'translate-y-0 opacity-100' : 'translate-y-6 opacity-0'
+                      } ${isBday ? 'border-pink-200 bg-gradient-to-br from-pink-50 to-purple-50' : 'border-orange-200 bg-orange-50'}`}
+                      style={{ transitionDelay: `${300 + idx * 150}ms` }}
+                    >
+                      {/* Media */}
+                      {evt.videoUrl && evt.videoUrl.trim() !== '' ? (
+                        <div className="w-full h-48 bg-black">
+                          <video
+                            src={evt.videoUrl}
+                            controls
+                            playsInline
+                            preload="metadata"
+                            className="w-full h-full object-contain"
+                          />
+                        </div>
+                      ) : evt.image && (evt.image.startsWith('/api/') || evt.image.startsWith('http')) ? (
+                        <img
+                          src={evt.image}
+                          alt={evt.title}
+                          className="w-full h-48 object-cover"
+                        />
+                      ) : isBday ? (
+                        <div className="w-full h-32 bg-gradient-to-r from-pink-400 via-purple-400 to-blue-400 flex items-center justify-center">
+                          <span className="text-6xl">🎂</span>
+                        </div>
+                      ) : null}
+
+                      <div className="p-4">
+                        <div className="flex items-center gap-2 mb-2">
+                          {isBday ? (
+                            <span className="text-2xl">🎉</span>
+                          ) : (
+                            <Calendar className="w-5 h-5 text-[#ff9900]" />
+                          )}
+                          <h3 className={`font-bold text-lg ${isBday ? 'bg-gradient-to-r from-pink-600 to-purple-600 text-transparent bg-clip-text' : 'text-gray-900'}`}>
+                            {evt.title}
+                          </h3>
+                        </div>
+                        {evt.description && (
+                          <p className="text-sm text-gray-600 leading-relaxed">{evt.description}</p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Footer */}
+              <div className="px-6 pb-6">
+                <button
+                  onClick={() => { setPopupAnimating(false); setTimeout(() => setShowTodayPopup(false), 300); }}
+                  className="w-full py-3 rounded-xl bg-[#ff9900] text-white font-bold text-sm hover:bg-[#e68a00] transition-colors shadow-md"
+                >
+                  Entendido
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Floating view-switcher (admins and fondo) */}
         {(userRole === "admin" || userRole === "fondo") && (
