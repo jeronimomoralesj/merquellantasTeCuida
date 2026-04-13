@@ -61,9 +61,28 @@ export async function POST(req: NextRequest) {
   }
 
   const tasaMensual = getInterestRate(numCuotas, frecuenciaPago);
-  // For quincenal, half of monthly rate per period; for mensual, full rate per period
-  const tasaPorPeriodo = frecuenciaPago === 'quincenal' ? tasaMensual / 2 : tasaMensual;
-  const totalInteres = Math.round(valorPrestamo * (tasaPorPeriodo / 100) * numCuotas * 100) / 100;
+  const tasaPorPeriodo = (frecuenciaPago === 'quincenal' ? tasaMensual / 2 : tasaMensual) / 100;
+
+  // Standard amortization: payment = P * r(1+r)^n / ((1+r)^n - 1)
+  const cuotaFija = tasaPorPeriodo === 0
+    ? valorPrestamo / numCuotas
+    : valorPrestamo * (tasaPorPeriodo * Math.pow(1 + tasaPorPeriodo, numCuotas)) / (Math.pow(1 + tasaPorPeriodo, numCuotas) - 1);
+
+  // Compute total interest by walking the amortization schedule
+  let totalInteres = 0;
+  let balance = valorPrestamo;
+  for (let i = 0; i < numCuotas; i++) {
+    const interesPeriodo = Math.round(balance * tasaPorPeriodo * 100) / 100;
+    let pago = Math.round(cuotaFija * 100) / 100;
+    let capital = pago - interesPeriodo;
+    if (i === numCuotas - 1 || capital > balance) {
+      capital = Math.round(balance * 100) / 100;
+      pago = capital + interesPeriodo;
+    }
+    totalInteres += interesPeriodo;
+    balance = Math.max(0, Math.round((balance - capital) * 100) / 100);
+  }
+  totalInteres = Math.round(totalInteres * 100) / 100;
 
   const isFondo = session.user.rol === 'fondo';
   const targetUserId = isFondo && body.user_id ? body.user_id : session.user.id;

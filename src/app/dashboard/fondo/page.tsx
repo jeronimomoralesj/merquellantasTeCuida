@@ -1720,6 +1720,7 @@ interface PendingCredito {
   valor_prestamo: number;
   numero_cuotas: number;
   tasa_interes: number;
+  saldo_total: number;
   motivo_solicitud?: string | null;
   fecha_solicitud: string;
   estado: string;
@@ -2039,7 +2040,7 @@ function SolicitudesTab() {
                     <div>
                       <p className="text-xs text-gray-500">Total a pagar</p>
                       <p className="font-semibold text-gray-900">
-                        {fmt(c.valor_prestamo + (c.valor_prestamo * (c.tasa_interes / 100) * c.numero_cuotas))}
+                        {fmt(c.saldo_total)}
                       </p>
                     </div>
                   </div>

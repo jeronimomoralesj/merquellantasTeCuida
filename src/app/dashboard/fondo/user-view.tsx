@@ -685,37 +685,43 @@ export default function FondoUserView() {
       {showCreditoForm && (() => {
         const valor = Number(creditoValor) || 0;
         const cuotas = Math.max(1, Math.min(120, Number(creditoCuotas) || 0));
-        // Interest rate uses cuotas-as-months equivalent.
-        // For quincenal payments, divide cuotas by 2 to compare monthly term.
         const cuotasComoMeses = creditoFrecuencia === "quincenal" ? cuotas / 2 : cuotas;
         const tasa = cuotasComoMeses <= 12 ? 1.0 : cuotasComoMeses <= 24 ? 1.2 : 1.3;
-        // For quincenal, the monthly interest is split across 2 quincenal payments
-        const tasaPorPeriodo = creditoFrecuencia === "quincenal" ? tasa / 2 : tasa;
-        const interesPorCuota = Math.round(valor * (tasaPorPeriodo / 100) * 100) / 100;
-        const capitalPorCuota = cuotas > 0 ? Math.round((valor / cuotas) * 100) / 100 : 0;
-        const cuotaMensual = capitalPorCuota + interesPorCuota;
-        const totalInteres = interesPorCuota * cuotas;
-        const totalAPagar = valor + totalInteres;
+        const tasaPorPeriodo = (creditoFrecuencia === "quincenal" ? tasa / 2 : tasa) / 100;
         const showSchedule = valor > 0 && cuotas > 0;
 
-        // Build payment schedule (each row = one payment based on chosen frequency)
+        // Standard amortization: fixed payment = P * r(1+r)^n / ((1+r)^n - 1)
+        const cuotaFija = showSchedule
+          ? tasaPorPeriodo === 0
+            ? valor / cuotas
+            : valor * (tasaPorPeriodo * Math.pow(1 + tasaPorPeriodo, cuotas)) / (Math.pow(1 + tasaPorPeriodo, cuotas) - 1)
+          : 0;
+
+        // Build amortization schedule
         const today = new Date();
         const daysBetween = creditoFrecuencia === "quincenal" ? 15 : 30;
-        const schedule = showSchedule
-          ? Array.from({ length: cuotas }, (_, i) => {
-              const fecha = new Date(today);
-              fecha.setDate(fecha.getDate() + daysBetween * (i + 1));
-              const saldoRestante = Math.max(0, totalAPagar - cuotaMensual * (i + 1));
-              return {
-                num: i + 1,
-                fecha,
-                capital: capitalPorCuota,
-                interes: interesPorCuota,
-                cuota: cuotaMensual,
-                saldo: saldoRestante,
-              };
-            })
-          : [];
+        const schedule: { num: number; fecha: Date; saldoInicial: number; cuota: number; interes: number; capital: number; saldoFinal: number }[] = [];
+        if (showSchedule) {
+          let balance = valor;
+          for (let i = 0; i < cuotas; i++) {
+            const fecha = new Date(today);
+            fecha.setDate(fecha.getDate() + daysBetween * (i + 1));
+            const interes = Math.round(balance * tasaPorPeriodo * 100) / 100;
+            let pago = Math.round(cuotaFija * 100) / 100;
+            let capital = pago - interes;
+            // Final period: adjust so balance hits exactly 0
+            if (i === cuotas - 1 || capital > balance) {
+              capital = Math.round(balance * 100) / 100;
+              pago = capital + interes;
+            }
+            const saldoFinal = Math.max(0, Math.round((balance - capital) * 100) / 100);
+            schedule.push({ num: i + 1, fecha, saldoInicial: Math.round(balance * 100) / 100, cuota: pago, interes, capital, saldoFinal });
+            balance = saldoFinal;
+          }
+        }
+
+        const totalInteres = schedule.reduce((sum, r) => sum + r.interes, 0);
+        const totalAPagar = schedule.reduce((sum, r) => sum + r.cuota, 0);
 
         return (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
@@ -800,16 +806,16 @@ export default function FondoUserView() {
                     <p className="text-sm font-bold text-gray-900">{tasa}% mensual</p>
                   </div>
                   <div>
-                    <p className="text-[10px] font-semibold text-orange-700 uppercase">Cuota mensual</p>
-                    <p className="text-sm font-bold text-gray-900">{formatCurrency(cuotaMensual)}</p>
+                    <p className="text-[10px] font-semibold text-orange-700 uppercase">Cuota fija</p>
+                    <p className="text-sm font-bold text-gray-900">{formatCurrency(Math.round(cuotaFija * 100) / 100)}</p>
                   </div>
                   <div>
                     <p className="text-[10px] font-semibold text-orange-700 uppercase">Total intereses</p>
-                    <p className="text-sm font-bold text-gray-900">{formatCurrency(totalInteres)}</p>
+                    <p className="text-sm font-bold text-gray-900">{formatCurrency(Math.round(totalInteres * 100) / 100)}</p>
                   </div>
                   <div>
                     <p className="text-[10px] font-semibold text-orange-700 uppercase">Total a pagar</p>
-                    <p className="text-sm font-bold text-gray-900">{formatCurrency(totalAPagar)}</p>
+                    <p className="text-sm font-bold text-gray-900">{formatCurrency(Math.round(totalAPagar * 100) / 100)}</p>
                   </div>
                 </div>
               )}
@@ -823,22 +829,22 @@ export default function FondoUserView() {
                       <thead className="bg-gray-50 sticky top-0">
                         <tr className="text-left text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
                           <th className="px-3 py-2">#</th>
-                          <th className="px-3 py-2">Fecha aprox.</th>
-                          <th className="px-3 py-2 text-right">Capital</th>
+                          <th className="px-3 py-2 text-right">Saldo inicial</th>
+                          <th className="px-3 py-2 text-right">Cuota</th>
                           <th className="px-3 py-2 text-right">Interés</th>
-                          <th className="px-3 py-2 text-right">Cuota total</th>
-                          <th className="px-3 py-2 text-right">Saldo restante</th>
+                          <th className="px-3 py-2 text-right">Capital</th>
+                          <th className="px-3 py-2 text-right">Saldo final</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
                         {schedule.map((row) => (
                           <tr key={row.num} className="hover:bg-gray-50">
                             <td className="px-3 py-1.5 font-medium text-gray-700">{row.num}</td>
-                            <td className="px-3 py-1.5 text-gray-600">{row.fecha.toLocaleDateString("es-CO", { day: "numeric", month: "short", year: "numeric" })}</td>
-                            <td className="px-3 py-1.5 text-right font-mono text-gray-700">{formatCurrency(row.capital)}</td>
-                            <td className="px-3 py-1.5 text-right font-mono text-gray-700">{formatCurrency(row.interes)}</td>
+                            <td className="px-3 py-1.5 text-right font-mono text-gray-600">{formatCurrency(row.saldoInicial)}</td>
                             <td className="px-3 py-1.5 text-right font-mono font-semibold text-gray-900">{formatCurrency(row.cuota)}</td>
-                            <td className="px-3 py-1.5 text-right font-mono text-gray-500">{formatCurrency(row.saldo)}</td>
+                            <td className="px-3 py-1.5 text-right font-mono text-gray-700">{formatCurrency(row.interes)}</td>
+                            <td className="px-3 py-1.5 text-right font-mono text-gray-700">{formatCurrency(row.capital)}</td>
+                            <td className="px-3 py-1.5 text-right font-mono text-gray-500">{formatCurrency(row.saldoFinal)}</td>
                           </tr>
                         ))}
                       </tbody>
