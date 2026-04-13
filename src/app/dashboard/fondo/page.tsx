@@ -459,6 +459,42 @@ function CicloActualTab() {
   // Load cicloActual data on mount
   useEffect(() => { fetchCicloActualData(); }, [fetchCicloActualData]);
 
+  // Auto-fill rows from cicloActual when PDF data arrives
+  const [appliedPdfUsers, setAppliedPdfUsers] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    if (Object.keys(cicloActualMap).length === 0 || rows.length === 0) return;
+    let changed = false;
+    const newApplied = new Set(appliedPdfUsers);
+    const updated = rows.map((row) => {
+      if (newApplied.has(row.user_id)) return row;
+      const ca = cicloActualMap[row.user_id];
+      if (!ca) return row;
+      newApplied.add(row.user_id);
+      changed = true;
+      const aporte = ca.savings ? ca.savings.total : row.aporte;
+      const actividad = ca.activities.reduce((sum, a) => sum + a.amount, 0) || row.actividad;
+      // Match credit payments by credit_id
+      const creditos = row.creditos.map((cr) => {
+        const pdfCredit = ca.credits.find((pc) => pc.credit_id === cr.credito_id);
+        if (pdfCredit) return { ...cr, monto: pdfCredit.total };
+        return cr;
+      });
+      return {
+        ...row,
+        aporte,
+        permanente: ca.savings ? ca.savings.ahorro_permanente : +(aporte * 0.9).toFixed(0),
+        social: ca.savings ? ca.savings.ahorro_social : +(aporte * 0.1).toFixed(0),
+        actividad,
+        creditos,
+      };
+    });
+    if (changed) {
+      setRows(updated);
+      setAppliedPdfUsers(newApplied);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cicloActualMap, rows.length]);
+
   const handlePdfUpload = async (file: File) => {
     setUploading(true);
     setUploadError("");
@@ -470,6 +506,7 @@ function CicloActualTab() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Error al subir el PDF");
       setUploadResult(data);
+      setAppliedPdfUsers(new Set()); // Reset so new PDF data gets applied
       await fetchCicloActualData();
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : "Error desconocido");
