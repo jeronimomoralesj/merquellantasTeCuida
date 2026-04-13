@@ -17,24 +17,29 @@ async function extractTextFromPdf(buffer: Buffer): Promise<string> {
     for (const item of content.items) {
       if (!('str' in item) || !item.str) continue;
       const tx = item.transform;
-      items.push({ str: item.str, x: tx[4], y: Math.round(tx[5]) });
+      items.push({ str: item.str, x: tx[4], y: tx[5] });
     }
 
+    // Sort by Y descending then X ascending
     items.sort((a, b) => b.y - a.y || a.x - b.x);
 
-    const lines: string[] = [];
-    let currentY = items.length > 0 ? items[0].y : 0;
-    let currentLine: string[] = [];
-
+    // Group into lines — use 5px tolerance to capture misaligned columns
+    const lineGroups: { y: number; items: { str: string; x: number }[] }[] = [];
     for (const item of items) {
-      if (Math.abs(item.y - currentY) > 2) {
-        lines.push(currentLine.join(' '));
-        currentLine = [];
-        currentY = item.y;
+      const existing = lineGroups.find(g => Math.abs(g.y - item.y) <= 5);
+      if (existing) {
+        existing.items.push({ str: item.str, x: item.x });
+      } else {
+        lineGroups.push({ y: item.y, items: [{ str: item.str, x: item.x }] });
       }
-      currentLine.push(item.str);
     }
-    if (currentLine.length > 0) lines.push(currentLine.join(' '));
+
+    // Sort each line's items by X position, then join
+    lineGroups.sort((a, b) => b.y - a.y);
+    const lines = lineGroups.map(g => {
+      g.items.sort((a, b) => a.x - b.x);
+      return g.items.map(it => it.str).join(' ');
+    });
 
     pages.push(lines.join('\n'));
   }
@@ -326,6 +331,11 @@ export async function POST(req: NextRequest) {
       no_encontrados: notFound,
       cedulas_no_encontradas: notFoundCedulas,
       detalle: processed,
+      _debug_sample: parsedCredits.slice(0, 3).map(c => ({
+        credit_id: c.credit_id, cedula: c.cedula, name: c.name,
+        cuota_valor: c.cuota_valor, numero_cuotas: c.numero_cuotas,
+        tasa: c.tasa, saldo: c.saldo, valor_inicial: c.valor_inicial,
+      })),
     });
   } catch (err) {
     console.error('Bulk credit upload error:', err);

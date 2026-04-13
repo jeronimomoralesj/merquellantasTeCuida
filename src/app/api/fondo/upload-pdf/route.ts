@@ -13,31 +13,31 @@ async function extractTextFromPdf(buffer: Buffer): Promise<string> {
     const page = await doc.getPage(i);
     const content = await page.getTextContent();
 
-    // Group text items by Y position to reconstruct lines
     const items: { str: string; x: number; y: number }[] = [];
     for (const item of content.items) {
       if (!('str' in item) || !item.str) continue;
       const tx = item.transform;
-      items.push({ str: item.str, x: tx[4], y: Math.round(tx[5]) });
+      items.push({ str: item.str, x: tx[4], y: tx[5] });
     }
 
-    // Sort by Y descending (top to bottom), then X ascending (left to right)
     items.sort((a, b) => b.y - a.y || a.x - b.x);
 
-    // Group into lines by Y coordinate (items within 2px are same line)
-    const lines: string[] = [];
-    let currentY = items.length > 0 ? items[0].y : 0;
-    let currentLine: string[] = [];
-
+    // Group into lines — 5px Y tolerance for misaligned columns
+    const lineGroups: { y: number; items: { str: string; x: number }[] }[] = [];
     for (const item of items) {
-      if (Math.abs(item.y - currentY) > 2) {
-        lines.push(currentLine.join(' '));
-        currentLine = [];
-        currentY = item.y;
+      const existing = lineGroups.find(g => Math.abs(g.y - item.y) <= 5);
+      if (existing) {
+        existing.items.push({ str: item.str, x: item.x });
+      } else {
+        lineGroups.push({ y: item.y, items: [{ str: item.str, x: item.x }] });
       }
-      currentLine.push(item.str);
     }
-    if (currentLine.length > 0) lines.push(currentLine.join(' '));
+
+    lineGroups.sort((a, b) => b.y - a.y);
+    const lines = lineGroups.map(g => {
+      g.items.sort((a, b) => a.x - b.x);
+      return g.items.map(it => it.str).join(' ');
+    });
 
     pages.push(lines.join('\n'));
   }
