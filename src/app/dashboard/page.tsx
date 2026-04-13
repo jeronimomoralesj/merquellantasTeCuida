@@ -387,11 +387,12 @@ useEffect(() => {
       setNextEvent(events.length > 0 ? events[0] : null);
       setUpcomingEvents(events);
 
-      // Show popup for today's events (once per session)
+      // Show popup for today's events (once per login session per day)
       if (todayEvents.length > 0 && typeof window !== 'undefined') {
-        const key = `todayPopupShown_${new Date().toDateString()}`;
-        if (!sessionStorage.getItem(key)) {
-          sessionStorage.setItem(key, '1');
+        const todayKey = new Date().toISOString().slice(0, 10);
+        const popupKey = `todayPopup_${todayKey}`;
+        if (!sessionStorage.getItem(popupKey)) {
+          sessionStorage.setItem(popupKey, '1');
           setTodayPopupEvents(todayEvents);
           setShowTodayPopup(true);
           setTimeout(() => setPopupAnimating(true), 50);
