@@ -62,7 +62,7 @@ export default function DocumentsPage() {
         dateUploaded: d.date_uploaded || d.dateUploaded,
         document: d.document,
         size: d.size || 'N/A',
-        type: getFileTypeFromUrl(d.document as string)
+        type: getFileTypeFromUrl((d.document as string) || '')
       }));
       setDocuments(docs);
     } catch (error) {
