@@ -83,7 +83,15 @@ export default function QuickActionsAdmin() {
     try {
       const res = await fetch('/api/quick-actions');
       if (!res.ok) throw new Error('Error loading quick actions');
-      const data: QuickAction[] = await res.json();
+      const raw: Record<string, unknown>[] = await res.json();
+      const data: QuickAction[] = raw.map(d => ({
+        id: String(d._id || d.id || ''),
+        title: String(d.title || ''),
+        href: String(d.href || ''),
+        icon: String(d.icon || 'zap'),
+        order: Number(d.order || 0),
+        active: !!d.active,
+      }));
       setItems(data);
     } catch (e) {
       console.error("Error loading quickActions", e);
