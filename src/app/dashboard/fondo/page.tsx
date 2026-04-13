@@ -711,6 +711,23 @@ function CicloActualTab() {
                 Cédulas no encontradas: {uploadResult.cedulas_no_encontradas.join(", ")}
               </p>
             )}
+            {/* Temporary debug: raw text preview */}
+            {(() => {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const r = uploadResult as any;
+              if (!r._debug_raw_text_preview) return null;
+              return (
+                <details className="mt-3">
+                  <summary className="text-xs text-gray-500 cursor-pointer font-semibold">Debug: Raw PDF text (click to expand)</summary>
+                  <pre className="mt-2 p-2 bg-gray-900 text-green-400 text-[10px] rounded-lg overflow-auto max-h-80 whitespace-pre-wrap">
+                    {String(r._debug_raw_text_preview)}
+                  </pre>
+                  <pre className="mt-1 p-2 bg-gray-900 text-yellow-400 text-[10px] rounded-lg overflow-auto max-h-40 whitespace-pre-wrap">
+                    {JSON.stringify(r._debug_parsed_sample, null, 2)}
+                  </pre>
+                </details>
+              );
+            })()}
           </div>
         )}
       </div>

@@ -292,6 +292,8 @@ export async function POST(req: NextRequest) {
       no_encontrados: notFound,
       cedulas_no_encontradas: notFoundCedulas,
       detalle: updatedUsers,
+      _debug_raw_text_preview: text.substring(0, 3000),
+      _debug_parsed_sample: parsedUsers.slice(0, 3),
     });
   } catch (err) {
     console.error('PDF upload error:', err);
