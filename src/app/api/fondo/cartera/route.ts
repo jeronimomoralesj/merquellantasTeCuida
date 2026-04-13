@@ -196,6 +196,18 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ success: true });
   }
 
+  // ----- UPDATE CREDITO_ID -----
+  if (action === 'update_credito_id') {
+    if (!body.credito_id || !String(body.credito_id).trim()) {
+      return NextResponse.json({ error: 'credito_id requerido' }, { status: 400 });
+    }
+    await db.collection('fondo_cartera').updateOne(
+      { _id: new ObjectId(body.cartera_id) },
+      { $set: { credito_id: String(body.credito_id).trim() } }
+    );
+    return NextResponse.json({ success: true });
+  }
+
   // ----- PAGO (default) -----
   if (cartera.estado !== 'activo') {
     return NextResponse.json({ error: 'Solo se pueden pagar créditos activos' }, { status: 400 });

@@ -113,41 +113,71 @@ function parseUserBlocks(text: string): ParsedUser[] {
       if (line.includes('ASOCIADO ==>')) continue;
 
       if (line.includes('ABONO A CREDTO') || line.includes('ABONO A CREDITO')) {
-        // Credit line: [credit_id] [line_num] ABONO A CREDTO [capital] [interest] [mora] ... [total]
-        // Extract credit_id: first number at the start of the line (4+ digits)
+        // Credit line: [credit_id] [line_num] ABONO A CREDTO [values in jumbled column order]
         const creditIdMatch = line.match(/^(\d{3,6})\s/);
         const creditId = creditIdMatch ? creditIdMatch[1] : '0';
 
-        // Extract all numbers from the line after the description
         const afterDesc = line.replace(/^.*?ABONO A CRED(?:TO|ITO)\s*/, '');
         const nums = extractNumbers(afterDesc);
+        const nonZero = nums.filter(n => n > 0).sort((a, b) => b - a);
 
-        if (nums.length >= 2) {
-          // PDF column order: CAPITAL, INTERESES, MORA, AHORROS, APORTES, OTROS, TOTAL
-          // After description, the values are: capital, interest, ...zeros..., total
-          const capital = nums[0];
-          const interest = nums[1];
-          const total = nums[nums.length - 1];
+        // Find the value that is the sum of two others (that's the total)
+        // total = capital + interest, so find a+b=c among the nonzero values
+        let capital = 0, interest = 0, total = 0;
+        let found = false;
+        if (nonZero.length >= 3) {
+          for (let a = 0; a < nonZero.length && !found; a++) {
+            for (let b = a + 1; b < nonZero.length && !found; b++) {
+              for (let c = b + 1; c < nonZero.length && !found; c++) {
+                const vals = [nonZero[a], nonZero[b], nonZero[c]];
+                vals.sort((x, y) => y - x);
+                if (Math.abs(vals[0] - (vals[1] + vals[2])) <= 1) {
+                  total = vals[0];
+                  capital = vals[1];
+                  interest = vals[2];
+                  found = true;
+                }
+              }
+            }
+          }
+        }
+        if (!found && nonZero.length >= 2) {
+          // Fallback: largest is total, second is capital, rest is interest
+          capital = nonZero[1];
+          interest = nonZero.length > 2 ? nonZero[2] : 0;
+          total = nonZero[0];
+        } else if (!found && nonZero.length === 1) {
+          capital = nonZero[0]; total = nonZero[0];
+        }
+
+        if (total > 0 || capital > 0) {
           credits.push({ credit_id: creditId, capital, interest, total });
-        } else if (nums.length === 1) {
-          credits.push({ credit_id: creditId, capital: nums[0], interest: 0, total: nums[0] });
         }
 
       } else if (line.includes('AHORROS PERMANENTES')) {
-        // Savings line: AHORROS PERMANENTES [capital=0] [int=0] [mora=0] [ahorros] [aportes] [otros=0] [total]
+        // Savings line has columns in jumbled order from pdfjs.
+        // We know: ahorro_permanente ≈ 90%, ahorro_social ≈ 10%, total = sum.
+        // The total value equals the sum of the other two, so find the pair that sums correctly.
         const afterDesc = line.replace(/^.*?AHORROS PERMANENTES\s*/, '');
         const nums = extractNumbers(afterDesc);
-        // Find the non-zero values: ahorros (permanente) and aportes (social)
         const nonZero = nums.filter(n => n > 0);
 
-        if (nonZero.length >= 2) {
-          // Sort: smaller = social (aportes/10%), larger = permanente (ahorros/90%)
+        if (nonZero.length >= 3) {
+          // Find the value that is the sum of two others
           const sorted = [...nonZero].sort((a, b) => a - b);
-          const ahorro_social = sorted[0];
-          const ahorro_permanente = sorted.length > 2 ? sorted[sorted.length - 2] : sorted[sorted.length - 1];
-          // Total is the largest or sum of the two main values
-          const total = ahorro_permanente + ahorro_social;
-          savings = { ahorro_permanente, ahorro_social, total };
+          // Smallest = social, second = permanente, largest = total (= social + permanente)
+          savings = {
+            ahorro_social: sorted[0],
+            ahorro_permanente: sorted[1],
+            total: sorted[0] + sorted[1],
+          };
+        } else if (nonZero.length === 2) {
+          const sorted = [...nonZero].sort((a, b) => a - b);
+          savings = {
+            ahorro_social: sorted[0],
+            ahorro_permanente: sorted[1],
+            total: sorted[0] + sorted[1],
+          };
         } else if (nonZero.length === 1) {
           const total = nonZero[0];
           savings = {

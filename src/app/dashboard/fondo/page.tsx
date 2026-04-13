@@ -1079,6 +1079,29 @@ function BuscarAfiliadoTab() {
   const [creditos, setCreditos] = useState<Credito[]>([]);
   const [loadingProfile, setLoadingProfile] = useState(false);
 
+  /* editable credito_id */
+  const [editingCreditId, setEditingCreditId] = useState<string | null>(null);
+  const [editCreditIdValue, setEditCreditIdValue] = useState("");
+  const [savingCreditId, setSavingCreditId] = useState(false);
+
+  const handleSaveCreditId = async (carteraId: string) => {
+    if (!editCreditIdValue.trim()) return;
+    setSavingCreditId(true);
+    try {
+      const res = await fetch("/api/fondo/cartera", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cartera_id: carteraId, action: "update_credito_id", credito_id: editCreditIdValue.trim() }),
+      });
+      if (res.ok) {
+        setCreditos(prev => prev.map(c => c._id === carteraId ? { ...c, credito_id: editCreditIdValue.trim() } : c));
+        setEditingCreditId(null);
+      }
+    } finally {
+      setSavingCreditId(false);
+    }
+  };
+
   /* collapsible sections */
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     saldos: true,
@@ -1402,17 +1425,49 @@ function BuscarAfiliadoTab() {
                         key={cr._id || idx}
                         className="rounded-xl border border-gray-200 overflow-hidden"
                       >
-                        <div className="px-4 py-3 bg-gray-50 flex items-center justify-between">
-                          <div>
-                            <span className="font-semibold text-gray-900 text-sm">
-                              Crédito {cr.credito_id || cr._id}
-                            </span>
-                            <span className="ml-3 text-xs text-gray-500">
+                        <div className="px-4 py-3 bg-gray-50 flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 flex-wrap min-w-0">
+                            {editingCreditId === cr._id ? (
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-xs text-gray-500">ID:</span>
+                                <input
+                                  type="text"
+                                  value={editCreditIdValue}
+                                  onChange={(e) => setEditCreditIdValue(e.target.value)}
+                                  onKeyDown={(e) => e.key === "Enter" && handleSaveCreditId(cr._id!)}
+                                  className="w-24 px-2 py-1 rounded-lg border border-[#ff9900] text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-[#ff9900]/40"
+                                  autoFocus
+                                />
+                                <button
+                                  onClick={() => handleSaveCreditId(cr._id!)}
+                                  disabled={savingCreditId}
+                                  className="p-1 rounded-lg bg-[#ff9900] text-white hover:bg-[#e68a00] disabled:opacity-50"
+                                >
+                                  <Check size={14} />
+                                </button>
+                                <button
+                                  onClick={() => setEditingCreditId(null)}
+                                  className="p-1 rounded-lg bg-gray-200 text-gray-600 hover:bg-gray-300"
+                                >
+                                  <X size={14} />
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => { setEditingCreditId(cr._id!); setEditCreditIdValue(cr.credito_id || cr._id || ""); }}
+                                className="font-semibold text-gray-900 text-sm hover:text-[#ff9900] transition-colors cursor-pointer"
+                                title="Click para editar ID del crédito"
+                              >
+                                Crédito {cr.credito_id || cr._id}
+                                <span className="ml-1 text-[10px] text-gray-400">(editar)</span>
+                              </button>
+                            )}
+                            <span className="text-xs text-gray-500">
                               Total: {fmt(cr.valor_prestamo || 0)} | Saldo: {fmt(cr.saldo_total || 0)} | Cuotas: {cr.cuotas_pagadas || 0}/{(cr.cuotas_pagadas || 0) + (cr.cuotas_restantes || 0)}
                             </span>
                           </div>
                           <span
-                            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${
+                            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border flex-shrink-0 ${
                               cr.estado === "activo"
                                 ? "bg-blue-100 text-blue-800 border-blue-300"
                                 : "bg-gray-100 text-gray-800 border-gray-300"
