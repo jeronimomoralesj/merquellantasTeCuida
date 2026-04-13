@@ -2054,12 +2054,12 @@ function SolicitudesTab() {
   // Bulk credit upload
   const [bulkUploading, setBulkUploading] = useState(false);
   const [bulkResult, setBulkResult] = useState<{
-    total_en_pdf: number;
+    total_en_archivo: number;
     creados: number;
     actualizados: number;
     no_encontrados: number;
     cedulas_no_encontradas: string[];
-    detalle: { credit_id: string; cedula: string; name: string; action: string }[];
+    detalle: { credit_id: string; cedula: string; name: string; action: string; valor_prestamo?: number; saldo?: number }[];
   } | null>(null);
   const [bulkError, setBulkError] = useState("");
 
@@ -2458,16 +2458,16 @@ function SolicitudesTab() {
           <FileText size={18} className="text-[#ff9900]" />
           <div>
             <p className="text-sm font-semibold text-gray-900">Carga masiva de créditos (PDF)</p>
-            <p className="text-xs text-gray-500">Sube el PDF de reporte de créditos para crear o actualizar créditos de todos los usuarios.</p>
+            <p className="text-xs text-gray-500">Sube el archivo de reporte de créditos (Excel o PDF) para crear o actualizar créditos de todos los usuarios.</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
           <label className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-gray-200 text-sm font-semibold text-gray-700 cursor-pointer hover:border-[#ff9900]/40 hover:text-[#ff9900] transition-all">
             <Upload size={16} />
-            {bulkUploading ? "Procesando..." : "Seleccionar PDF de créditos"}
+            {bulkUploading ? "Procesando..." : "Seleccionar archivo (Excel/PDF)"}
             <input
               type="file"
-              accept=".pdf"
+              accept=".xlsx,.xls,.pdf"
               className="hidden"
               disabled={bulkUploading}
               onChange={(e) => {
@@ -2492,7 +2492,7 @@ function SolicitudesTab() {
               <p className="font-semibold text-emerald-800 mb-2">Créditos procesados correctamente</p>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
                 <div className="bg-white rounded-lg p-2 text-center border border-emerald-100">
-                  <p className="text-lg font-bold text-gray-900">{bulkResult.total_en_pdf}</p>
+                  <p className="text-lg font-bold text-gray-900">{bulkResult.total_en_archivo}</p>
                   <p className="text-[10px] text-gray-500 font-semibold uppercase">En PDF</p>
                 </div>
                 <div className="bg-white rounded-lg p-2 text-center border border-emerald-100">
@@ -2525,6 +2525,8 @@ function SolicitudesTab() {
                         <th className="px-3 py-2">ID</th>
                         <th className="px-3 py-2">Cédula</th>
                         <th className="px-3 py-2">Nombre</th>
+                        <th className="px-3 py-2 text-right">Préstamo</th>
+                        <th className="px-3 py-2 text-right">Saldo</th>
                         <th className="px-3 py-2">Acción</th>
                       </tr>
                     </thead>
@@ -2533,7 +2535,9 @@ function SolicitudesTab() {
                         <tr key={i} className="hover:bg-gray-50">
                           <td className="px-3 py-1.5 font-mono font-semibold text-gray-700">{d.credit_id}</td>
                           <td className="px-3 py-1.5 text-gray-600">{d.cedula}</td>
-                          <td className="px-3 py-1.5 text-gray-600 truncate max-w-[200px]">{d.name}</td>
+                          <td className="px-3 py-1.5 text-gray-600 truncate max-w-[150px]">{d.name}</td>
+                          <td className="px-3 py-1.5 text-right font-mono text-gray-700">{d.valor_prestamo ? fmt(d.valor_prestamo) : "—"}</td>
+                          <td className="px-3 py-1.5 text-right font-mono text-gray-500">{d.saldo ? fmt(d.saldo) : "—"}</td>
                           <td className="px-3 py-1.5">
                             <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${d.action === "creado" ? "bg-emerald-100 text-emerald-800" : "bg-blue-100 text-blue-800"}`}>
                               {d.action}

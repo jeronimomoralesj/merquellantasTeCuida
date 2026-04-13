@@ -1,9 +1,162 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '../../../../../lib/db';
 import { auth } from '../../../../../lib/auth';
+import * as XLSX from 'xlsx';
+
 // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
 const pdfjsLib = require('pdfjs-dist/legacy/build/pdf.js');
 pdfjsLib.GlobalWorkerOptions.workerSrc = false;
+
+/* ------------------------------------------------------------------ */
+/*  Shared types                                                       */
+/* ------------------------------------------------------------------ */
+
+interface ParsedCredit {
+  credit_id: string;
+  cedula: string;
+  name: string;
+  fecha_desembolso: Date | null;
+  fecha_primera_cuota: Date | null;
+  frecuencia: string;
+  cuota_valor: number;
+  numero_cuotas: number;
+  tasa: number;
+  saldo: number;
+  valor_inicial: number;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Number / date helpers                                              */
+/* ------------------------------------------------------------------ */
+
+function parseColNumber(raw: string): number {
+  const cleaned = raw.replace(/\./g, '').replace(',', '.').trim();
+  const n = parseFloat(cleaned);
+  return isNaN(n) ? 0 : Math.round(n);
+}
+
+function parseDateStr(raw: string): Date | null {
+  const m = raw.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (!m) return null;
+  return new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]));
+}
+
+// XLSX can give dates as JS Date objects, serial numbers, or strings
+function normalizeDate(val: unknown): Date | null {
+  if (!val) return null;
+  if (val instanceof Date) return val;
+  if (typeof val === 'number') {
+    // Excel serial date
+    const d = XLSX.SSF.parse_date_code(val);
+    if (d) return new Date(d.y, d.m - 1, d.d);
+    return null;
+  }
+  if (typeof val === 'string') return parseDateStr(val);
+  return null;
+}
+
+function normalizeNumber(val: unknown): number {
+  if (val === null || val === undefined) return 0;
+  if (typeof val === 'number') return Math.round(val);
+  if (typeof val === 'string') return parseColNumber(val);
+  return 0;
+}
+
+/* ------------------------------------------------------------------ */
+/*  XLSX parser (clean, reliable)                                      */
+/* ------------------------------------------------------------------ */
+
+function normalizeHeader(h: string): string {
+  return String(h || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase().trim()
+    .replace(/\s+/g, ' ');
+}
+
+// Map various possible header names to our canonical field names
+const HEADER_MAP: Record<string, string> = {
+  'CREDITO': 'credit_id',
+  'CEDULA': 'cedula',
+  'NOMBRE': 'name',
+  'FECHA DESEMBOLSO': 'fecha_desembolso',
+  'FECHA 1RA CUOTA': 'fecha_primera_cuota',
+  'FECHA PRIMERA CUOTA': 'fecha_primera_cuota',
+  'FRE': 'frecuencia',
+  'FRECUENCIA': 'frecuencia',
+  'CUOTA': 'cuota_valor',
+  'NUMERO CUOTAS': 'numero_cuotas',
+  'NUM CUOTAS': 'numero_cuotas',
+  'TASA': 'tasa',
+  'SALDO': 'saldo',
+  'VR INICIAL': 'valor_inicial',
+  'VALOR INICIAL': 'valor_inicial',
+};
+
+function parseXlsx(buffer: Buffer): ParsedCredit[] {
+  const workbook = XLSX.read(buffer, { type: 'buffer', cellDates: true });
+  const sheet = workbook.Sheets[workbook.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '' });
+
+  if (rows.length === 0) return [];
+
+  // Map actual headers to canonical field names
+  const actualHeaders = Object.keys(rows[0]);
+  const fieldMap: Record<string, string> = {};
+  for (const h of actualHeaders) {
+    const norm = normalizeHeader(h);
+    if (HEADER_MAP[norm]) {
+      fieldMap[h] = HEADER_MAP[norm];
+    }
+  }
+
+  const credits: ParsedCredit[] = [];
+
+  for (const row of rows) {
+    const get = (field: string): unknown => {
+      for (const [actualH, mappedField] of Object.entries(fieldMap)) {
+        if (mappedField === field) return row[actualH];
+      }
+      return undefined;
+    };
+
+    const credit_id = String(get('credit_id') || '').trim();
+    const cedula = String(get('cedula') || '').replace(/\./g, '').trim();
+    if (!credit_id || !cedula) continue;
+
+    const name = String(get('name') || '').trim();
+    const fecha_desembolso = normalizeDate(get('fecha_desembolso'));
+    const fecha_primera_cuota = normalizeDate(get('fecha_primera_cuota'));
+
+    const freRaw = String(get('frecuencia') || 'M').toUpperCase().trim();
+    const frecuencia = freRaw === 'Q' ? 'Q' : 'M';
+
+    const cuota_valor = normalizeNumber(get('cuota_valor'));
+    const numero_cuotas = normalizeNumber(get('numero_cuotas'));
+    const saldo = normalizeNumber(get('saldo'));
+    const valor_inicial = normalizeNumber(get('valor_inicial'));
+
+    // Tasa: keep as float (e.g. 1.2)
+    const tasaRaw = get('tasa');
+    let tasa = 0;
+    if (typeof tasaRaw === 'number') {
+      tasa = tasaRaw;
+    } else if (typeof tasaRaw === 'string') {
+      tasa = parseFloat(tasaRaw.replace(/\./g, '').replace(',', '.')) || 0;
+    }
+
+    credits.push({
+      credit_id, cedula, name,
+      fecha_desembolso, fecha_primera_cuota,
+      frecuencia, cuota_valor, numero_cuotas, tasa, saldo, valor_inicial,
+    });
+  }
+
+  return credits;
+}
+
+/* ------------------------------------------------------------------ */
+/*  PDF parser (fallback)                                              */
+/* ------------------------------------------------------------------ */
 
 async function extractTextFromPdf(buffer: Buffer): Promise<string> {
   const data = new Uint8Array(buffer);
@@ -20,10 +173,8 @@ async function extractTextFromPdf(buffer: Buffer): Promise<string> {
       items.push({ str: item.str, x: tx[4], y: tx[5] });
     }
 
-    // Sort by Y descending then X ascending
     items.sort((a, b) => b.y - a.y || a.x - b.x);
 
-    // Group into lines — use 5px tolerance to capture misaligned columns
     const lineGroups: { y: number; items: { str: string; x: number }[] }[] = [];
     for (const item of items) {
       const existing = lineGroups.find(g => Math.abs(g.y - item.y) <= 5);
@@ -34,7 +185,6 @@ async function extractTextFromPdf(buffer: Buffer): Promise<string> {
       }
     }
 
-    // Sort each line's items by X position, then join
     lineGroups.sort((a, b) => b.y - a.y);
     const lines = lineGroups.map(g => {
       g.items.sort((a, b) => a.x - b.x);
@@ -46,128 +196,74 @@ async function extractTextFromPdf(buffer: Buffer): Promise<string> {
   return pages.join('\n');
 }
 
-// Normalize Colombian number format: "103.813,00" → 103813
-function parseColNumber(raw: string): number {
-  const cleaned = raw.replace(/\./g, '').replace(',', '.').trim();
-  const n = parseFloat(cleaned);
-  return isNaN(n) ? 0 : Math.round(n);
-}
-
-// Parse date DD/MM/YYYY
-function parseDate(raw: string): Date | null {
-  const m = raw.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-  if (!m) return null;
-  return new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]));
-}
-
-interface ParsedCredit {
-  credit_id: string;
-  cedula: string;
-  name: string;
-  fecha_desembolso: Date | null;
-  fecha_primera_cuota: Date | null;
-  frecuencia: string;
-  cuota_valor: number;
-  numero_cuotas: number;
-  tasa: number;
-  saldo: number;
-  valor_inicial: number;
-}
-
-function parseCreditRows(text: string): ParsedCredit[] {
+function parseCreditRowsFromText(text: string): ParsedCredit[] {
   const credits: ParsedCredit[] = [];
   const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
 
   for (const line of lines) {
-    // Skip headers, footers, and non-data lines
     if (/REPORTE DE CREDITOS|FONALMERQUE|PAGINA|CREDITO\s+CCN|TOTAL|^\s*$/i.test(line)) continue;
     if (/^FONDO NACIONAL/i.test(line)) continue;
     if (!/^\d{1,6}\s/.test(line)) continue;
 
-    // Strategy: find credit_id, CCN, cedula as first three numbers,
-    // then name until first date, then parse remaining fields
-
-    // Extract all dates first
     const datePattern = /\d{1,2}\/\d{1,2}\/\d{4}/g;
     const dates: { match: string; index: number }[] = [];
     let dm;
     while ((dm = datePattern.exec(line)) !== null) {
       dates.push({ match: dm[0], index: dm.index });
     }
+    if (dates.length < 2) continue;
 
-    if (dates.length < 2) continue; // Need at least desembolso + primera cuota dates
-
-    // Everything before the first date: credit_id, CCN, cedula, name
     const beforeDates = line.substring(0, dates[0].index).trim();
-
-    // Extract first three numbers from the prefix
     const prefixNums = beforeDates.match(/\d+/g);
     if (!prefixNums || prefixNums.length < 3) continue;
 
     const credit_id = prefixNums[0];
-    // prefixNums[1] = CCN (ignore)
     const cedula = prefixNums[2];
-
-    // Name: text between the cedula and the first date
     const cedulaIdx = beforeDates.indexOf(cedula);
-    const nameStart = cedulaIdx + cedula.length;
-    const name = beforeDates.substring(nameStart).replace(/\s+/g, ' ').trim();
+    const name = beforeDates.substring(cedulaIdx + cedula.length).replace(/\s+/g, ' ').trim();
 
-    const fecha_desembolso = parseDate(dates[0].match);
-    const fecha_primera_cuota = parseDate(dates[1].match);
+    const fecha_desembolso = parseDateStr(dates[0].match);
+    const fecha_primera_cuota = parseDateStr(dates[1].match);
 
-    // Everything after the second date
     const afterDates = line.substring(dates[1].index + dates[1].match.length).trim();
-
-    // Parse remaining fields after dates: FRE [CUOTA_NUM] CUOTA_VALOR NUMERO_CUOTAS TASA SALDO VR_INICIAL
     const freMatch = afterDates.match(/^([MQ])\s/i);
     const frecuencia = freMatch ? freMatch[1].toUpperCase() : 'M';
 
     const afterFre = freMatch ? afterDates.substring(freMatch[0].length) : afterDates;
-    // Split into tokens preserving Colombian number format
     const numTokens = afterFre.match(/[\d.]+,\d+|\d+/g) || [];
 
-    // Separate: tokens with commas are monetary/rate values, pure integers are counts
-    // Expected sequence: [optional_small_int] cuota_valor(comma) numero_cuotas(int) tasa(comma) saldo(comma) valor_inicial(comma)
     const commaTokens: { raw: string; idx: number }[] = [];
     const intTokens: { val: number; idx: number }[] = [];
     numTokens.forEach((t, i) => {
-      if (t.includes(',')) {
-        commaTokens.push({ raw: t, idx: i });
-      } else {
-        intTokens.push({ val: parseInt(t, 10), idx: i });
-      }
+      if (t.includes(',')) commaTokens.push({ raw: t, idx: i });
+      else intTokens.push({ val: parseInt(t, 10), idx: i });
     });
 
     let cuota_valor = 0, numero_cuotas = 0, tasa = 0, saldo = 0, valor_inicial = 0;
 
-    // comma tokens in order: cuota_valor, tasa, saldo, valor_inicial
-    // But pdfjs may reorder columns, so after extracting we ensure valor_inicial >= saldo
     if (commaTokens.length >= 4) {
       cuota_valor = parseColNumber(commaTokens[0].raw);
       tasa = parseFloat(commaTokens[1].raw.replace(/\./g, '').replace(',', '.')) || 0;
       const lastTwo = [parseColNumber(commaTokens[2].raw), parseColNumber(commaTokens[3].raw)];
-      // valor_inicial is always >= saldo (original amount >= remaining balance)
       valor_inicial = Math.max(...lastTwo);
       saldo = Math.min(...lastTwo);
+    } else if (commaTokens.length === 3) {
+      cuota_valor = parseColNumber(commaTokens[0].raw);
+      tasa = parseFloat(commaTokens[1].raw.replace(/\./g, '').replace(',', '.')) || 0;
+      // Only got one big value — it's saldo; valor_inicial is missing
+      saldo = parseColNumber(commaTokens[2].raw);
+      valor_inicial = saldo; // best guess
     } else if (commaTokens.length >= 2) {
       cuota_valor = parseColNumber(commaTokens[0].raw);
       tasa = parseFloat(commaTokens[1].raw.replace(/\./g, '').replace(',', '.')) || 0;
-      if (commaTokens.length === 3) {
-        // Only one big number — could be saldo or valor_inicial
-        saldo = parseColNumber(commaTokens[2].raw);
-        valor_inicial = saldo;
-      }
     }
 
-    // numero_cuotas: the integer that appears between cuota_valor and tasa positions
     for (const it of intTokens) {
       if (commaTokens.length >= 2 && it.idx > commaTokens[0].idx && it.idx < commaTokens[1].idx) {
         numero_cuotas = it.val;
         break;
       }
     }
-    // Fallback: if not found between those positions, take the largest small integer
     if (numero_cuotas === 0) {
       const candidates = intTokens.filter(it => it.val > 1 && it.val <= 360);
       if (candidates.length > 0) numero_cuotas = candidates[0].val;
@@ -176,22 +272,18 @@ function parseCreditRows(text: string): ParsedCredit[] {
     if (!credit_id || !cedula) continue;
 
     credits.push({
-      credit_id,
-      cedula,
-      name,
-      fecha_desembolso,
-      fecha_primera_cuota,
-      frecuencia,
-      cuota_valor,
-      numero_cuotas,
-      tasa,
-      saldo,
-      valor_inicial,
+      credit_id, cedula, name,
+      fecha_desembolso, fecha_primera_cuota,
+      frecuencia, cuota_valor, numero_cuotas, tasa, saldo, valor_inicial,
     });
   }
 
   return credits;
 }
+
+/* ------------------------------------------------------------------ */
+/*  POST handler                                                       */
+/* ------------------------------------------------------------------ */
 
 export async function POST(req: NextRequest) {
   const session = await auth();
@@ -204,25 +296,33 @@ export async function POST(req: NextRequest) {
     const file = formData.get('file') as File | null;
 
     if (!file) {
-      return NextResponse.json({ error: 'Archivo PDF requerido' }, { status: 400 });
+      return NextResponse.json({ error: 'Archivo requerido' }, { status: 400 });
     }
-    if (!file.name.toLowerCase().endsWith('.pdf')) {
-      return NextResponse.json({ error: 'El archivo debe ser un PDF' }, { status: 400 });
+
+    const fileName = file.name.toLowerCase();
+    const isXlsx = fileName.endsWith('.xlsx') || fileName.endsWith('.xls');
+    const isPdf = fileName.endsWith('.pdf');
+
+    if (!isXlsx && !isPdf) {
+      return NextResponse.json({ error: 'El archivo debe ser PDF o Excel (.xlsx/.xls)' }, { status: 400 });
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
-    const text = await extractTextFromPdf(buffer);
+    let parsedCredits: ParsedCredit[];
 
-    if (!text || text.trim().length === 0) {
-      return NextResponse.json({ error: 'No se pudo extraer texto del PDF' }, { status: 400 });
+    if (isXlsx) {
+      parsedCredits = parseXlsx(buffer);
+    } else {
+      const text = await extractTextFromPdf(buffer);
+      if (!text || text.trim().length === 0) {
+        return NextResponse.json({ error: 'No se pudo extraer texto del PDF' }, { status: 400 });
+      }
+      parsedCredits = parseCreditRowsFromText(text);
     }
-
-    const parsedCredits = parseCreditRows(text);
 
     if (parsedCredits.length === 0) {
       return NextResponse.json({
-        error: 'No se encontraron créditos en el PDF. Verifica que el formato sea correcto.',
-        _debug_raw_preview: text.substring(0, 2000),
+        error: 'No se encontraron créditos en el archivo. Verifica que el formato y los nombres de columnas sean correctos.',
       }, { status: 400 });
     }
 
@@ -234,7 +334,7 @@ export async function POST(req: NextRequest) {
     let updated = 0;
     let notFound = 0;
     const notFoundCedulas: string[] = [];
-    const processed: { credit_id: string; cedula: string; name: string; action: string }[] = [];
+    const processed: { credit_id: string; cedula: string; name: string; action: string; valor_prestamo: number; saldo: number }[] = [];
 
     for (const cr of parsedCredits) {
       const user = await usersCol.findOne({ cedula: cr.cedula });
@@ -261,56 +361,42 @@ export async function POST(req: NextRequest) {
       }
       const cuotasRestantes = Math.max(0, cr.numero_cuotas - cuotasPagadas);
 
-      // valor_prestamo = VR INICIAL; if 0, estimate from saldo
+      // valor_prestamo = VR INICIAL; if 0 or missing, use saldo as fallback
       const valorPrestamo = cr.valor_inicial > 0 ? cr.valor_inicial : cr.saldo;
 
-      // Check if credit_id already exists for this user
       const existing = await carteraCol.findOne({
         user_id: userId,
         credito_id: cr.credit_id,
       });
 
+      const docFields = {
+        tasa_interes: cr.tasa,
+        frecuencia_pago: frecuenciaPago,
+        fecha_desembolso: cr.fecha_desembolso,
+        fecha_cuota_1: cr.fecha_primera_cuota,
+        fecha_termina: fechaTermina,
+        valor_prestamo: valorPrestamo,
+        numero_cuotas: cr.numero_cuotas,
+        cuotas_pagadas: cuotasPagadas,
+        cuotas_restantes: cuotasRestantes,
+        saldo_capital: cr.saldo,
+        saldo_total: cr.saldo,
+        cuota_valor: cr.cuota_valor,
+      };
+
       if (existing) {
         await carteraCol.updateOne(
           { _id: existing._id },
-          {
-            $set: {
-              tasa_interes: cr.tasa,
-              frecuencia_pago: frecuenciaPago,
-              fecha_desembolso: cr.fecha_desembolso,
-              fecha_cuota_1: cr.fecha_primera_cuota,
-              fecha_termina: fechaTermina,
-              valor_prestamo: valorPrestamo,
-              numero_cuotas: cr.numero_cuotas,
-              cuotas_pagadas: cuotasPagadas,
-              cuotas_restantes: cuotasRestantes,
-              saldo_capital: cr.saldo,
-              saldo_total: cr.saldo,
-              cuota_valor: cr.cuota_valor,
-              updated_at: new Date(),
-            },
-          }
+          { $set: { ...docFields, updated_at: new Date() } }
         );
         updated++;
-        processed.push({ credit_id: cr.credit_id, cedula: cr.cedula, name: cr.name, action: 'actualizado' });
       } else {
         await carteraCol.insertOne({
           user_id: userId,
           credito_id: cr.credit_id,
-          tasa_interes: cr.tasa,
-          frecuencia_pago: frecuenciaPago,
+          ...docFields,
           fecha_solicitud: new Date(),
-          fecha_desembolso: cr.fecha_desembolso,
-          fecha_cuota_1: cr.fecha_primera_cuota,
-          fecha_termina: fechaTermina,
-          valor_prestamo: valorPrestamo,
-          numero_cuotas: cr.numero_cuotas,
-          cuotas_pagadas: cuotasPagadas,
-          cuotas_restantes: cuotasRestantes,
-          saldo_capital: cr.saldo,
           saldo_interes: 0,
-          saldo_total: cr.saldo,
-          cuota_valor: cr.cuota_valor,
           estado: 'activo',
           motivo_solicitud: null,
           motivo_respuesta: null,
@@ -319,28 +405,27 @@ export async function POST(req: NextRequest) {
           created_at: new Date(),
         });
         created++;
-        processed.push({ credit_id: cr.credit_id, cedula: cr.cedula, name: cr.name, action: 'creado' });
       }
+      processed.push({
+        credit_id: cr.credit_id, cedula: cr.cedula, name: cr.name,
+        action: existing ? 'actualizado' : 'creado',
+        valor_prestamo: valorPrestamo, saldo: cr.saldo,
+      });
     }
 
     return NextResponse.json({
       success: true,
-      total_en_pdf: parsedCredits.length,
+      total_en_archivo: parsedCredits.length,
       creados: created,
       actualizados: updated,
       no_encontrados: notFound,
       cedulas_no_encontradas: notFoundCedulas,
       detalle: processed,
-      _debug_sample: parsedCredits.slice(0, 3).map(c => ({
-        credit_id: c.credit_id, cedula: c.cedula, name: c.name,
-        cuota_valor: c.cuota_valor, numero_cuotas: c.numero_cuotas,
-        tasa: c.tasa, saldo: c.saldo, valor_inicial: c.valor_inicial,
-      })),
     });
   } catch (err) {
     console.error('Bulk credit upload error:', err);
     return NextResponse.json(
-      { error: 'Error procesando el PDF: ' + (err instanceof Error ? err.message : 'desconocido') },
+      { error: 'Error procesando el archivo: ' + (err instanceof Error ? err.message : 'desconocido') },
       { status: 500 }
     );
   }
