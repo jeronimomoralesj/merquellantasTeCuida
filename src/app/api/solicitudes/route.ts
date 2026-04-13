@@ -68,6 +68,7 @@ export async function POST(req: NextRequest) {
     num_dias: body.numDias || null,
     document_url: body.documentUrl || null,
     document_name: body.documentName || null,
+    document_urls: Array.isArray(body.documentUrls) ? body.documentUrls : (body.documentUrl ? [{ url: body.documentUrl, name: body.documentName }] : []),
     created_at: new Date(),
   });
 

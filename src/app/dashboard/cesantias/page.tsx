@@ -42,8 +42,7 @@ export default function CesantiasPage() {
   // form state
   const [motivoSolicitud, setMotivoSolicitud] = useState('');
   const [categoria, setCategoria] = useState('');
-  const [selectedFile, setSelectedFile] = useState<File|null>(null);
-  const [fileName, setFileName] = useState('');
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [fileError, setFileError] = useState(false);
 
   // submission state
@@ -56,23 +55,20 @@ export default function CesantiasPage() {
   const userCedula = session?.user?.cedula || '';
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0] ?? null;
-    if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        setFileError(true);
-        setSelectedFile(null);
-        setFileName('');
-      } else {
-        setFileError(false);
-        setSelectedFile(file);
-        setFileName(file.name);
-      }
+    const files = Array.from(e.target.files || []);
+    const valid: File[] = [];
+    for (const file of files) {
+      if (file.size > 50 * 1024 * 1024) { setFileError(true); return; }
+      valid.push(file);
     }
+    if (selectedFiles.length + valid.length > 5) { setFileError(true); return; }
+    setFileError(false);
+    setSelectedFiles(prev => [...prev, ...valid]);
+    e.target.value = '';
   };
 
-  const handleRemoveFile = () => {
-    setSelectedFile(null);
-    setFileName('');
+  const handleRemoveFile = (idx: number) => {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== idx));
     setFileError(false);
   };
 
@@ -116,21 +112,24 @@ export default function CesantiasPage() {
       setFormError('Debe seleccionar una categoría');
       return;
     }
-    if (!selectedFile) {
-      setFormError('Debe adjuntar un documento');
+    if (selectedFiles.length === 0) {
+      setFormError('Debe adjuntar al menos un documento');
       return;
     }
     setIsSubmitting(true);
 
     try {
-      // 1) upload to OneDrive
-      const fd = new FormData();
-      fd.append('file', selectedFile);
-      fd.append('folder', 'cesantias');
-
-      const uploadRes = await fetch('/api/upload', { method: 'POST', body: fd });
-      if (!uploadRes.ok) throw new Error('Error al subir el documento');
-      const uploaded = await uploadRes.json();
+      // 1) upload all files
+      const fileUrls: { url: string; name: string }[] = [];
+      for (const file of selectedFiles) {
+        const fd = new FormData();
+        fd.append('file', file);
+        fd.append('folder', 'cesantias');
+        const uploadRes = await fetch('/api/upload', { method: 'POST', body: fd });
+        if (!uploadRes.ok) throw new Error('Error al subir el documento');
+        const uploaded = await uploadRes.json();
+        fileUrls.push({ url: uploaded.url || uploaded.webUrl, name: file.name });
+      }
 
       // 2) create cesantias record
       const res = await fetch('/api/cesantias', {
@@ -139,7 +138,8 @@ export default function CesantiasPage() {
         body: JSON.stringify({
           motivoSolicitud: motivoSolicitud.trim(),
           categoria,
-          fileUrl: uploaded.webUrl,
+          fileUrl: fileUrls[0]?.url || null,
+          fileUrls,
         }),
       });
       if (!res.ok) throw new Error('Error al crear solicitud');
@@ -160,8 +160,7 @@ export default function CesantiasPage() {
   const handleNewRequest = () => {
     setMotivoSolicitud('');
     setCategoria('');
-    setSelectedFile(null);
-    setFileName('');
+    setSelectedFiles([]);
     setFileError(false);
     setFormError('');
     setSubmitted(false);
@@ -291,51 +290,37 @@ export default function CesantiasPage() {
                   )}
                 </label>
 
-                <div className={`
-                  border-2 border-dashed rounded-lg p-6
-                  ${fileError ? 'border-red-300 bg-red-50' 
-                    : fileName ? 'border-green-300 bg-green-50' 
-                    : 'border-gray-300 hover:border-[#ff9900]'}
-                  transition-all
-                `}>
-                  {!fileName ? (
-                    <div className="text-center">
-                      <Upload className="h-10 w-10 text-gray-400 mx-auto mb-3" />
-                      <p className="text-sm text-gray-600 mb-1">Arrastre su archivo aquí o</p>
+                <div className={`border-2 border-dashed rounded-lg p-6 transition-all ${fileError ? 'border-red-300 bg-red-50' : selectedFiles.length > 0 ? 'border-green-300 bg-green-50' : 'border-gray-300 hover:border-[#ff9900]'}`}>
+                  {selectedFiles.length < 5 && (
+                    <div className="text-center mb-3">
+                      <Upload className="h-8 w-8 text-gray-400 mx-auto mb-2" />
                       <label className="bg-white border border-gray-300 rounded-lg px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 cursor-pointer inline-block">
-                        Seleccionar archivo
-                        <input
-                          type="file"
-                          className="hidden"
-                          accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                          onChange={handleFileChange}
-                        />
+                        Seleccionar archivos
+                        <input type="file" className="hidden" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" onChange={handleFileChange} multiple />
                       </label>
-                      <p className="mt-2 text-xs text-gray-500">PDF, DOC, DOCX, JPG o PNG (máx. 5MB)</p>
-                    </div>
-                  ) : (
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center">
-                        <FileText className="h-8 w-8 text-[#ff9900] mr-3" />
-                        <div>
-                          <p className="text-sm font-medium text-gray-700">{fileName}</p>
-                          <p className="text-xs text-gray-500">Documento cargado correctamente</p>
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={handleRemoveFile}
-                        className="p-1.5 bg-white rounded-full border border-gray-300 hover:bg-gray-100"
-                      >
-                        <X className="h-4 w-4 text-gray-500" />
-                      </button>
+                      <p className="mt-2 text-xs text-gray-500">Hasta 5 archivos, máx. 50MB c/u</p>
                     </div>
                   )}
-
+                  {selectedFiles.length > 0 && (
+                    <div className="space-y-2">
+                      {selectedFiles.map((f, i) => (
+                        <div key={i} className="flex items-center justify-between p-2 bg-white rounded-lg border border-gray-200">
+                          <div className="flex items-center min-w-0">
+                            <FileText className="h-5 w-5 text-[#ff9900] mr-2 flex-shrink-0" />
+                            <p className="text-sm text-gray-700 truncate">{f.name}</p>
+                            <span className="text-xs text-gray-400 ml-2 flex-shrink-0">{(f.size / 1024 / 1024).toFixed(1)}MB</span>
+                          </div>
+                          <button type="button" onClick={() => handleRemoveFile(i)} className="p-1 hover:bg-gray-100 rounded-full ml-2 flex-shrink-0">
+                            <X className="h-4 w-4 text-gray-500" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   {fileError && (
                     <div className="mt-3 flex items-center text-red-600 text-sm">
                       <AlertCircle className="h-4 w-4 mr-1.5" />
-                      El archivo excede el tamaño máximo de 5MB
+                      Máximo 5 archivos de 50MB cada uno
                     </div>
                   )}
                 </div>

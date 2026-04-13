@@ -11,6 +11,7 @@ import {
   Info,
   User,
   Briefcase,
+  X,
 } from 'lucide-react';
 
 // Interface definition - removed name and cedula
@@ -26,7 +27,7 @@ interface FormData {
   mesDiagnostico: string;
   startDate: string;
   endDate: string;
-  document: File | null;
+  documents: File[];
 }
 
 const IncapacidadForm = () => {
@@ -43,7 +44,7 @@ const IncapacidadForm = () => {
     mesDiagnostico: '',
     startDate: '',
     endDate: '',
-    document: null,
+    documents: [],
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -141,8 +142,8 @@ const IncapacidadForm = () => {
       return false;
     }
     
-    if (!formData.document) {
-      setFormError('Debe adjuntar un documento');
+    if (formData.documents.length === 0) {
+      setFormError('Debe adjuntar al menos un documento');
       return false;
     }
     
@@ -165,26 +166,23 @@ const IncapacidadForm = () => {
         return;
       }
 
-      // 2) upload the file
-      const fileToUpload = formData.document;
-      if (!fileToUpload) {
-        setFormError('Debe adjuntar un documento');
-        setIsSubmitting(false);
-        return;
-      }
-      if (!(fileToUpload instanceof File)) {
-        setFormError('Archivo inválido');
+      // 2) upload files
+      if (formData.documents.length === 0) {
+        setFormError('Debe adjuntar al menos un documento');
         setIsSubmitting(false);
         return;
       }
 
-      const uploadForm = new window.FormData();
-      uploadForm.append('file', fileToUpload);
-      uploadForm.append('folder', 'incapacidad');
-
-      const uploadRes = await fetch('/api/upload', { method: 'POST', body: uploadForm });
-      if (!uploadRes.ok) throw new Error('Error al subir archivo');
-      const { url } = await uploadRes.json();
+      const documentUrls: { url: string; name: string }[] = [];
+      for (const file of formData.documents) {
+        const uploadForm = new window.FormData();
+        uploadForm.append('file', file);
+        uploadForm.append('folder', 'incapacidad');
+        const uploadRes = await fetch('/api/upload', { method: 'POST', body: uploadForm });
+        if (!uploadRes.ok) throw new Error('Error al subir archivo');
+        const uploaded = await uploadRes.json();
+        documentUrls.push({ url: uploaded.url || uploaded.webUrl, name: file.name });
+      }
 
       // 3) user info from session
       const nombre = session.user.nombre || 'Usuario';
@@ -204,8 +202,9 @@ const IncapacidadForm = () => {
         estado: 'pendiente',
         startDate: formData.startDate,
         endDate: formData.endDate,
-        documentName: fileToUpload.name,
-        documentUrl: url,
+        documentName: documentUrls[0]?.name || null,
+        documentUrl: documentUrls[0]?.url || null,
+        documentUrls,
         edad: formData.edad,
         gender: formData.gender,
         cargo: formData.cargo,
@@ -240,22 +239,22 @@ const IncapacidadForm = () => {
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      
-      if (file.size > 5 * 1024 * 1024) { // 5MB limit
-        setFileError(true);
-        setFormData({
-          ...formData,
-          document: null
-        });
-      } else {
-        setFileError(false);
-        setFormData({
-          ...formData,
-          document: file
-        });
+      const files = Array.from(e.target.files || []);
+      const valid: File[] = [];
+      for (const file of files) {
+        if (file.size > 50 * 1024 * 1024) { setFileError(true); return; }
+        valid.push(file);
       }
+      if (formData.documents.length + valid.length > 5) { setFileError(true); return; }
+      setFileError(false);
+      setFormData({ ...formData, documents: [...formData.documents, ...valid] });
+      e.target.value = '';
     }
+  };
+
+  const handleRemoveFile = (idx: number) => {
+    setFormData({ ...formData, documents: formData.documents.filter((_, i) => i !== idx) });
+    setFileError(false);
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
@@ -284,7 +283,7 @@ const IncapacidadForm = () => {
       mesDiagnostico: '',
       startDate: '',
       endDate: '',
-      document: null,
+      documents: [],
     });
     setSubmitted(false);
     setFormError('');
@@ -575,38 +574,39 @@ const IncapacidadForm = () => {
               <Upload className="w-5 h-5 mr-2 text-[#ff9900]" />
               Documentación
             </h3>
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-              <input
-                type="file"
-                id="document"
-                name="document"
-                onChange={handleFileChange}
-                className="hidden"
-                accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-              />
-              <label
-                htmlFor="document"
-                className="cursor-pointer flex flex-col items-center justify-center"
-              >
-                <div className="w-12 h-12 bg-[#ff9900]/10 rounded-full flex items-center justify-center mb-3">
-                  <Upload className="h-6 w-6 text-[#ff9900]" />
-                </div>
-                <span className="font-medium text-gray-700 mb-1">
-                  {formData.document ? formData.document.name : 'Adjuntar documento'}
-                </span>
-                <span className="text-sm text-gray-500">
-                  {formData.document 
-                    ? `${(formData.document.size / 1024 / 1024).toFixed(2)} MB`
-                    : 'PDF, JPG, PNG, DOC (Máx. 5MB)'}
-                </span>
-                
-                {fileError && (
-                  <div className="mt-3 text-red-500 text-sm flex items-center">
-                    <AlertCircle className="h-4 w-4 mr-1" />
-                    El archivo excede el límite de 5MB
+            <div className={`border-2 border-dashed rounded-lg p-6 text-center transition-all ${fileError ? 'border-red-300 bg-red-50' : formData.documents.length > 0 ? 'border-green-300 bg-green-50' : 'border-gray-300 hover:border-[#ff9900]'}`}>
+              {formData.documents.length < 5 && (
+                <label className="cursor-pointer flex flex-col items-center justify-center">
+                  <div className="w-12 h-12 bg-[#ff9900]/10 rounded-full flex items-center justify-center mb-3">
+                    <Upload className="h-6 w-6 text-[#ff9900]" />
                   </div>
-                )}
-              </label>
+                  <span className="font-medium text-gray-700 mb-1">Adjuntar documentos</span>
+                  <span className="text-xs text-gray-500">Hasta 5 archivos, máx. 50MB c/u</span>
+                  <input type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" onChange={handleFileChange} multiple />
+                </label>
+              )}
+              {formData.documents.length > 0 && (
+                <div className="space-y-2 mt-3 text-left">
+                  {formData.documents.map((f, i) => (
+                    <div key={i} className="flex items-center justify-between p-2 bg-white rounded-lg border border-gray-200">
+                      <div className="flex items-center min-w-0">
+                        <FileText className="h-5 w-5 text-[#ff9900] mr-2 flex-shrink-0" />
+                        <p className="text-sm text-gray-700 truncate">{f.name}</p>
+                        <span className="text-xs text-gray-400 ml-2 flex-shrink-0">{(f.size / 1024 / 1024).toFixed(1)}MB</span>
+                      </div>
+                      <button type="button" onClick={() => handleRemoveFile(i)} className="p-1 hover:bg-gray-100 rounded-full ml-2">
+                        <X className="h-4 w-4 text-gray-500" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {fileError && (
+                <div className="mt-3 text-red-500 text-sm flex items-center justify-center">
+                  <AlertCircle className="h-4 w-4 mr-1" />
+                  Máximo 5 archivos de 50MB cada uno
+                </div>
+              )}
             </div>
             <p className="mt-2 text-xs text-gray-500 flex items-center">
               <Info className="h-3 w-3 mr-1" />

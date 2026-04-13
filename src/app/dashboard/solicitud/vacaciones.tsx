@@ -2,12 +2,14 @@
 
 import React, { useState, useEffect } from 'react';
 import { 
-  Upload, 
-  Calendar, 
-  CheckCircle, 
-  AlertCircle, 
+  Upload,
+  Calendar,
+  CheckCircle,
+  AlertCircle,
   Info,
-  Clock
+  Clock,
+  FileText,
+  X,
 } from 'lucide-react';
 import { useSession } from 'next-auth/react';
 
@@ -15,7 +17,7 @@ interface VacacionesFormData {
   fechaInicio: string;
   fechaFin: string;
   description: string;
-  document: File | null;
+  documents: File[];
 }
 
 const VacacionesForm = () => {
@@ -24,7 +26,7 @@ const VacacionesForm = () => {
     fechaInicio: '',
     fechaFin: '',
     description: '',
-    document: null,
+    documents: [],
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -70,8 +72,8 @@ const VacacionesForm = () => {
       setFormError('La fecha de fin debe ser posterior o igual a la fecha de inicio');
       return false;
     }
-    if (!formData.document) {
-      setFormError('Debe adjuntar un documento');
+    if (formData.documents.length === 0) {
+      setFormError('Debe adjuntar al menos un documento');
       return false;
     }
     return true;
@@ -110,16 +112,17 @@ const VacacionesForm = () => {
         return;
       }
 
-      const file = formData.document as File;
-
-      // Upload to OneDrive
-      const fd = new FormData();
-      fd.append('file', file);
-      fd.append('folder', 'vacaciones');
-
-      const uploadRes = await fetch('/api/upload', { method: 'POST', body: fd });
-      if (!uploadRes.ok) throw new Error('Error al subir el documento');
-      const uploaded = await uploadRes.json();
+      // Upload all documents
+      const documentUrls: { url: string; name: string }[] = [];
+      for (const file of formData.documents) {
+        const fd = new FormData();
+        fd.append('file', file);
+        fd.append('folder', 'vacaciones');
+        const uploadRes = await fetch('/api/upload', { method: 'POST', body: fd });
+        if (!uploadRes.ok) throw new Error('Error al subir el documento');
+        const uploaded = await uploadRes.json();
+        documentUrls.push({ url: uploaded.url || uploaded.webUrl, name: file.name });
+      }
 
       const res = await fetch('/api/solicitudes', {
         method: 'POST',
@@ -130,8 +133,9 @@ const VacacionesForm = () => {
           fechaFin: formData.fechaFin,
           diasVacaciones,
           description: formData.description,
-          documentName: uploaded.name,
-          documentUrl: uploaded.webUrl,
+          documentName: documentUrls[0]?.name || null,
+          documentUrl: documentUrls[0]?.url || null,
+          documentUrls,
         }),
       });
 
@@ -151,17 +155,21 @@ const VacacionesForm = () => {
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      
-      if (file.size > 5 * 1024 * 1024) {
-        setFileError(true);
-        setFormData({ ...formData, document: null });
-      } else {
-        setFileError(false);
-        setFormData({ ...formData, document: file });
-      }
+    const files = Array.from(e.target.files || []);
+    const valid: File[] = [];
+    for (const file of files) {
+      if (file.size > 50 * 1024 * 1024) { setFileError(true); return; }
+      valid.push(file);
     }
+    if (formData.documents.length + valid.length > 5) { setFileError(true); return; }
+    setFileError(false);
+    setFormData({ ...formData, documents: [...formData.documents, ...valid] });
+    e.target.value = '';
+  };
+
+  const handleRemoveFile = (idx: number) => {
+    setFormData({ ...formData, documents: formData.documents.filter((_, i) => i !== idx) });
+    setFileError(false);
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -175,7 +183,7 @@ const VacacionesForm = () => {
       fechaInicio: '',
       fechaFin: '',
       description: '',
-      document: null,
+      documents: [],
     });
     setSubmitted(false);
     setFormError('');
@@ -298,35 +306,39 @@ const VacacionesForm = () => {
               <Upload className="w-5 h-5 mr-2 text-[#ff9900]" />
               Documentación
             </h3>
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-              <input
-                type="file"
-                id="document"
-                name="document"
-                onChange={handleFileChange}
-                className="hidden"
-                accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-              />
-              <label htmlFor="document" className="cursor-pointer flex flex-col items-center justify-center">
-                <div className="w-12 h-12 bg-[#ff9900]/10 rounded-full flex items-center justify-center mb-3">
-                  <Upload className="h-6 w-6 text-[#ff9900]" />
-                </div>
-                <span className="font-medium text-gray-700 mb-1 text-sm sm:text-base">
-                  {formData.document ? formData.document.name : 'Adjuntar documento'}
-                </span>
-                <span className="text-xs sm:text-sm text-gray-500">
-                  {formData.document 
-                    ? `${(formData.document.size / 1024 / 1024).toFixed(2)} MB`
-                    : 'PDF, JPG, PNG, DOC (Máx. 5MB)'}
-                </span>
-                
-                {fileError && (
-                  <div className="mt-3 text-red-500 text-sm flex items-center">
-                    <AlertCircle className="h-4 w-4 mr-1" />
-                    El archivo excede el límite de 5MB
+            <div className={`border-2 border-dashed rounded-lg p-6 text-center transition-all ${fileError ? 'border-red-300 bg-red-50' : formData.documents.length > 0 ? 'border-green-300 bg-green-50' : 'border-gray-300 hover:border-[#ff9900]'}`}>
+              {formData.documents.length < 5 && (
+                <label className="cursor-pointer flex flex-col items-center justify-center">
+                  <div className="w-12 h-12 bg-[#ff9900]/10 rounded-full flex items-center justify-center mb-3">
+                    <Upload className="h-6 w-6 text-[#ff9900]" />
                   </div>
-                )}
-              </label>
+                  <span className="font-medium text-gray-700 mb-1 text-sm">Adjuntar documentos</span>
+                  <span className="text-xs text-gray-500">Hasta 5 archivos, máx. 50MB c/u</span>
+                  <input type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" onChange={handleFileChange} multiple />
+                </label>
+              )}
+              {formData.documents.length > 0 && (
+                <div className="space-y-2 mt-3 text-left">
+                  {formData.documents.map((f, i) => (
+                    <div key={i} className="flex items-center justify-between p-2 bg-white rounded-lg border border-gray-200">
+                      <div className="flex items-center min-w-0">
+                        <FileText className="h-5 w-5 text-[#ff9900] mr-2 flex-shrink-0" />
+                        <p className="text-sm text-gray-700 truncate">{f.name}</p>
+                        <span className="text-xs text-gray-400 ml-2 flex-shrink-0">{(f.size / 1024 / 1024).toFixed(1)}MB</span>
+                      </div>
+                      <button type="button" onClick={() => handleRemoveFile(i)} className="p-1 hover:bg-gray-100 rounded-full ml-2">
+                        <X className="h-4 w-4 text-gray-500" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {fileError && (
+                <div className="mt-3 text-red-500 text-sm flex items-center justify-center">
+                  <AlertCircle className="h-4 w-4 mr-1" />
+                  Máximo 5 archivos de 50MB cada uno
+                </div>
+              )}
             </div>
           </div>
           

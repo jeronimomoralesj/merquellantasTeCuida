@@ -23,6 +23,11 @@ import {
   RefreshCw,
 } from "lucide-react";
 // Type definitions
+interface DocFile {
+  url: string;
+  name: string;
+}
+
 interface BaseDocumentData {
   nombre: string;
   cedula: string;
@@ -32,6 +37,7 @@ interface BaseDocumentData {
   description?: string;
   document_url?: string;
   document_name?: string;
+  document_urls?: DocFile[];
   motivo_respuesta?: string;
 }
 
@@ -91,6 +97,7 @@ interface PermisoData extends BaseDocumentData {
 interface CesantiasData extends BaseDocumentData {
   motivo_solicitud: string;
   file_url?: string;
+  file_urls?: DocFile[];
 }
 
 type TabKey = "pendiente" | "gestionada" | "todas";
@@ -473,6 +480,45 @@ export default function SolicitudesCard() {
   );
 
   // Type guard
+  // Helper to get all document files from any solicitud type
+  const getDocFiles = (data: RequestData['rawData']): DocFile[] => {
+    if (!data) return [];
+    // New multi-file format
+    if ('document_urls' in data && Array.isArray(data.document_urls) && data.document_urls.length > 0) return data.document_urls;
+    if ('file_urls' in data && Array.isArray((data as CesantiasData).file_urls) && ((data as CesantiasData).file_urls || []).length > 0) return (data as CesantiasData).file_urls!;
+    // Legacy single-file format
+    if ('document_url' in data && data.document_url) return [{ url: data.document_url, name: data.document_name || 'Documento' }];
+    if ('file_url' in data && (data as CesantiasData).file_url) return [{ url: (data as CesantiasData).file_url!, name: 'Documento' }];
+    return [];
+  };
+
+  const DocumentsList: React.FC<{ files: DocFile[] }> = ({ files }) => {
+    if (files.length === 0) return null;
+    return (
+      <div className="mb-6">
+        <h4 className="font-semibold mb-2 text-gray-700 flex items-center">
+          <Download className="h-5 w-5 mr-2" />
+          Documentos adjuntos ({files.length})
+        </h4>
+        <div className="space-y-2">
+          {files.map((f, i) => (
+            <button
+              key={i}
+              onClick={() => window.open(f.url, "_blank")}
+              className="w-full flex items-center justify-between px-4 py-2.5 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors border border-blue-200 text-left"
+            >
+              <div className="flex items-center min-w-0">
+                <FileText className="h-4 w-4 mr-2 flex-shrink-0" />
+                <span className="text-sm truncate">{f.name}</span>
+              </div>
+              <Download className="h-4 w-4 flex-shrink-0 ml-2" />
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
   const isIncapacidadData = (data: RequestData['rawData']): data is IncapacidadData => {
     return data !== undefined && 'tipo' in data && data.tipo === 'incapacidad';
   };
@@ -581,23 +627,7 @@ export default function SolicitudesCard() {
         </div>
       </div>
 
-      {data.document_url && (
-        <div className="bg-purple-50 p-4 rounded-lg">
-          <h4 className="font-semibold mb-3 text-gray-800 flex items-center">
-            <FileText className="h-5 w-5 mr-2 text-purple-600" />
-            Documento Adjunto
-          </h4>
-          <div className="flex items-center justify-between">
-            <p className="text-gray-700">{data.document_name || 'Documento médico'}</p>
-            <button
-              onClick={() => window.open(data.document_url, "_blank")}
-              className="flex items-center px-4 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors duration-200"
-            >
-              <Download className="mr-2 h-4 w-4" /> Ver documento
-            </button>
-          </div>
-        </div>
-      )}
+      <DocumentsList files={getDocFiles(data)} />
     </div>
   );
 
@@ -907,14 +937,7 @@ export default function SolicitudesCard() {
                     <p className="bg-gray-50 p-4 rounded-lg text-gray-800 border border-gray-200">{selected.rawData.description}</p>
                   </div>
                 )}
-                {selected.rawData.document_url && (
-                  <div>
-                    <h4 className="font-semibold mb-2 text-gray-700 flex items-center"><Download className="h-5 w-5 mr-2" /> Documento adjunto</h4>
-                    <button onClick={() => window.open(selected.rawData && 'document_url' in selected.rawData ? (selected.rawData as PermisoData).document_url : undefined, "_blank")} className="flex items-center px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors border border-blue-200">
-                      <Download className="mr-2 h-4 w-4" /> Ver documento
-                    </button>
-                  </div>
-                )}
+                <DocumentsList files={getDocFiles(selected.rawData)} />
               </div>
             ) : isVacacionesData(selected.rawData) ? (
               <div className="space-y-4">
@@ -944,14 +967,7 @@ export default function SolicitudesCard() {
                     <p className="bg-gray-50 p-4 rounded-lg text-gray-800 border border-gray-200">{selected.rawData.description}</p>
                   </div>
                 )}
-                {selected.rawData.document_url && (
-                  <div>
-                    <h4 className="font-semibold mb-2 text-gray-700 flex items-center"><Download className="h-5 w-5 mr-2" /> Documento adjunto</h4>
-                    <button onClick={() => window.open(selected.rawData && 'document_url' in selected.rawData ? (selected.rawData as VacacionesData).document_url : undefined, "_blank")} className="flex items-center px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors border border-blue-200">
-                      <Download className="mr-2 h-4 w-4" /> Ver documento
-                    </button>
-                  </div>
-                )}
+                <DocumentsList files={getDocFiles(selected.rawData)} />
               </div>
             ) : isCesantiasData(selected.rawData) ? (
               <div className="space-y-4">
@@ -965,14 +981,7 @@ export default function SolicitudesCard() {
                     <p className="font-medium text-gray-800 mt-1">{selected.rawData.motivo_solicitud || 'No disponible'}</p>
                   </div>
                 </div>
-                {selected.rawData.file_url && (
-                  <div>
-                    <h4 className="font-semibold mb-2 text-gray-700 flex items-center"><Download className="h-5 w-5 mr-2" /> Documento adjunto</h4>
-                    <button onClick={() => window.open((selected.rawData as CesantiasData).file_url, "_blank")} className="flex items-center px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors border border-blue-200">
-                      <Download className="mr-2 h-4 w-4" /> Ver documento
-                    </button>
-                  </div>
-                )}
+                <DocumentsList files={getDocFiles(selected.rawData)} />
               </div>
             ) : (
               <>

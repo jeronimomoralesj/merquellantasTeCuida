@@ -34,6 +34,7 @@ export async function POST(req: NextRequest) {
     motivo_solicitud: body.motivoSolicitud,
     categoria: body.categoria,
     file_url: body.fileUrl || null,
+    file_urls: Array.isArray(body.fileUrls) ? body.fileUrls : (body.fileUrl ? [{ url: body.fileUrl, name: 'documento' }] : []),
     estado: 'pendiente',
     created_at: new Date(),
   });
