@@ -2,11 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '../../../lib/db';
 import { auth } from '../../../lib/auth';
 
-export const config = {
-  api: { bodyParser: false },
-};
-
-// Increase body size limit for Next.js App Router
 export const maxDuration = 60;
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
@@ -30,7 +25,7 @@ export async function POST(req: NextRequest) {
   }
 
   if (file.size > MAX_FILE_SIZE) {
-    return NextResponse.json({ error: 'El archivo excede el tamaño máximo de 25MB' }, { status: 400 });
+    return NextResponse.json({ error: 'El archivo excede el tamaño máximo de 50MB' }, { status: 400 });
   }
 
   if (file.size === 0) {
@@ -45,6 +40,10 @@ export async function POST(req: NextRequest) {
   const buffer = Buffer.from(await file.arrayBuffer());
   const base64 = buffer.toString('base64');
 
+  // For calendar uploads, set an expiration date (next day) for auto-cleanup
+  const isCalendar = folder === 'calendar';
+  const expiresAt = isCalendar ? new Date(Date.now() + 2 * 24 * 60 * 60 * 1000) : null;
+
   const db = await getDb();
   const result = await db.collection('file_uploads').insertOne({
     name: file.name,
@@ -54,6 +53,7 @@ export async function POST(req: NextRequest) {
     data: base64,
     uploaded_by: session.user.id,
     uploaded_at: new Date(),
+    expires_at: expiresAt,
   });
 
   const fileId = result.insertedId.toString();

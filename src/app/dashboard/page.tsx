@@ -332,6 +332,9 @@ const mapCalendarData = (raw: Record<string, unknown>[]): CalendarEvent[] =>
   }));
 
 useEffect(() => {
+  // Fire-and-forget cleanup of expired calendar media
+  fetch('/api/cleanup').catch(() => {});
+
   async function fetchNextEvents() {
     try {
       setLoadingEvent(true);
