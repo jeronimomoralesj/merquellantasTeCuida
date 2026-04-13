@@ -184,8 +184,8 @@ const uploadBirthdayMedia = async (
     const file = input.files?.[0];
     if (!file) return;
 
-    if (file.size > 25 * 1024 * 1024) {
-      alert("El archivo no debe superar 25MB");
+    if (file.size > 50 * 1024 * 1024) {
+      alert("El archivo no debe superar 50MB");
       return;
     }
 
@@ -861,7 +861,7 @@ const uploadBirthdayMedia = async (
     <label className="block text-sm font-medium text-gray-700 mb-2">
       Video o imagen de cumpleaños (opcional)
     </label>
-    <p className="text-xs text-gray-500 mb-2">Video: máx 45 segundos, 25MB. Imagen: máx 25MB.</p>
+    <p className="text-xs text-gray-500 mb-2">Video: máx 45 segundos, 50MB. Imagen: máx 50MB.</p>
 
     <input
       type="file"
@@ -870,8 +870,8 @@ const uploadBirthdayMedia = async (
         const file = e.target.files?.[0] ?? null;
         if (!file) return;
 
-        if (file.size > 25 * 1024 * 1024) {
-          setVideoError("El archivo no debe superar 25MB");
+        if (file.size > 50 * 1024 * 1024) {
+          setVideoError("El archivo no debe superar 50MB");
           setSelectedVideo(null);
           return;
         }

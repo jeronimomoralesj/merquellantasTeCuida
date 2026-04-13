@@ -2,7 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '../../../lib/db';
 import { auth } from '../../../lib/auth';
 
-const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25MB
+export const config = {
+  api: { bodyParser: false },
+};
+
+// Increase body size limit for Next.js App Router
+export const maxDuration = 60;
+
+const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 const ALLOWED_EXTENSIONS = new Set([
   '.pdf', '.doc', '.docx', '.xls', '.xlsx',
   '.jpg', '.jpeg', '.png', '.gif', '.webp',
