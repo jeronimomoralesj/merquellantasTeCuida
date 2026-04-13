@@ -114,8 +114,12 @@ export default function DocumentsPage() {
   };
 
   // Handle document download/view
-  const handleDocumentAction = (doc: Document) => {
-    window.open(doc.document, '_blank');
+  const handleDocumentAction = (doc: Document, download = false) => {
+    if (!doc.document) return;
+    const url = download && doc.document.startsWith('/api/upload/')
+      ? `${doc.document}?download=1`
+      : doc.document;
+    window.open(url, '_blank');
   };
 
   // Format date
@@ -150,7 +154,8 @@ export default function DocumentsPage() {
 
       const uploadRes = await fetch('/api/upload', { method: 'POST', body: formData });
       if (!uploadRes.ok) throw new Error('Upload failed');
-      const { url: downloadURL } = await uploadRes.json();
+      const uploadData = await uploadRes.json();
+      const downloadURL = uploadData.url || uploadData.webUrl;
 
       // Create document record via API
       const docRes = await fetch('/api/documentos', {
@@ -344,7 +349,7 @@ export default function DocumentsPage() {
                         Ver/Abrir
                       </button>
                       <button
-                        onClick={() => handleDocumentAction(doc)}
+                        onClick={() => handleDocumentAction(doc, true)}
                         className="px-4 py-2 border border-[#ff9900] text-[#ff9900] rounded-lg hover:bg-[#ff9900]/10 transition-colors"
                       >
                         <Download size={16} />
