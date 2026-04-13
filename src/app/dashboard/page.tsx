@@ -319,13 +319,25 @@ const isBirthdayToday = (originalDate: Date): boolean => {
   );
 };
 
+// Map raw DB calendar docs to frontend CalendarEvent (video_url → videoUrl, etc.)
+const mapCalendarData = (raw: Record<string, unknown>[]): CalendarEvent[] =>
+  raw.map(d => ({
+    title: String(d.title || ''),
+    description: String(d.description || ''),
+    image: String(d.image || ''),
+    date: String(d.date || ''),
+    type: String(d.type || ''),
+    videoUrl: String(d.video_url || d.videoUrl || ''),
+    videoPath: String(d.video_path || d.videoPath || ''),
+  }));
+
 useEffect(() => {
   async function fetchNextEvents() {
     try {
       setLoadingEvent(true);
 
       const res = await fetch('/api/calendar');
-      const calendarData: CalendarEvent[] = res.ok ? await res.json() : [];
+      const calendarData: CalendarEvent[] = res.ok ? mapCalendarData(await res.json()) : [];
 
       const now = new Date();
       now.setHours(0, 0, 0, 0);
@@ -460,7 +472,7 @@ useEffect(() => {
       setLoadingEvents(true);
 
       const res = await fetch('/api/calendar');
-      const calendarData: CalendarEvent[] = res.ok ? await res.json() : [];
+      const calendarData: CalendarEvent[] = res.ok ? mapCalendarData(await res.json()) : [];
 
       const now = new Date();
       now.setHours(0, 0, 0, 0);

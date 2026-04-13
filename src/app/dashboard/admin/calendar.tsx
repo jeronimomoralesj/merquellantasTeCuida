@@ -98,7 +98,7 @@ export default function CalendarCard() {
       const fetchedEvents: CalendarEvent[] = events.map((eventData: Record<string, unknown>) => {
         const storedDate = new Date(eventData.date as string);
         return {
-          id: eventData.id,
+          id: String(eventData._id || eventData.id || ''),
           title: (eventData.title as string) || '',
           description: (eventData.description as string) || '',
           date: addOneDayForDisplay(storedDate),
