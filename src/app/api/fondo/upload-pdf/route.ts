@@ -1,20 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '../../../../lib/db';
 import { auth } from '../../../../lib/auth';
-import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist/legacy/build/pdf.mjs';
-
-// Disable worker for server-side usage
-GlobalWorkerOptions.workerSrc = '';
+// eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
+const pdfjsLib = require('pdfjs-dist/legacy/build/pdf.js');
+pdfjsLib.GlobalWorkerOptions.workerSrc = false;
 
 async function extractTextFromPdf(buffer: Buffer): Promise<string> {
   const data = new Uint8Array(buffer);
-  const doc = await getDocument({ data, useWorkerFetch: false, isEvalSupported: false, useSystemFonts: true }).promise;
+  const doc = await pdfjsLib.getDocument({ data, isEvalSupported: false, useSystemFonts: true }).promise;
   const pages: string[] = [];
   for (let i = 1; i <= doc.numPages; i++) {
     const page = await doc.getPage(i);
     const content = await page.getTextContent();
     const text = content.items
-      .map((item) => ('str' in item ? item.str : ''))
+      .map((item: { str?: string }) => item.str || '')
       .join(' ');
     pages.push(text);
   }
