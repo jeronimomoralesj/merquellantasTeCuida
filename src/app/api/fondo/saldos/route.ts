@@ -67,3 +67,36 @@ export async function GET(req: NextRequest) {
     retiros,
   });
 }
+
+// PUT /api/fondo/saldos — update member balances (fondo only)
+export async function PUT(req: NextRequest) {
+  const session = await auth();
+  if (!session || session.user.rol !== 'fondo') {
+    return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+  }
+
+  const body = await req.json();
+  const userId = body.user_id;
+  if (!userId) return NextResponse.json({ error: 'user_id requerido' }, { status: 400 });
+
+  const db = await getDb();
+  const update: Record<string, unknown> = {};
+
+  if (body.saldo_permanente !== undefined) update.saldo_permanente = Number(body.saldo_permanente);
+  if (body.saldo_social !== undefined) update.saldo_social = Number(body.saldo_social);
+  if (body.saldo_actividad !== undefined) update.saldo_actividad = Number(body.saldo_actividad);
+  if (body.saldo_intereses !== undefined) update.saldo_intereses = Number(body.saldo_intereses);
+  if (body.monto_aporte !== undefined) update.monto_aporte = Number(body.monto_aporte);
+  if (body.frecuencia !== undefined) update.frecuencia = body.frecuencia;
+
+  if (Object.keys(update).length === 0) {
+    return NextResponse.json({ error: 'Nada que actualizar' }, { status: 400 });
+  }
+
+  await db.collection('fondo_members').updateOne(
+    { user_id: userId },
+    { $set: update }
+  );
+
+  return NextResponse.json({ success: true });
+}

@@ -109,10 +109,15 @@ interface Credito {
   credito_id?: string;
   valor_prestamo: number;
   saldo_total: number;
+  tasa_interes?: number;
+  numero_cuotas?: number;
   cuotas_pagadas: number;
   cuotas_restantes: number;
+  frecuencia_pago?: string;
+  fecha_desembolso?: string;
+  fecha_cuota_1?: string;
   estado: string;
-  pagos?: { numero_cuota: number; fecha_pago: string; monto_total: number; flagged?: boolean }[];
+  pagos?: { numero_cuota: number; fecha_pago: string; monto_total: number; flagged?: boolean; monto_esperado?: number; diferencia?: number }[];
 }
 
 interface SearchUser {
@@ -1116,14 +1121,15 @@ function BuscarAfiliadoTab() {
   const [creditos, setCreditos] = useState<Credito[]>([]);
   const [loadingProfile, setLoadingProfile] = useState(false);
 
+  const [saving, setSaving] = useState(false);
+
   /* editable credito_id */
   const [editingCreditId, setEditingCreditId] = useState<string | null>(null);
   const [editCreditIdValue, setEditCreditIdValue] = useState("");
-  const [savingCreditId, setSavingCreditId] = useState(false);
 
   const handleSaveCreditId = async (carteraId: string) => {
     if (!editCreditIdValue.trim()) return;
-    setSavingCreditId(true);
+    setSaving(true);
     try {
       const res = await fetch("/api/fondo/cartera", {
         method: "PUT",
@@ -1135,7 +1141,53 @@ function BuscarAfiliadoTab() {
         setEditingCreditId(null);
       }
     } finally {
-      setSavingCreditId(false);
+      setSaving(false);
+    }
+  };
+
+  // Save saldo field
+  const handleSaveSaldo = async (field: string, value: number) => {
+    if (!selected) return;
+    setSaving(true);
+    try {
+      const userId = selected.user_id || selected.id;
+      const res = await fetch("/api/fondo/saldos", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: userId, [field]: value }),
+      });
+      if (res.ok && saldos) {
+        const key = field.replace("saldo_", "") as keyof Saldos;
+        setSaldos({ ...saldos, [key]: value });
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Save credit fields
+  const handleSaveCreditFields = async (carteraId: string, fields: Record<string, unknown>) => {
+    setSaving(true);
+    try {
+      const res = await fetch("/api/fondo/cartera", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cartera_id: carteraId, action: "update_fields", fields }),
+      });
+      if (res.ok) {
+        // Refresh the user profile
+        const userId = selected?.user_id || selected?.id;
+        if (userId) {
+          const sRes = await fetch(`/api/fondo/saldos?user_id=${userId}`);
+          if (sRes.ok) {
+            const data = await sRes.json();
+            if (data.saldos) setSaldos(data.saldos);
+            if (Array.isArray(data.cartera)) setCreditos(data.cartera);
+          }
+        }
+      }
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -1144,7 +1196,7 @@ function BuscarAfiliadoTab() {
     saldos: true,
     aportes: true,
     actividades: false,
-    cartera: false,
+    cartera: true,
   });
 
   const toggleSection = (key: string) =>
@@ -1314,22 +1366,29 @@ function BuscarAfiliadoTab() {
               >
                 {saldos ? (
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                    {[
-                      { label: "Permanente", value: saldos.permanente },
-                      { label: "Social", value: saldos.social },
-                      { label: "Actividad", value: saldos.actividad },
-                      { label: "Intereses", value: saldos.intereses },
-                    ].map((s) => (
+                    {([
+                      { label: "Permanente", field: "saldo_permanente", value: saldos.permanente },
+                      { label: "Social", field: "saldo_social", value: saldos.social },
+                      { label: "Actividad", field: "saldo_actividad", value: saldos.actividad },
+                      { label: "Intereses", field: "saldo_intereses", value: saldos.intereses },
+                    ] as const).map((s) => (
                       <div
                         key={s.label}
-                        className="bg-gray-50 rounded-xl p-4 border border-gray-100"
+                        className="bg-gray-50 rounded-xl p-3 border border-gray-100"
                       >
-                        <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">
+                        <p className="text-[10px] text-gray-500 font-semibold uppercase tracking-wider mb-1">
                           {s.label}
                         </p>
-                        <p className="mt-1 text-lg font-bold text-gray-900">
-                          {fmt(s.value)}
-                        </p>
+                        <input
+                          type="number"
+                          defaultValue={s.value}
+                          onBlur={(e) => {
+                            const v = Number(e.target.value) || 0;
+                            if (v !== s.value) handleSaveSaldo(s.field, v);
+                          }}
+                          onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                          className="w-full text-lg font-bold text-gray-900 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-[#ff9900] focus:outline-none transition-colors"
+                        />
                       </div>
                     ))}
                   </div>
@@ -1457,11 +1516,14 @@ function BuscarAfiliadoTab() {
               >
                 {creditos.length > 0 ? (
                   <div className="space-y-4">
-                    {creditos.map((cr, idx) => (
+                    {creditos.map((cr, idx) => {
+                      const totalCuotas = (cr.numero_cuotas || (cr.cuotas_pagadas + cr.cuotas_restantes));
+                      return (
                       <div
                         key={cr._id || idx}
                         className="rounded-xl border border-gray-200 overflow-hidden"
                       >
+                        {/* Credit header with editable ID */}
                         <div className="px-4 py-3 bg-gray-50 flex items-center justify-between gap-2">
                           <div className="flex items-center gap-2 flex-wrap min-w-0">
                             {editingCreditId === cr._id ? (
@@ -1475,85 +1537,106 @@ function BuscarAfiliadoTab() {
                                   className="w-24 px-2 py-1 rounded-lg border border-[#ff9900] text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-[#ff9900]/40"
                                   autoFocus
                                 />
-                                <button
-                                  onClick={() => handleSaveCreditId(cr._id!)}
-                                  disabled={savingCreditId}
-                                  className="p-1 rounded-lg bg-[#ff9900] text-white hover:bg-[#e68a00] disabled:opacity-50"
-                                >
-                                  <Check size={14} />
-                                </button>
-                                <button
-                                  onClick={() => setEditingCreditId(null)}
-                                  className="p-1 rounded-lg bg-gray-200 text-gray-600 hover:bg-gray-300"
-                                >
-                                  <X size={14} />
-                                </button>
+                                <button onClick={() => handleSaveCreditId(cr._id!)} disabled={saving} className="p-1 rounded-lg bg-[#ff9900] text-white hover:bg-[#e68a00] disabled:opacity-50"><Check size={14} /></button>
+                                <button onClick={() => setEditingCreditId(null)} className="p-1 rounded-lg bg-gray-200 text-gray-600 hover:bg-gray-300"><X size={14} /></button>
                               </div>
                             ) : (
                               <button
                                 onClick={() => { setEditingCreditId(cr._id!); setEditCreditIdValue(cr.credito_id || cr._id || ""); }}
                                 className="font-semibold text-gray-900 text-sm hover:text-[#ff9900] transition-colors cursor-pointer"
-                                title="Click para editar ID del crédito"
+                                title="Click para editar ID"
                               >
                                 Crédito {cr.credito_id || cr._id}
                                 <span className="ml-1 text-[10px] text-gray-400">(editar)</span>
                               </button>
                             )}
-                            <span className="text-xs text-gray-500">
-                              Total: {fmt(cr.valor_prestamo || 0)} | Saldo: {fmt(cr.saldo_total || 0)} | Cuotas: {cr.cuotas_pagadas || 0}/{(cr.cuotas_pagadas || 0) + (cr.cuotas_restantes || 0)}
-                            </span>
                           </div>
-                          <span
-                            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border flex-shrink-0 ${
-                              cr.estado === "activo"
-                                ? "bg-blue-100 text-blue-800 border-blue-300"
-                                : "bg-gray-100 text-gray-800 border-gray-300"
-                            }`}
+                          <select
+                            defaultValue={cr.estado}
+                            onChange={(e) => handleSaveCreditFields(cr._id!, { estado: e.target.value })}
+                            className="text-xs font-semibold rounded-full px-2.5 py-0.5 border bg-white focus:outline-none focus:ring-2 focus:ring-[#ff9900]/40"
                           >
-                            {cr.estado}
-                          </span>
+                            <option value="activo">activo</option>
+                            <option value="pagado">pagado</option>
+                            <option value="pendiente">pendiente</option>
+                            <option value="rechazado">rechazado</option>
+                          </select>
                         </div>
-                        <table className="w-full text-sm">
-                          <thead>
-                            <tr className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                              <th className="px-4 py-2">Cuota</th>
-                              <th className="px-4 py-2">Fecha</th>
-                              <th className="px-4 py-2 text-right">Monto</th>
-                              <th className="px-4 py-2">Estado</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-gray-100">
-                            {(cr.pagos ?? []).map((p, i) => (
-                              <tr
-                                key={i}
-                                className={`transition-colors ${
-                                  p.flagged ? "bg-yellow-50" : "hover:bg-gray-50"
-                                }`}
-                              >
-                                <td className="px-4 py-2 text-gray-700 font-medium">
-                                  #{p.numero_cuota}
-                                </td>
-                                <td className="px-4 py-2 text-gray-600">
-                                  {p.fecha_pago ? new Date(p.fecha_pago).toLocaleDateString("es-CO") : "—"}
-                                </td>
-                                <td className="px-4 py-2 text-right font-mono text-gray-700">
-                                  {fmt(p.monto_total || 0)}
-                                </td>
-                                <td className="px-4 py-2">
-                                  {p.flagged ? (
-                                    <span className="inline-flex items-center gap-1 text-xs text-yellow-700 font-semibold">
-                                      <AlertCircle size={14} /> Difiere
-                                    </span>
-                                  ) : (
-                                    <span className="text-xs text-green-600 font-semibold">OK</span>
-                                  )}
-                                </td>
+
+                        {/* Editable credit fields */}
+                        <div className="p-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                          {([
+                            { label: "Valor Préstamo", field: "valor_prestamo", value: cr.valor_prestamo, type: "number" },
+                            { label: "Saldo Total", field: "saldo_total", value: cr.saldo_total, type: "number" },
+                            { label: "Tasa Interés (%)", field: "tasa_interes", value: cr.tasa_interes ?? 0, type: "number" },
+                            { label: "Num. Cuotas", field: "numero_cuotas", value: totalCuotas, type: "number" },
+                            { label: "Cuotas Pagadas", field: "cuotas_pagadas", value: cr.cuotas_pagadas, type: "number" },
+                            { label: "Cuotas Restantes", field: "", value: cr.cuotas_restantes, type: "readonly" },
+                            { label: "Frecuencia", field: "frecuencia_pago", value: cr.frecuencia_pago || "mensual", type: "select" },
+                            { label: "Fecha Desembolso", field: "fecha_desembolso", value: cr.fecha_desembolso ? new Date(cr.fecha_desembolso).toISOString().slice(0, 10) : "", type: "date" },
+                          ] as const).map((f) => (
+                            <div key={f.label}>
+                              <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">{f.label}</p>
+                              {f.type === "readonly" ? (
+                                <p className="text-sm font-bold text-gray-900">{f.value}</p>
+                              ) : f.type === "select" ? (
+                                <select
+                                  defaultValue={String(f.value)}
+                                  onChange={(e) => handleSaveCreditFields(cr._id!, { [f.field]: e.target.value })}
+                                  className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#ff9900]/40"
+                                >
+                                  <option value="mensual">Mensual</option>
+                                  <option value="quincenal">Quincenal</option>
+                                </select>
+                              ) : (
+                                <input
+                                  type={f.type}
+                                  defaultValue={f.value}
+                                  onBlur={(e) => {
+                                    const v = f.type === "date" ? e.target.value : Number(e.target.value) || 0;
+                                    if (String(v) !== String(f.value)) handleSaveCreditFields(cr._id!, { [f.field]: v });
+                                  }}
+                                  onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                                  className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff9900]/40 focus:border-[#ff9900]"
+                                  step={f.field === "tasa_interes" ? "0.01" : undefined}
+                                />
+                              )}
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Payment history */}
+                        {(cr.pagos ?? []).length > 0 && (
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider bg-gray-50">
+                                <th className="px-4 py-2">Cuota</th>
+                                <th className="px-4 py-2">Fecha</th>
+                                <th className="px-4 py-2 text-right">Monto</th>
+                                <th className="px-4 py-2">Estado</th>
                               </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                              {(cr.pagos ?? []).map((p, i) => (
+                                <tr key={i} className={`transition-colors ${p.flagged ? "bg-yellow-50" : "hover:bg-gray-50"}`}>
+                                  <td className="px-4 py-2 text-gray-700 font-medium">#{p.numero_cuota}</td>
+                                  <td className="px-4 py-2 text-gray-600">{p.fecha_pago ? new Date(p.fecha_pago).toLocaleDateString("es-CO") : "—"}</td>
+                                  <td className="px-4 py-2 text-right font-mono text-gray-700">{fmt(p.monto_total || 0)}</td>
+                                  <td className="px-4 py-2">
+                                    {p.flagged ? (
+                                      <span className="inline-flex items-center gap-1 text-xs text-yellow-700 font-semibold"><AlertCircle size={14} /> Difiere</span>
+                                    ) : (
+                                      <span className="text-xs text-green-600 font-semibold">OK</span>
+                                    )}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        )}
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 ) : (
                   <p className="text-sm text-gray-400">

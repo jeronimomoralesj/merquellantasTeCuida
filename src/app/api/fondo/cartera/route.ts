@@ -208,6 +208,43 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ success: true });
   }
 
+  // ----- UPDATE FIELDS (general credit editing) -----
+  if (action === 'update_fields') {
+    const update: Record<string, unknown> = {};
+    const fields = body.fields || {};
+
+    if (fields.valor_prestamo !== undefined) update.valor_prestamo = Number(fields.valor_prestamo);
+    if (fields.tasa_interes !== undefined) update.tasa_interes = Number(fields.tasa_interes);
+    if (fields.numero_cuotas !== undefined) update.numero_cuotas = Number(fields.numero_cuotas);
+    if (fields.cuotas_pagadas !== undefined) update.cuotas_pagadas = Number(fields.cuotas_pagadas);
+    if (fields.frecuencia_pago !== undefined) update.frecuencia_pago = fields.frecuencia_pago;
+    if (fields.saldo_total !== undefined) {
+      update.saldo_total = Number(fields.saldo_total);
+      update.saldo_capital = Number(fields.saldo_total);
+    }
+    if (fields.estado !== undefined) update.estado = fields.estado;
+    if (fields.fecha_desembolso !== undefined) update.fecha_desembolso = fields.fecha_desembolso ? new Date(fields.fecha_desembolso) : null;
+    if (fields.fecha_cuota_1 !== undefined) update.fecha_cuota_1 = fields.fecha_cuota_1 ? new Date(fields.fecha_cuota_1) : null;
+
+    // Recalculate cuotas_restantes if cuotas_pagadas or numero_cuotas changed
+    const newNumCuotas = update.numero_cuotas !== undefined ? Number(update.numero_cuotas) : cartera.numero_cuotas;
+    const newCuotasPagadas = update.cuotas_pagadas !== undefined ? Number(update.cuotas_pagadas) : cartera.cuotas_pagadas;
+    update.cuotas_restantes = Math.max(0, newNumCuotas - newCuotasPagadas);
+
+    update.updated_at = new Date();
+
+    if (Object.keys(update).length <= 1) {
+      return NextResponse.json({ error: 'Nada que actualizar' }, { status: 400 });
+    }
+
+    await db.collection('fondo_cartera').updateOne(
+      { _id: new ObjectId(body.cartera_id) },
+      { $set: update }
+    );
+
+    return NextResponse.json({ success: true });
+  }
+
   // ----- PAGO (default) -----
   if (cartera.estado !== 'activo') {
     return NextResponse.json({ error: 'Solo se pueden pagar créditos activos' }, { status: 400 });
