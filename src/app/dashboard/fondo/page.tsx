@@ -341,6 +341,9 @@ function CicloActualTab() {
   const [uploadError, setUploadError] = useState("");
   const [cicloActualMap, setCicloActualMap] = useState<Record<string, CicloActualData>>({});
   const [expandedPdf, setExpandedPdf] = useState<string | null>(null);
+  const [pdfUploaded, setPdfUploaded] = useState(false);
+  const [manuallyAddedUsers, setManuallyAddedUsers] = useState<Set<string>>(new Set());
+  const [showAddUser, setShowAddUser] = useState(false);
 
   // Compute current periodo (YYYY-MM-A or YYYY-MM-B)
   const computeCurrentPeriodo = () => {
@@ -511,7 +514,9 @@ function CicloActualTab() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Error al subir el PDF");
       setUploadResult(data);
-      setAppliedPdfUsers(new Set()); // Reset so new PDF data gets applied
+      setAppliedPdfUsers(new Set());
+      setPdfUploaded(true);
+      setManuallyAddedUsers(new Set());
       await fetchCicloActualData();
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : "Error desconocido");
@@ -563,11 +568,13 @@ function CicloActualTab() {
   };
 
   // In ajustes_admin mode, only show users who actually have budget adjustments
+  // When PDF uploaded, only show users in the PDF + manually added
   const isAjustesMode = existingCiclo?.estado === "ajustes_admin";
   const visibleRows = useMemo(() => {
-    if (!isAjustesMode) return rows;
-    return rows.filter((r) => budgetMap[r.user_id] !== undefined);
-  }, [rows, isAjustesMode, budgetMap]);
+    if (isAjustesMode) return rows.filter((r) => budgetMap[r.user_id] !== undefined);
+    if (pdfUploaded) return rows.filter((r) => cicloActualMap[r.user_id] || manuallyAddedUsers.has(r.user_id));
+    return rows;
+  }, [rows, isAjustesMode, budgetMap, pdfUploaded, cicloActualMap, manuallyAddedUsers]);
 
   const filtered = useMemo(
     () => {
@@ -791,6 +798,9 @@ function CicloActualTab() {
         {filtered.length === 0 && (
           <div className="text-center py-12 text-gray-400 text-sm">No se encontraron miembros.</div>
         )}
+        {pdfUploaded && filtered.length > 0 && (
+          <p className="text-xs text-gray-500">Mostrando {filtered.length} usuario(s) del PDF{manuallyAddedUsers.size > 0 ? ` + ${manuallyAddedUsers.size} agregado(s)` : ""}</p>
+        )}
         {filtered.map((row) => {
           const idx = rows.findIndex((r) => r.user_id === row.user_id);
           const total = computeRowTotal(row);
@@ -949,6 +959,45 @@ function CicloActualTab() {
             </div>
           );
         })}
+
+        {/* Add user button (visible after PDF upload) */}
+        {pdfUploaded && (
+          <div className="mt-2">
+            {!showAddUser ? (
+              <button
+                onClick={() => setShowAddUser(true)}
+                className="w-full py-3 rounded-xl border-2 border-dashed border-gray-300 text-gray-500 hover:border-[#ff9900] hover:text-[#ff9900] transition-colors flex items-center justify-center gap-2 text-sm font-semibold"
+              >
+                <UserPlus size={16} />
+                Agregar usuario no incluido en el PDF
+              </button>
+            ) : (
+              <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-semibold text-gray-700">Seleccionar usuario</p>
+                  <button onClick={() => setShowAddUser(false)} className="p-1 hover:bg-gray-100 rounded-full"><X size={16} className="text-gray-400" /></button>
+                </div>
+                <div className="max-h-48 overflow-y-auto divide-y divide-gray-100 border border-gray-200 rounded-lg">
+                  {rows
+                    .filter((r) => !cicloActualMap[r.user_id] && !manuallyAddedUsers.has(r.user_id))
+                    .map((r) => (
+                      <button
+                        key={r.user_id}
+                        onClick={() => {
+                          setManuallyAddedUsers((prev) => new Set(prev).add(r.user_id));
+                          setShowAddUser(false);
+                        }}
+                        className="w-full text-left px-3 py-2 hover:bg-orange-50 text-sm transition-colors"
+                      >
+                        <span className="font-medium text-gray-900">{r.nombre}</span>
+                        <span className="ml-2 text-xs text-gray-500">CC {r.cedula}</span>
+                      </button>
+                    ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
