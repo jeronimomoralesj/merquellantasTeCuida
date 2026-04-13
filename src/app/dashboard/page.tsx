@@ -779,9 +779,11 @@ useEffect(() => {
                 </div>
               ) : currentEvent.image || isBirthday ? (
                 <img
-                  src={isBirthday
-                    ? ["https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ28hdK2YMK1kT1QcKgtTpMVKX-PzNDQy0GGg&s","https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQx_br_f6lRM6GlR4pC_lTXijSfA2d3ovsdSw&s","https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRJF6XSwytfBht0vJcIbdWDCpif4C9esFJ0_g&s"][currentEventIndex % 3]
-                    : currentEvent.image
+                  src={currentEvent.image && currentEvent.image.startsWith('/api/')
+                    ? currentEvent.image
+                    : isBirthday
+                      ? ["https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ28hdK2YMK1kT1QcKgtTpMVKX-PzNDQy0GGg&s","https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQx_br_f6lRM6GlR4pC_lTXijSfA2d3ovsdSw&s","https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRJF6XSwytfBht0vJcIbdWDCpif4C9esFJ0_g&s"][currentEventIndex % 3]
+                      : currentEvent.image
                   }
                   alt={currentEvent.title}
                   className="rounded-2xl shadow-2xl h-48 w-full object-cover md:w-72 ring-4 ring-[#ff9900]/30"
@@ -962,9 +964,11 @@ useEffect(() => {
             </div>
           ) : currentEvent.image || isBirthday ? (
             <img
-              src={isBirthday
-                ? ["https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ28hdK2YMK1kT1QcKgtTpMVKX-PzNDQy0GGg&s","https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQx_br_f6lRM6GlR4pC_lTXijSfA2d3ovsdSw&s","https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRJF6XSwytfBht0vJcIbdWDCpif4C9esFJ0_g&s"][currentEventIndex % 3]
-                : currentEvent.image
+              src={currentEvent.image && currentEvent.image.startsWith('/api/')
+                ? currentEvent.image
+                : isBirthday
+                  ? ["https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ28hdK2YMK1kT1QcKgtTpMVKX-PzNDQy0GGg&s","https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQx_br_f6lRM6GlR4pC_lTXijSfA2d3ovsdSw&s","https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRJF6XSwytfBht0vJcIbdWDCpif4C9esFJ0_g&s"][currentEventIndex % 3]
+                  : currentEvent.image
               }
               alt={currentEvent.title}
               className={`rounded-xl shadow h-40 w-full object-cover md:w-64 ${

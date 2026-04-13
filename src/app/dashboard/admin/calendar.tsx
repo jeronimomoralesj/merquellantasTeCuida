@@ -624,36 +624,30 @@ const uploadBirthdayMedia = async (
                       {event.description && (
                         <p className="text-xs text-gray-600 mt-1 truncate">{event.description}</p>
                       )}
-                      {event.type === "birthday" && (
-  <>
-    {event.videoUrl ? (
-      <div className="flex items-center gap-2 mt-1">
-        <a
-          href={event.videoUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-xs text-blue-600 underline inline-block"
-        >
-          Ver media actual
-        </a>
-        <span className="text-gray-300">|</span>
-        <button
-          onClick={() => uploadBirthdayMedia(event.id, event.userId, event.videoPath)}
-          className="text-xs text-blue-600 underline inline-block hover:text-blue-800"
-        >
-          Cambiar imagen/video
-        </button>
-      </div>
-    ) : (
-      <button
-        onClick={() => uploadBirthdayMedia(event.id, event.userId)}
-        className="text-xs text-blue-600 underline mt-1 inline-block hover:text-blue-800"
-      >
-        Subir imagen o video
-      </button>
-    )}
-  </>
-)}
+                      {/* Media preview + edit */}
+                      {(event.videoUrl || event.image) && (
+                        <div className="mt-2 flex items-center gap-2">
+                          {event.videoUrl ? (
+                            <video src={event.videoUrl} className="h-16 w-24 object-cover rounded border border-gray-200" muted preload="metadata" />
+                          ) : event.image ? (
+                            <img src={event.image} alt="" className="h-16 w-24 object-cover rounded border border-gray-200" />
+                          ) : null}
+                          <button
+                            onClick={() => uploadBirthdayMedia(event.id, event.userId, event.videoPath)}
+                            className="text-[10px] px-2 py-1 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition-colors"
+                          >
+                            Cambiar
+                          </button>
+                        </div>
+                      )}
+                      {!event.videoUrl && !event.image && event.type === "birthday" && (
+                        <button
+                          onClick={() => uploadBirthdayMedia(event.id, event.userId)}
+                          className="text-xs text-blue-600 underline mt-1 inline-block hover:text-blue-800"
+                        >
+                          Subir imagen o video
+                        </button>
+                      )}
 
                     </div>
                     <button
