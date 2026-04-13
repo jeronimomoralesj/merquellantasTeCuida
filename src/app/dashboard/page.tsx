@@ -777,9 +777,12 @@ useEffect(() => {
                     className="h-full w-full object-contain"
                   />
                 </div>
-              ) : currentEvent.image ? (
+              ) : currentEvent.image || isBirthday ? (
                 <img
-                  src={currentEvent.image}
+                  src={isBirthday
+                    ? ["https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ28hdK2YMK1kT1QcKgtTpMVKX-PzNDQy0GGg&s","https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQx_br_f6lRM6GlR4pC_lTXijSfA2d3ovsdSw&s","https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRJF6XSwytfBht0vJcIbdWDCpif4C9esFJ0_g&s"][currentEventIndex % 3]
+                    : currentEvent.image
+                  }
                   alt={currentEvent.title}
                   className="rounded-2xl shadow-2xl h-48 w-full object-cover md:w-72 ring-4 ring-[#ff9900]/30"
                 />
@@ -959,8 +962,8 @@ useEffect(() => {
             </div>
           ) : currentEvent.image || isBirthday ? (
             <img
-              src={isBirthday 
-                ? "https://thumbs.dreamstime.com/b/imprimir-parte-corporativa-cumplea%C3%B1os-de-empleados-la-gente-desea-un-feliz-ilustraci%C3%B3n-vectorial-plana-bolas-torta-crackers-184335154.jpg"
+              src={isBirthday
+                ? ["https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ28hdK2YMK1kT1QcKgtTpMVKX-PzNDQy0GGg&s","https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQx_br_f6lRM6GlR4pC_lTXijSfA2d3ovsdSw&s","https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRJF6XSwytfBht0vJcIbdWDCpif4C9esFJ0_g&s"][currentEventIndex % 3]
                 : currentEvent.image
               }
               alt={currentEvent.title}

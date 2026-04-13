@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
             type: 'birthday',
             title: `Cumpleaños de ${nombre}`,
             description: `Recuerden que cumple años ${nombre}`,
-            image: 'https://media.istockphoto.com/id/1349208049/es/foto/marco-multicolor-de-accesorios-para-fiestas-o-cumplea%C3%B1os.jpg',
+            image: ['https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ28hdK2YMK1kT1QcKgtTpMVKX-PzNDQy0GGg&s','https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQx_br_f6lRM6GlR4pC_lTXijSfA2d3ovsdSw&s','https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRJF6XSwytfBht0vJcIbdWDCpif4C9esFJ0_g&s'][Math.floor(Math.random() * 3)],
             date: birthDate,
             created_at: new Date(),
           });
