@@ -171,69 +171,80 @@ export default function CalendarCard() {
   }
 };
 
-const uploadBirthdayVideo = async (
+const uploadBirthdayMedia = async (
   eventId: string,
   _userId: string,
   oldVideoPath?: string
 ) => {
   const input = document.createElement("input");
   input.type = "file";
-  input.accept = "video/mp4,video/webm,video/quicktime";
+  input.accept = "video/mp4,video/webm,video/quicktime,image/jpeg,image/png,image/gif,image/webp";
 
   input.onchange = async () => {
     const file = input.files?.[0];
     if (!file) return;
 
-    if (file.size > 50 * 1024 * 1024) {
-      alert("El video no debe superar 50MB");
+    if (file.size > 25 * 1024 * 1024) {
+      alert("El archivo no debe superar 25MB");
       return;
     }
 
-    const video = document.createElement("video");
-    video.preload = "metadata";
+    const isVideo = file.type.startsWith("video/");
+    const isImage = file.type.startsWith("image/");
 
-    video.onloadedmetadata = async () => {
-      URL.revokeObjectURL(video.src);
+    if (!isVideo && !isImage) {
+      alert("Solo se permiten imágenes o videos");
+      return;
+    }
 
-      if (video.duration > 20) {
-        alert("El video no puede durar más de 20 segundos");
-        return;
-      }
-
+    const doUpload = async () => {
       try {
-        // Upload video via API
         const formData = new FormData();
         formData.append('file', file);
         formData.append('folder', 'calendar');
-
-        const uploadRes = await fetch('/api/upload', {
-          method: 'POST',
-          body: formData,
-        });
+        const uploadRes = await fetch('/api/upload', { method: 'POST', body: formData });
         if (!uploadRes.ok) throw new Error('Upload failed');
-        const { url: videoUrl, path: videoPath } = await uploadRes.json();
+        const uploadData = await uploadRes.json();
+        const fileUrl = uploadData.url || uploadData.webUrl;
 
-        // Update calendar event with new video info
+        const updateBody: Record<string, unknown> = { id: eventId };
+        if (isVideo) {
+          updateBody.videoUrl = fileUrl;
+          updateBody.videoPath = fileUrl;
+        } else {
+          updateBody.image = fileUrl;
+        }
+
         await fetch('/api/calendar', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: eventId, videoUrl, videoPath }),
+          body: JSON.stringify(updateBody),
         });
 
         fetchEvents();
-        alert(oldVideoPath ? "Video actualizado correctamente" : "Video subido correctamente");
-
+        alert(oldVideoPath ? "Archivo actualizado correctamente" : "Archivo subido correctamente");
       } catch (error) {
-        console.error("Error uploading video:", error);
-        alert("Error al subir el video");
+        console.error("Error uploading media:", error);
+        alert("Error al subir el archivo");
       }
     };
 
-    video.onerror = () => {
-      alert("No se pudo leer el video");
-    };
-
-    video.src = URL.createObjectURL(file);
+    if (isVideo) {
+      const video = document.createElement("video");
+      video.preload = "metadata";
+      video.onloadedmetadata = async () => {
+        URL.revokeObjectURL(video.src);
+        if (video.duration > 45) {
+          alert("El video no puede durar más de 45 segundos");
+          return;
+        }
+        await doUpload();
+      };
+      video.onerror = () => alert("No se pudo leer el video");
+      video.src = URL.createObjectURL(file);
+    } else {
+      await doUpload();
+    }
   };
 
   input.click();
@@ -393,10 +404,17 @@ const uploadBirthdayVideo = async (
         formData.append('file', selectedVideo);
         formData.append('folder', 'calendar');
         const uploadRes = await fetch('/api/upload', { method: 'POST', body: formData });
-        if (!uploadRes.ok) throw new Error('Video upload failed');
+        if (!uploadRes.ok) throw new Error('Media upload failed');
         const uploadData = await uploadRes.json();
-        videoUrl = uploadData.url;
-        videoPath = uploadData.path;
+        const mediaUrl = uploadData.url || uploadData.webUrl;
+
+        if (selectedVideo.type.startsWith("video/")) {
+          videoUrl = mediaUrl;
+          videoPath = mediaUrl;
+        } else {
+          // It's an image uploaded via the video/image field — override imageUrl
+          imageUrl = mediaUrl;
+        }
       }
 
       await fetch('/api/calendar', {
@@ -616,22 +634,22 @@ const uploadBirthdayVideo = async (
           rel="noopener noreferrer"
           className="text-xs text-blue-600 underline inline-block"
         >
-          Ver video actual
+          Ver media actual
         </a>
         <span className="text-gray-300">|</span>
         <button
-          onClick={() => uploadBirthdayVideo(event.id, event.userId, event.videoPath)}
+          onClick={() => uploadBirthdayMedia(event.id, event.userId, event.videoPath)}
           className="text-xs text-blue-600 underline inline-block hover:text-blue-800"
         >
-          Cambiar video
+          Cambiar imagen/video
         </button>
       </div>
     ) : (
       <button
-        onClick={() => uploadBirthdayVideo(event.id, event.userId)}
+        onClick={() => uploadBirthdayMedia(event.id, event.userId)}
         className="text-xs text-blue-600 underline mt-1 inline-block hover:text-blue-800"
       >
-        Subir video
+        Subir imagen o video
       </button>
     )}
   </>
@@ -847,27 +865,55 @@ const uploadBirthdayVideo = async (
               {newEvent.type === "birthday" && (
   <div>
     <label className="block text-sm font-medium text-gray-700 mb-2">
-      Video de cumpleaños (opcional)
+      Video o imagen de cumpleaños (opcional)
     </label>
+    <p className="text-xs text-gray-500 mb-2">Video: máx 45 segundos, 25MB. Imagen: máx 25MB.</p>
 
     <input
       type="file"
-      accept="video/mp4,video/webm,video/quicktime"
+      accept="video/mp4,video/webm,video/quicktime,image/jpeg,image/png,image/gif,image/webp"
       onChange={(e) => {
         const file = e.target.files?.[0] ?? null;
         if (!file) return;
 
-        if (file.size > 50 * 1024 * 1024) {
-          setVideoError("El video no debe superar 50MB");
+        if (file.size > 25 * 1024 * 1024) {
+          setVideoError("El archivo no debe superar 25MB");
           setSelectedVideo(null);
           return;
         }
 
-        setVideoError("");
-        setSelectedVideo(file);
+        if (file.type.startsWith("video/")) {
+          // Validate video duration
+          const video = document.createElement("video");
+          video.preload = "metadata";
+          video.onloadedmetadata = () => {
+            URL.revokeObjectURL(video.src);
+            if (video.duration > 45) {
+              setVideoError("El video no puede durar más de 45 segundos");
+              setSelectedVideo(null);
+            } else {
+              setVideoError("");
+              setSelectedVideo(file);
+            }
+          };
+          video.onerror = () => {
+            setVideoError("No se pudo leer el video");
+            setSelectedVideo(null);
+          };
+          video.src = URL.createObjectURL(file);
+        } else {
+          setVideoError("");
+          setSelectedVideo(file);
+        }
       }}
       className="block w-full text-sm text-gray-700"
     />
+
+    {selectedVideo && (
+      <p className="text-xs text-green-600 mt-1">
+        {selectedVideo.type.startsWith("video/") ? "Video" : "Imagen"} seleccionado: {selectedVideo.name}
+      </p>
+    )}
 
     {videoError && (
       <p className="text-xs text-red-600 mt-1">{videoError}</p>
