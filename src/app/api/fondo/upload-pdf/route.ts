@@ -12,10 +12,34 @@ async function extractTextFromPdf(buffer: Buffer): Promise<string> {
   for (let i = 1; i <= doc.numPages; i++) {
     const page = await doc.getPage(i);
     const content = await page.getTextContent();
-    const text = content.items
-      .map((item: { str?: string }) => item.str || '')
-      .join(' ');
-    pages.push(text);
+
+    // Group text items by Y position to reconstruct lines
+    const items: { str: string; x: number; y: number }[] = [];
+    for (const item of content.items) {
+      if (!('str' in item) || !item.str) continue;
+      const tx = item.transform;
+      items.push({ str: item.str, x: tx[4], y: Math.round(tx[5]) });
+    }
+
+    // Sort by Y descending (top to bottom), then X ascending (left to right)
+    items.sort((a, b) => b.y - a.y || a.x - b.x);
+
+    // Group into lines by Y coordinate (items within 2px are same line)
+    const lines: string[] = [];
+    let currentY = items.length > 0 ? items[0].y : 0;
+    let currentLine: string[] = [];
+
+    for (const item of items) {
+      if (Math.abs(item.y - currentY) > 2) {
+        lines.push(currentLine.join(' '));
+        currentLine = [];
+        currentY = item.y;
+      }
+      currentLine.push(item.str);
+    }
+    if (currentLine.length > 0) lines.push(currentLine.join(' '));
+
+    pages.push(lines.join('\n'));
   }
   return pages.join('\n');
 }
@@ -197,10 +221,20 @@ export async function POST(req: NextRequest) {
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
+    const debug = formData.get('debug') === '1';
     const text = await extractTextFromPdf(buffer);
 
     if (!text || text.trim().length === 0) {
       return NextResponse.json({ error: 'No se pudo extraer texto del PDF' }, { status: 400 });
+    }
+
+    // Debug mode: return raw text for analysis
+    if (debug) {
+      return NextResponse.json({
+        raw_text_length: text.length,
+        raw_text_preview: text.substring(0, 5000),
+        raw_text_sample_middle: text.substring(Math.floor(text.length / 2), Math.floor(text.length / 2) + 3000),
+      });
     }
 
     const parsedUsers = parseUserBlocks(text);
