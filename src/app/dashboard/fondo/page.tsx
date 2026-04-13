@@ -21,6 +21,8 @@ import {
   Wallet,
   Activity,
   Landmark,
+  Upload,
+  FileText,
 } from "lucide-react";
 import DashboardNavbar from "../navbar";
 import FondoUserView from "./user-view";
@@ -300,6 +302,22 @@ export default function FondoPage() {
 /*  CICLO ACTUAL TAB                                                   */
 /* ================================================================== */
 
+interface PdfUploadResult {
+  success: boolean;
+  total_en_pdf: number;
+  actualizados: number;
+  no_encontrados: number;
+  cedulas_no_encontradas: string[];
+  detalle: { cedula: string; name: string; credits: number; savings: boolean; activities: number }[];
+}
+
+interface CicloActualData {
+  credits: { credit_id: string; interest: number; capital: number; total: number }[];
+  savings: { ahorro_permanente: number; ahorro_social: number; total: number } | null;
+  activities: { description: string; amount: number }[];
+  uploaded_at?: string;
+}
+
 function CicloActualTab() {
   const [rows, setRows] = useState<CycleRow[]>([]);
   const [filter, setFilter] = useState("");
@@ -311,6 +329,13 @@ function CicloActualTab() {
   const [periodoLabel, setPeriodoLabel] = useState<string>("");
   const [existingCiclo, setExistingCiclo] = useState<Ciclo | null>(null);
   const [budgetMap, setBudgetMap] = useState<Record<string, number>>({});
+
+  // PDF upload state
+  const [uploading, setUploading] = useState(false);
+  const [uploadResult, setUploadResult] = useState<PdfUploadResult | null>(null);
+  const [uploadError, setUploadError] = useState("");
+  const [cicloActualMap, setCicloActualMap] = useState<Record<string, CicloActualData>>({});
+  const [expandedPdf, setExpandedPdf] = useState<string | null>(null);
 
   // Compute current periodo (YYYY-MM-A or YYYY-MM-B)
   const computeCurrentPeriodo = () => {
@@ -416,6 +441,42 @@ function CicloActualTab() {
       }
     })();
   }, []);
+
+  // Fetch cicloActual data for all members after PDF upload
+  const fetchCicloActualData = useCallback(async () => {
+    try {
+      const res = await fetch("/api/fondo/members?include_ciclo=1");
+      if (!res.ok) return;
+      const members: { user_id: string; cedula: string; cicloActual?: CicloActualData }[] = await res.json();
+      const map: Record<string, CicloActualData> = {};
+      for (const m of members) {
+        if (m.cicloActual) map[m.user_id] = m.cicloActual;
+      }
+      setCicloActualMap(map);
+    } catch { /* ignore */ }
+  }, []);
+
+  // Load cicloActual data on mount
+  useEffect(() => { fetchCicloActualData(); }, [fetchCicloActualData]);
+
+  const handlePdfUpload = async (file: File) => {
+    setUploading(true);
+    setUploadError("");
+    setUploadResult(null);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/fondo/upload-pdf", { method: "POST", body: formData });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Error al subir el PDF");
+      setUploadResult(data);
+      await fetchCicloActualData();
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Error desconocido");
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const updateRowField = useCallback(
     (idx: number, field: "frecuencia" | "aporte" | "actividad", value: string | number) => {
@@ -603,6 +664,57 @@ function CicloActualTab() {
         </div>
       )}
 
+      {/* PDF Upload Section */}
+      <div className="mx-5 mt-4 p-4 rounded-xl bg-gray-50 border border-gray-200">
+        <div className="flex items-center gap-3 mb-3">
+          <FileText size={18} className="text-[#ff9900]" />
+          <div>
+            <p className="text-sm font-semibold text-gray-900">Cargar nómina (PDF)</p>
+            <p className="text-xs text-gray-500">Sube el PDF de nómina para actualizar automáticamente los datos del ciclo actual.</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <label className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-gray-200 text-sm font-semibold text-gray-700 cursor-pointer hover:border-[#ff9900]/40 hover:text-[#ff9900] transition-all">
+            <Upload size={16} />
+            {uploading ? "Procesando..." : "Seleccionar PDF"}
+            <input
+              type="file"
+              accept=".pdf"
+              className="hidden"
+              disabled={uploading}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) handlePdfUpload(f);
+                e.target.value = "";
+              }}
+            />
+          </label>
+          {uploading && <div className="animate-spin h-5 w-5 border-2 border-[#ff9900] border-t-transparent rounded-full" />}
+        </div>
+
+        {uploadError && (
+          <div className="mt-3 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm flex items-center gap-2">
+            <AlertCircle size={14} /> {uploadError}
+          </div>
+        )}
+
+        {uploadResult && (
+          <div className="mt-3 p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-sm">
+            <p className="font-semibold text-emerald-800 mb-1">PDF procesado correctamente</p>
+            <div className="grid grid-cols-3 gap-2 text-xs text-emerald-700">
+              <div>Total en PDF: <span className="font-bold">{uploadResult.total_en_pdf}</span></div>
+              <div>Actualizados: <span className="font-bold">{uploadResult.actualizados}</span></div>
+              <div>No encontrados: <span className="font-bold">{uploadResult.no_encontrados}</span></div>
+            </div>
+            {uploadResult.cedulas_no_encontradas.length > 0 && (
+              <p className="mt-2 text-xs text-amber-700">
+                Cédulas no encontradas: {uploadResult.cedulas_no_encontradas.join(", ")}
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* Messages */}
       {error && (
         <div className="mx-5 mt-4 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm flex items-center gap-2">
@@ -707,6 +819,74 @@ function CicloActualTab() {
                   </div>
                 </div>
               )}
+
+              {/* Ciclo Actual from PDF */}
+              {cicloActualMap[row.user_id] && (() => {
+                const ca = cicloActualMap[row.user_id];
+                const isExpanded = expandedPdf === row.user_id;
+                return (
+                  <div className="mt-3 border border-blue-200 rounded-lg overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => setExpandedPdf(isExpanded ? null : row.user_id)}
+                      className="w-full flex items-center justify-between px-3 py-2 bg-blue-50 hover:bg-blue-100 transition-colors text-left"
+                    >
+                      <span className="text-xs font-semibold text-blue-800 flex items-center gap-1.5">
+                        <FileText size={13} />
+                        Datos nómina (PDF)
+                        <span className="text-[10px] font-normal text-blue-600">
+                          — {ca.credits.length} crédito(s), {ca.savings ? "ahorro" : "sin ahorro"}, {ca.activities.length} actividad(es)
+                        </span>
+                      </span>
+                      {isExpanded ? <ChevronDown size={14} className="text-blue-600" /> : <ChevronRight size={14} className="text-blue-600" />}
+                    </button>
+                    {isExpanded && (
+                      <div className="p-3 space-y-3 bg-white">
+                        {ca.credits.length > 0 && (
+                          <div>
+                            <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Abonos a crédito</p>
+                            <div className="space-y-1">
+                              {ca.credits.map((cr, i) => (
+                                <div key={i} className="flex items-center justify-between p-2 rounded-lg bg-gray-50 text-xs">
+                                  <span className="font-semibold text-gray-700">Crédito {cr.credit_id}</span>
+                                  <div className="flex gap-4 text-gray-600">
+                                    <span>Interés: {fmt(cr.interest)}</span>
+                                    <span>Capital: {fmt(cr.capital)}</span>
+                                    <span className="font-bold text-gray-900">Total: {fmt(cr.total)}</span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {ca.savings && (
+                          <div>
+                            <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Ahorros</p>
+                            <div className="flex items-center gap-4 p-2 rounded-lg bg-gray-50 text-xs text-gray-600">
+                              <span>Permanente: {fmt(ca.savings.ahorro_permanente)}</span>
+                              <span>Social: {fmt(ca.savings.ahorro_social)}</span>
+                              <span className="font-bold text-gray-900">Total: {fmt(ca.savings.total)}</span>
+                            </div>
+                          </div>
+                        )}
+                        {ca.activities.length > 0 && (
+                          <div>
+                            <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Actividades</p>
+                            <div className="space-y-1">
+                              {ca.activities.map((act, i) => (
+                                <div key={i} className="flex items-center justify-between p-2 rounded-lg bg-gray-50 text-xs">
+                                  <span className="text-gray-700">{act.description}</span>
+                                  <span className="font-bold text-gray-900">{fmt(act.amount)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           );
         })}

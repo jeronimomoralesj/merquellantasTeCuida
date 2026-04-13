@@ -16,6 +16,7 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const search = searchParams.get('search');
   const searchUsers = searchParams.get('search_users');
+  const includeCiclo = searchParams.get('include_ciclo') === '1';
 
   // Regular users only see themselves
   if (session.user.rol !== 'fondo' && session.user.rol !== 'admin') {
@@ -50,6 +51,9 @@ export async function GET(req: NextRequest) {
   }
 
   // Build the aggregation pipeline for members
+  const userProjection: Record<string, number> = { nombre: 1, cedula: 1, email: 1, cargo_empleado: 1, departamento: 1 };
+  if (includeCiclo) userProjection.cicloActual = 1;
+
   const pipeline: Record<string, unknown>[] = [
     {
       $lookup: {
@@ -57,7 +61,7 @@ export async function GET(req: NextRequest) {
         let: { uid: '$user_id' },
         pipeline: [
           { $match: { $expr: { $eq: [{ $toString: '$_id' }, '$$uid'] } } },
-          { $project: { nombre: 1, cedula: 1, email: 1, cargo_empleado: 1, departamento: 1 } },
+          { $project: userProjection },
         ],
         as: 'user',
       },
@@ -84,23 +88,29 @@ export async function GET(req: NextRequest) {
   const members = await db.collection('fondo_members').aggregate(pipeline).toArray();
 
   // Flatten so the frontend gets nombre/cedula at top level
-  const flattened = members.map((m) => ({
-    id: m._id.toString(),
-    user_id: m.user_id,
-    nombre: m.user?.nombre || '',
-    cedula: m.user?.cedula || '',
-    email: m.user?.email || '',
-    cargo_empleado: m.user?.cargo_empleado || '',
-    departamento: m.user?.departamento || '',
-    frecuencia: m.frecuencia,
-    monto_aporte: m.monto_aporte,
-    saldo_permanente: m.saldo_permanente || 0,
-    saldo_social: m.saldo_social || 0,
-    saldo_actividad: m.saldo_actividad || 0,
-    saldo_intereses: m.saldo_intereses || 0,
-    fecha_afiliacion: m.fecha_afiliacion,
-    activo: m.activo,
-  }));
+  const flattened = members.map((m) => {
+    const base: Record<string, unknown> = {
+      id: m._id.toString(),
+      user_id: m.user_id,
+      nombre: m.user?.nombre || '',
+      cedula: m.user?.cedula || '',
+      email: m.user?.email || '',
+      cargo_empleado: m.user?.cargo_empleado || '',
+      departamento: m.user?.departamento || '',
+      frecuencia: m.frecuencia,
+      monto_aporte: m.monto_aporte,
+      saldo_permanente: m.saldo_permanente || 0,
+      saldo_social: m.saldo_social || 0,
+      saldo_actividad: m.saldo_actividad || 0,
+      saldo_intereses: m.saldo_intereses || 0,
+      fecha_afiliacion: m.fecha_afiliacion,
+      activo: m.activo,
+    };
+    if (includeCiclo && m.user?.cicloActual) {
+      base.cicloActual = m.user.cicloActual;
+    }
+    return base;
+  });
 
   return NextResponse.json(flattened);
 }
