@@ -2051,6 +2051,37 @@ function SolicitudesTab() {
   const [manualExtraPago, setManualExtraPago] = useState("");
   const [manualCreating, setManualCreating] = useState(false);
 
+  // Bulk credit upload
+  const [bulkUploading, setBulkUploading] = useState(false);
+  const [bulkResult, setBulkResult] = useState<{
+    total_en_pdf: number;
+    creados: number;
+    actualizados: number;
+    no_encontrados: number;
+    cedulas_no_encontradas: string[];
+    detalle: { credit_id: string; cedula: string; name: string; action: string }[];
+  } | null>(null);
+  const [bulkError, setBulkError] = useState("");
+
+  const handleBulkUpload = async (file: File) => {
+    setBulkUploading(true);
+    setBulkError("");
+    setBulkResult(null);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/fondo/credits/bulk-upload", { method: "POST", body: formData });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Error al subir el PDF");
+      setBulkResult(data);
+      await loadAll();
+    } catch (err) {
+      setBulkError(err instanceof Error ? err.message : "Error desconocido");
+    } finally {
+      setBulkUploading(false);
+    }
+  };
+
   const loadAll = useCallback(async () => {
     setLoading(true);
     setError("");
@@ -2417,6 +2448,104 @@ function SolicitudesTab() {
                 </>
               );
             })()}
+          </div>
+        )}
+      </div>
+
+      {/* Bulk credit upload */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 sm:p-6">
+        <div className="flex items-center gap-3 mb-3">
+          <FileText size={18} className="text-[#ff9900]" />
+          <div>
+            <p className="text-sm font-semibold text-gray-900">Carga masiva de créditos (PDF)</p>
+            <p className="text-xs text-gray-500">Sube el PDF de reporte de créditos para crear o actualizar créditos de todos los usuarios.</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <label className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-gray-200 text-sm font-semibold text-gray-700 cursor-pointer hover:border-[#ff9900]/40 hover:text-[#ff9900] transition-all">
+            <Upload size={16} />
+            {bulkUploading ? "Procesando..." : "Seleccionar PDF de créditos"}
+            <input
+              type="file"
+              accept=".pdf"
+              className="hidden"
+              disabled={bulkUploading}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) handleBulkUpload(f);
+                e.target.value = "";
+              }}
+            />
+          </label>
+          {bulkUploading && <div className="animate-spin h-5 w-5 border-2 border-[#ff9900] border-t-transparent rounded-full" />}
+        </div>
+
+        {bulkError && (
+          <div className="mt-3 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm flex items-center gap-2">
+            <AlertCircle size={14} /> {bulkError}
+          </div>
+        )}
+
+        {bulkResult && (
+          <div className="mt-3 space-y-3">
+            <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-sm">
+              <p className="font-semibold text-emerald-800 mb-2">Créditos procesados correctamente</p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                <div className="bg-white rounded-lg p-2 text-center border border-emerald-100">
+                  <p className="text-lg font-bold text-gray-900">{bulkResult.total_en_pdf}</p>
+                  <p className="text-[10px] text-gray-500 font-semibold uppercase">En PDF</p>
+                </div>
+                <div className="bg-white rounded-lg p-2 text-center border border-emerald-100">
+                  <p className="text-lg font-bold text-emerald-700">{bulkResult.creados}</p>
+                  <p className="text-[10px] text-gray-500 font-semibold uppercase">Creados</p>
+                </div>
+                <div className="bg-white rounded-lg p-2 text-center border border-emerald-100">
+                  <p className="text-lg font-bold text-blue-700">{bulkResult.actualizados}</p>
+                  <p className="text-[10px] text-gray-500 font-semibold uppercase">Actualizados</p>
+                </div>
+                <div className="bg-white rounded-lg p-2 text-center border border-emerald-100">
+                  <p className="text-lg font-bold text-amber-700">{bulkResult.no_encontrados}</p>
+                  <p className="text-[10px] text-gray-500 font-semibold uppercase">No encontrados</p>
+                </div>
+              </div>
+              {bulkResult.cedulas_no_encontradas.length > 0 && (
+                <p className="mt-2 text-xs text-amber-700">
+                  Cédulas no encontradas: {bulkResult.cedulas_no_encontradas.join(", ")}
+                </p>
+              )}
+            </div>
+
+            {bulkResult.detalle.length > 0 && (
+              <details>
+                <summary className="text-xs text-gray-500 cursor-pointer font-semibold">Ver detalle ({bulkResult.detalle.length} créditos)</summary>
+                <div className="mt-2 border border-gray-200 rounded-xl overflow-hidden max-h-48 overflow-y-auto">
+                  <table className="w-full text-xs">
+                    <thead className="bg-gray-50 sticky top-0">
+                      <tr className="text-left text-[10px] font-semibold text-gray-500 uppercase">
+                        <th className="px-3 py-2">ID</th>
+                        <th className="px-3 py-2">Cédula</th>
+                        <th className="px-3 py-2">Nombre</th>
+                        <th className="px-3 py-2">Acción</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {bulkResult.detalle.map((d, i) => (
+                        <tr key={i} className="hover:bg-gray-50">
+                          <td className="px-3 py-1.5 font-mono font-semibold text-gray-700">{d.credit_id}</td>
+                          <td className="px-3 py-1.5 text-gray-600">{d.cedula}</td>
+                          <td className="px-3 py-1.5 text-gray-600 truncate max-w-[200px]">{d.name}</td>
+                          <td className="px-3 py-1.5">
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${d.action === "creado" ? "bg-emerald-100 text-emerald-800" : "bg-blue-100 text-blue-800"}`}>
+                              {d.action}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </details>
+            )}
           </div>
         )}
       </div>
