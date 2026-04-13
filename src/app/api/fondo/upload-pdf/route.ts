@@ -80,33 +80,27 @@ interface ParsedUser {
 function parseUserBlocks(text: string): ParsedUser[] {
   const users: ParsedUser[] = [];
 
-  // Split into user blocks: each starts with a line containing "ASOCIADO ==>"
-  // Pattern: [CEDULA] [FULL NAME] ASOCIADO ==>
-  const blockPattern = /(\d[\d.]*)\s+(.+?)\s+ASOCIADO\s*==>/g;
+  // Real PDF format: ASOCIADO ==> [CEDULA]   [FULL NAME]
+  // Cedula comes AFTER "ASOCIADO ==>", name is uppercase letters+spaces on same line
+  const blockPattern = /ASOCIADO\s*==>\s*(\d{5,12})\s+([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ ]+)/g;
   const matches: { index: number; cedula: string; name: string }[] = [];
 
   let match;
   while ((match = blockPattern.exec(text)) !== null) {
     matches.push({
       index: match.index,
-      cedula: match[1].replace(/\./g, ''),
+      cedula: match[1].trim(),
       name: match[2].trim(),
     });
   }
 
   for (let i = 0; i < matches.length; i++) {
-    const start = matches[i].index;
-    const end = i + 1 < matches.length ? matches[i + 1].index : text.length;
-    const blockText = text.substring(start, end);
+    const blockEnd = i + 1 < matches.length ? matches[i + 1].index : text.length;
+    const blockText = text.substring(matches[i].index, blockEnd);
 
-    // Find content between "ASOCIADO ==>" and "Subtotal Asociado"
-    const asociadoIdx = blockText.indexOf('ASOCIADO ==>');
+    // Find the line after "ASOCIADO ==>" header up to "Subtotal Asociado"
     const subtotalIdx = blockText.indexOf('Subtotal Asociado');
-    if (asociadoIdx === -1) continue;
-
-    const contentStart = asociadoIdx + 'ASOCIADO ==>'.length;
-    const contentEnd = subtotalIdx !== -1 ? subtotalIdx : blockText.length;
-    const content = blockText.substring(contentStart, contentEnd);
+    const content = subtotalIdx !== -1 ? blockText.substring(0, subtotalIdx) : blockText;
 
     const lines = content.split('\n').map(l => l.trim()).filter(l => l.length > 0);
 
@@ -115,77 +109,76 @@ function parseUserBlocks(text: string): ParsedUser[] {
     const activities: ParsedActivity[] = [];
 
     for (const line of lines) {
-      if (line.includes('ABONO A CREDTO') || line.includes('ABONO A CREDITO')) {
-        // Credit payment line
-        // Pattern: [credit_id] ABONO A CREDTO [values...]
-        const creditMatch = line.match(/^(\d+)\s+ABONO A CRED(?:TO|ITO)\s+(.+)$/i);
-        if (creditMatch) {
-          const creditId = creditMatch[1];
-          const valuesStr = creditMatch[2];
-          const numbers = valuesStr.match(/[\d.]+(?:,\d+)?/g) || [];
-          const nums = numbers.map(parseNumber).filter(n => n > 0);
+      // Skip the ASOCIADO header line itself
+      if (line.includes('ASOCIADO ==>')) continue;
 
-          if (nums.length >= 3) {
-            credits.push({
-              credit_id: creditId,
-              interest: nums[0],
-              capital: nums[1],
-              total: nums[nums.length - 1],
-            });
-          } else if (nums.length === 2) {
-            credits.push({
-              credit_id: creditId,
-              interest: nums[0],
-              capital: nums[1],
-              total: nums[0] + nums[1],
-            });
-          } else if (nums.length === 1) {
-            credits.push({
-              credit_id: creditId,
-              interest: 0,
-              capital: nums[0],
-              total: nums[0],
-            });
-          }
-        }
-      } else if (line.includes('AHORROS PERMANENTES')) {
-        // Savings line
-        const numbers = line.match(/[\d.]+(?:,\d+)?/g) || [];
-        const nums = numbers.map(parseNumber).filter(n => n > 0);
+      if (line.includes('ABONO A CREDTO') || line.includes('ABONO A CREDITO')) {
+        // Credit line: [credit_id] [line_num] ABONO A CREDTO [capital] [interest] [mora] ... [total]
+        // Extract credit_id: first number at the start of the line (4+ digits)
+        const creditIdMatch = line.match(/^(\d{3,6})\s/);
+        const creditId = creditIdMatch ? creditIdMatch[1] : '0';
+
+        // Extract all numbers from the line after the description
+        const afterDesc = line.replace(/^.*?ABONO A CRED(?:TO|ITO)\s*/, '');
+        const nums = extractNumbers(afterDesc);
 
         if (nums.length >= 2) {
-          const sorted = [...nums].sort((a, b) => a - b);
-          const smaller = sorted[0];
-          const larger = sorted[sorted.length - 1];
-          savings = {
-            ahorro_social: smaller,
-            ahorro_permanente: larger,
-            total: smaller + larger,
-          };
+          // PDF column order: CAPITAL, INTERESES, MORA, AHORROS, APORTES, OTROS, TOTAL
+          // After description, the values are: capital, interest, ...zeros..., total
+          const capital = nums[0];
+          const interest = nums[1];
+          const total = nums[nums.length - 1];
+          credits.push({ credit_id: creditId, capital, interest, total });
         } else if (nums.length === 1) {
-          const total = nums[0];
+          credits.push({ credit_id: creditId, capital: nums[0], interest: 0, total: nums[0] });
+        }
+
+      } else if (line.includes('AHORROS PERMANENTES')) {
+        // Savings line: AHORROS PERMANENTES [capital=0] [int=0] [mora=0] [ahorros] [aportes] [otros=0] [total]
+        const afterDesc = line.replace(/^.*?AHORROS PERMANENTES\s*/, '');
+        const nums = extractNumbers(afterDesc);
+        // Find the non-zero values: ahorros (permanente) and aportes (social)
+        const nonZero = nums.filter(n => n > 0);
+
+        if (nonZero.length >= 2) {
+          // Sort: smaller = social (aportes/10%), larger = permanente (ahorros/90%)
+          const sorted = [...nonZero].sort((a, b) => a - b);
+          const ahorro_social = sorted[0];
+          const ahorro_permanente = sorted.length > 2 ? sorted[sorted.length - 2] : sorted[sorted.length - 1];
+          // Total is the largest or sum of the two main values
+          const total = ahorro_permanente + ahorro_social;
+          savings = { ahorro_permanente, ahorro_social, total };
+        } else if (nonZero.length === 1) {
+          const total = nonZero[0];
           savings = {
             ahorro_permanente: Math.round(total * 0.9),
             ahorro_social: Math.round(total * 0.1),
             total,
           };
         }
+
       } else {
-        // Activity line — anything else with a numeric value
-        const numbers = line.match(/[\d.]+(?:,\d+)?/g) || [];
-        const nums = numbers.map(parseNumber).filter(n => n > 0);
-        if (nums.length > 0) {
-          // Extract description: remove numbers and clean up
-          const description = line
-            .replace(/[\d.]+(?:,\d+)?/g, '')
-            .replace(/\s{2,}/g, ' ')
-            .trim();
-          if (description.length > 0) {
-            activities.push({
-              description,
-              amount: nums[nums.length - 1],
-            });
-          }
+        // Activity line — anything else with a description and values
+        // Pattern: [id] [line] [desc like ACTIVIDAD MES] [values...]
+        // Detect: line has a text description AND numeric values
+        const hasDescription = /[A-ZÁÉÍÓÚÑ]{3,}/.test(line);
+        if (!hasDescription) continue;
+
+        // Extract the description text
+        const descMatch = line.match(/([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑA-Za-záéíóúñ\s]+)/);
+        const description = descMatch ? descMatch[1].trim() : '';
+        if (!description || description.length < 3) continue;
+        // Skip header-like lines
+        if (/^(CREDITO|LINEA|DESCRIPCION|CAPITAL|MERQUELLANTAS|FONDO NACIONAL|FONALMERQUE|RELACION|PAGINA)/.test(description)) continue;
+
+        const nums = extractNumbers(line);
+        const nonZero = nums.filter(n => n > 0);
+        if (nonZero.length > 0) {
+          // The last non-zero is typically the total
+          activities.push({
+            description,
+            amount: nonZero[nonZero.length - 1],
+          });
         }
       }
     }
@@ -200,6 +193,13 @@ function parseUserBlocks(text: string): ParsedUser[] {
   }
 
   return users;
+}
+
+// Extract all numbers from a string, handling Colombian format (dots as thousands)
+function extractNumbers(str: string): number[] {
+  // Match numbers like 131.521 or 16.724 or 0 or 45.000
+  const matches = str.match(/\d[\d.]*(?:,\d+)?/g) || [];
+  return matches.map(parseNumber);
 }
 
 export async function POST(req: NextRequest) {
