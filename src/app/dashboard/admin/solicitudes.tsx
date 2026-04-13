@@ -476,6 +476,15 @@ export default function SolicitudesCard() {
   const isIncapacidadData = (data: RequestData['rawData']): data is IncapacidadData => {
     return data !== undefined && 'tipo' in data && data.tipo === 'incapacidad';
   };
+  const isVacacionesData = (data: RequestData['rawData']): data is VacacionesData => {
+    return data !== undefined && 'tipo' in data && data.tipo === 'vacaciones';
+  };
+  const isPermisoData = (data: RequestData['rawData']): data is PermisoData => {
+    return data !== undefined && 'tipo' in data && data.tipo === 'permiso';
+  };
+  const isCesantiasData = (data: RequestData['rawData']): data is CesantiasData => {
+    return data !== undefined && 'motivo_solicitud' in data;
+  };
 
   // Enhanced details for Incapacidad
   const EnfermedadDetails: React.FC<{ data: IncapacidadData }> = ({ data }) => (
@@ -867,6 +876,104 @@ export default function SolicitudesCard() {
             
             {isIncapacidadData(selected.rawData) ? (
               <EnfermedadDetails data={selected.rawData} />
+            ) : isPermisoData(selected.rawData) ? (
+              <div className="space-y-4">
+                <div className="bg-orange-50 p-4 rounded-lg">
+                  <h4 className="font-semibold mb-3 text-gray-800 flex items-center">
+                    <Calendar className="h-5 w-5 mr-2 text-orange-600" />
+                    Detalles del Permiso
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <p className="text-sm text-gray-600">Fecha</p>
+                      <p className="font-medium text-gray-800">{selected.rawData.fecha ? formatShortDate(selected.rawData.fecha) : 'No disponible'}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Hora inicio</p>
+                      <p className="font-medium text-gray-800">{selected.rawData.tiempo_inicio || 'No disponible'}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Hora fin</p>
+                      <p className="font-medium text-gray-800">{selected.rawData.tiempo_fin || 'No disponible'}</p>
+                    </div>
+                  </div>
+                </div>
+                {selected.rawData.description && (
+                  <div>
+                    <h4 className="font-semibold mb-2 text-gray-700 flex items-center">
+                      <FileText className="h-5 w-5 mr-2" />
+                      Descripción
+                    </h4>
+                    <p className="bg-gray-50 p-4 rounded-lg text-gray-800 border border-gray-200">{selected.rawData.description}</p>
+                  </div>
+                )}
+                {selected.rawData.document_url && (
+                  <div>
+                    <h4 className="font-semibold mb-2 text-gray-700 flex items-center"><Download className="h-5 w-5 mr-2" /> Documento adjunto</h4>
+                    <button onClick={() => window.open(selected.rawData && 'document_url' in selected.rawData ? (selected.rawData as PermisoData).document_url : undefined, "_blank")} className="flex items-center px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors border border-blue-200">
+                      <Download className="mr-2 h-4 w-4" /> Ver documento
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : isVacacionesData(selected.rawData) ? (
+              <div className="space-y-4">
+                <div className="bg-blue-50 p-4 rounded-lg">
+                  <h4 className="font-semibold mb-3 text-gray-800 flex items-center">
+                    <Plane className="h-5 w-5 mr-2 text-blue-600" />
+                    Detalles de Vacaciones
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <p className="text-sm text-gray-600">Fecha inicio</p>
+                      <p className="font-medium text-gray-800">{selected.rawData.fecha_inicio ? formatShortDate(selected.rawData.fecha_inicio) : 'No disponible'}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Fecha fin</p>
+                      <p className="font-medium text-gray-800">{selected.rawData.fecha_fin ? formatShortDate(selected.rawData.fecha_fin) : 'No disponible'}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Días solicitados</p>
+                      <p className="font-medium text-gray-800">{selected.rawData.dias_vacaciones || 0} días</p>
+                    </div>
+                  </div>
+                </div>
+                {selected.rawData.description && (
+                  <div>
+                    <h4 className="font-semibold mb-2 text-gray-700 flex items-center"><FileText className="h-5 w-5 mr-2" /> Descripción</h4>
+                    <p className="bg-gray-50 p-4 rounded-lg text-gray-800 border border-gray-200">{selected.rawData.description}</p>
+                  </div>
+                )}
+                {selected.rawData.document_url && (
+                  <div>
+                    <h4 className="font-semibold mb-2 text-gray-700 flex items-center"><Download className="h-5 w-5 mr-2" /> Documento adjunto</h4>
+                    <button onClick={() => window.open(selected.rawData && 'document_url' in selected.rawData ? (selected.rawData as VacacionesData).document_url : undefined, "_blank")} className="flex items-center px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors border border-blue-200">
+                      <Download className="mr-2 h-4 w-4" /> Ver documento
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : isCesantiasData(selected.rawData) ? (
+              <div className="space-y-4">
+                <div className="bg-indigo-50 p-4 rounded-lg">
+                  <h4 className="font-semibold mb-3 text-gray-800 flex items-center">
+                    <Anchor className="h-5 w-5 mr-2 text-indigo-600" />
+                    Detalles de Cesantías
+                  </h4>
+                  <div>
+                    <p className="text-sm text-gray-600">Motivo de la solicitud</p>
+                    <p className="font-medium text-gray-800 mt-1">{selected.rawData.motivo_solicitud || 'No disponible'}</p>
+                  </div>
+                </div>
+                {selected.rawData.file_url && (
+                  <div>
+                    <h4 className="font-semibold mb-2 text-gray-700 flex items-center"><Download className="h-5 w-5 mr-2" /> Documento adjunto</h4>
+                    <button onClick={() => window.open((selected.rawData as CesantiasData).file_url, "_blank")} className="flex items-center px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors border border-blue-200">
+                      <Download className="mr-2 h-4 w-4" /> Ver documento
+                    </button>
+                  </div>
+                )}
+              </div>
             ) : (
               <>
                 <div className="mb-6">
@@ -878,7 +985,7 @@ export default function SolicitudesCard() {
                     {selected.description || "No hay descripción disponible"}
                   </p>
                 </div>
-                
+
                 {selected.attachment && (
                   <div className="mb-6">
                     <h4 className="font-semibold mb-2 text-gray-700 flex items-center">
