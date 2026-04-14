@@ -568,7 +568,7 @@ const Users: React.FC = () => {
 >
                     <option value="user">Usuario</option>
                     <option value="admin">Administrador</option>
-                    <option value="fondo">Fondo</option>
+                    <option value="fondo">Fonalmerque</option>
                   </select>
                 </div>
               </div>
@@ -719,7 +719,7 @@ const Users: React.FC = () => {
                       .toUpperCase();
                     const rolBadge: Record<string, { bg: string; label: string }> = {
                       admin: { bg: 'bg-black text-[#ff9900]', label: 'Admin' },
-                      fondo: { bg: 'bg-emerald-700 text-white', label: 'Fondo' },
+                      fondo: { bg: 'bg-emerald-700 text-white', label: 'Fonalmerque' },
                     };
                     return (
                       <tr key={user.id} className="hover:bg-[#ff9900]/5 transition-colors">

@@ -122,7 +122,7 @@ export default function FondoAdminCard() {
       }
       setAdjustments(adj);
     } catch {
-      setError("Error al cargar los ciclos del fondo");
+      setError("Error al cargar los ciclos de Fonalmerque");
     } finally {
       setLoading(false);
     }
@@ -183,7 +183,7 @@ export default function FondoAdminCard() {
           body: JSON.stringify({ id: cycle._id, action: "ajustes", budget_adjustments }),
         });
         if (!res.ok) throw new Error((await res.json()).error || "Error");
-        showNotification("Ajustes enviados al fondo para redistribución", "info");
+        showNotification("Ajustes enviados a Fonalmerque para redistribución", "info");
       }
 
       await fetchCycles();
@@ -291,7 +291,7 @@ export default function FondoAdminCard() {
         <div className="flex justify-between items-center mb-5">
           <h2 className="text-lg font-bold text-gray-900 flex items-center">
             <DollarSign className="h-5 w-5 mr-2 text-purple-500" />
-            Fondo de Empleados
+            Fonalmerque
           </h2>
         </div>
         <div className="flex items-center justify-center py-8">
@@ -310,7 +310,7 @@ export default function FondoAdminCard() {
         <div className="flex justify-between items-center mb-5">
           <h2 className="text-lg font-bold text-gray-900 flex items-center">
             <DollarSign className="h-5 w-5 mr-2 text-purple-500" />
-            Fondo de Empleados
+            Fonalmerque
           </h2>
           <button
             onClick={fetchCycles}
@@ -405,7 +405,7 @@ export default function FondoAdminCard() {
                     {!isApproved && (
                       <div className="p-3 rounded-xl bg-blue-50 border border-blue-200 text-xs text-blue-900">
                         <p className="font-semibold mb-1">Solo se muestra el total por usuario.</p>
-                        <p>Si necesitas reducir o aumentar el presupuesto de algún usuario, ajusta el total en la columna de la derecha. Si haces cambios, el ciclo regresará al fondo para que redistribuya el dinero entre las categorías.</p>
+                        <p>Si necesitas reducir o aumentar el presupuesto de algún usuario, ajusta el total en la columna de la derecha. Si haces cambios, el ciclo regresará a Fonalmerque para que redistribuya el dinero entre las categorías.</p>
                       </div>
                     )}
 
@@ -430,7 +430,7 @@ export default function FondoAdminCard() {
                           }`}
                         >
                           {processing === cycle._id ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle size={16} />}
-                          {changed ? "Enviar ajustes al fondo" : "Aprobar (sin cambios)"}
+                          {changed ? "Enviar ajustes a Fonalmerque" : "Aprobar (sin cambios)"}
                         </button>
                       </div>
                     )}

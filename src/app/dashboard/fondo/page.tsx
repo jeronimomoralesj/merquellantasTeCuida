@@ -244,13 +244,13 @@ export default function FondoPage() {
             <div className="relative p-6 sm:p-8 lg:p-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
                 <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#ff9900]/15 text-[#ff9900] text-xs font-semibold uppercase tracking-wider border border-[#ff9900]/30">
-                  <Landmark className="h-3.5 w-3.5" /> Fondo de Empleados
+                  <Landmark className="h-3.5 w-3.5" /> Fonalmerque
                 </span>
                 <h1 className="mt-3 text-2xl sm:text-3xl lg:text-4xl font-extrabold leading-tight">
-                  Panel del <span className="text-[#ff9900]">Fondo</span>
+                  Panel del <span className="text-[#ff9900]">Fonalmerque</span>
                 </h1>
                 <p className="mt-2 text-sm sm:text-base text-white/70">
-                  Gestiona ciclos, aportes y afiliados del fondo de empleados.
+                  Gestiona ciclos, aportes y afiliados de Fonalmerque.
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -443,7 +443,7 @@ function CicloActualTab() {
           })
         );
       } catch {
-        setError("No se pudieron cargar los miembros del fondo.");
+        setError("No se pudieron cargar los miembros de Fonalmerque.");
       } finally {
         setLoading(false);
       }
@@ -1371,7 +1371,7 @@ function BuscarAfiliadoTab() {
           <div className="mt-4 p-6 rounded-xl border border-dashed border-gray-200 text-center text-sm text-gray-500">
             No se encontraron afiliados con ese criterio.
             <br />
-            <span className="text-xs text-gray-400">Solo se buscan usuarios afiliados al fondo. Para crear una nueva afiliación usa la pestaña &quot;Nuevo Afiliado&quot;.</span>
+            <span className="text-xs text-gray-400">Solo se buscan usuarios afiliados a Fonalmerque. Para crear una nueva afiliación usa la pestaña &quot;Nuevo Afiliado&quot;.</span>
           </div>
         )}
       </div>
@@ -1770,7 +1770,7 @@ function NuevoAfiliadoTab() {
           Nuevo Afiliado
         </h2>
         <p className="text-sm text-gray-500 mt-1">
-          Busca un usuario existente y enrollalo en el fondo de empleados.
+          Busca un usuario existente y enrollalo en Fonalmerque.
         </p>
       </div>
 

@@ -45,7 +45,7 @@ const DashboardNavbar = ({ activePage = 'home' }) => {
     { id: 'permisos', href: '/dashboard/solicitud', icon: <Palmtree size={18} />, label: 'Permisos' },
     { id: 'documentos', href: '/dashboard/documents', icon: <FileText size={18} />, label: 'Documentos' },
     { id: 'pqrsf', href: '/dashboard/pqrsf', icon: <HelpCircle size={18} />, label: 'PQRSF' },
-    { id: 'fondo', href: '/dashboard/fondo', icon: <Landmark size={18} />, label: 'Fondo' },
+    { id: 'fondo', href: '/dashboard/fondo', icon: <Landmark size={18} />, label: 'Fonalmerque' },
   ];
 
   return (

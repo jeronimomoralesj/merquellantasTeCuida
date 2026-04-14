@@ -43,6 +43,7 @@ export default function PQRSFCard() {
   const [respuestaText, setRespuestaText] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [showAnonConfirm, setShowAnonConfirm] = useState(false);
 
   const getAvatarInitials = (name: string) =>
     name.split(' ').map(w => w.charAt(0)).join('').toUpperCase().slice(0, 2);
@@ -131,6 +132,19 @@ export default function PQRSFCard() {
     setSelected(null);
     setRespuestaText("");
     setSubmitError(null);
+    setShowAnonConfirm(false);
+  };
+
+  const handleSubmitClick = () => {
+    if (!selected || !respuestaText.trim()) {
+      setSubmitError('La respuesta es requerida');
+      return;
+    }
+    if (selected.is_anonymous) {
+      setShowAnonConfirm(true);
+      return;
+    }
+    submitResponse();
   };
 
   const submitResponse = async () => {
@@ -138,6 +152,7 @@ export default function PQRSFCard() {
       setSubmitError('La respuesta es requerida');
       return;
     }
+    setShowAnonConfirm(false);
     setSubmitting(true);
     setSubmitError(null);
     try {
@@ -402,7 +417,7 @@ export default function PQRSFCard() {
                 Cancelar
               </button>
               <button
-                onClick={submitResponse}
+                onClick={handleSubmitClick}
                 disabled={submitting || !respuestaText.trim()}
                 className="px-5 py-2 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2"
               >
@@ -415,6 +430,48 @@ export default function PQRSFCard() {
                   <>
                     <Send className="h-4 w-4" />
                     {selected.respuesta ? 'Actualizar respuesta' : 'Enviar respuesta'}
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Anonymous PQRSF confirmation modal */}
+      {showAnonConfirm && selected && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[70] p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
+            <div className="p-6 text-center border-b border-gray-200">
+              <div className="w-16 h-16 rounded-full bg-amber-100 flex items-center justify-center mx-auto mb-4">
+                <AlertCircle className="h-8 w-8 text-amber-600" />
+              </div>
+              <p className="text-sm text-gray-600 mb-3">Recuerda que este PQRSF es</p>
+              <p className="text-5xl font-black tracking-wider text-amber-600 mb-3">ANÓNIMO</p>
+              <p className="text-sm text-gray-700">¿Estás seguro que lo quieres enviar?</p>
+            </div>
+            <div className="p-5 flex justify-end gap-3 bg-gray-50">
+              <button
+                onClick={() => setShowAnonConfirm(false)}
+                disabled={submitting}
+                className="px-4 py-2 rounded-xl text-gray-700 bg-white border border-gray-300 hover:bg-gray-100 font-medium transition disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={submitResponse}
+                disabled={submitting}
+                className="px-5 py-2 rounded-xl bg-amber-600 text-white font-semibold hover:bg-amber-700 disabled:opacity-50 transition flex items-center gap-2"
+              >
+                {submitting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Enviando...
+                  </>
+                ) : (
+                  <>
+                    <Send className="h-4 w-4" />
+                    Sí, enviar respuesta
                   </>
                 )}
               </button>

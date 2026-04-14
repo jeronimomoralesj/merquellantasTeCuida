@@ -150,7 +150,7 @@ function FondoIncentiveLanding() {
     {
       icon: Users,
       title: "Una comunidad que crece",
-      desc: "Mas de 66 companeros ya hacen parte del fondo. Entre mas somos, mas beneficios podemos ofrecer.",
+      desc: "Mas de 66 companeros ya hacen parte de Fonalmerque. Entre mas somos, mas beneficios podemos ofrecer.",
     },
     {
       icon: TrendingUp,
@@ -177,7 +177,7 @@ function FondoIncentiveLanding() {
               <Landmark className="w-5 h-5 text-[#ff9900]" />
             </div>
             <span className="text-xs font-semibold uppercase tracking-wider text-[#ff9900]">
-              Fondo de Empleados
+              Fonalmerque
             </span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold leading-tight mb-3">
@@ -185,7 +185,7 @@ function FondoIncentiveLanding() {
             <span className="text-[#ff9900]">ahorrando</span>
           </h1>
           <p className="text-sm sm:text-base text-white/70 max-w-lg">
-            El fondo de empleados de Merquellantas te ayuda a ahorrar sin pensarlo,
+            Fonalmerque te ayuda a ahorrar sin pensarlo,
             acceder a creditos con tasas muy bajas y tener un respaldo financiero real.
           </p>
         </div>
@@ -210,13 +210,13 @@ function FondoIncentiveLanding() {
           <Sparkles className="w-5 h-5 text-[#ff9900] mt-0.5 flex-shrink-0" />
           <div>
             <p className="font-bold text-gray-900 text-sm mb-1">Historias reales de tus companeros</p>
-            <p className="text-xs text-gray-500">Casos anonimos de afiliados al fondo</p>
+            <p className="text-xs text-gray-500">Casos anonimos de afiliados a Fonalmerque</p>
           </div>
         </div>
         <div className="space-y-3">
           <div className="bg-white/80 rounded-xl p-4 border border-orange-100">
             <p className="text-sm text-gray-700 italic leading-relaxed">
-              &ldquo;Llevo 2 anos ahorrando en el fondo y ya tengo mas de $4 millones
+              &ldquo;Llevo 2 anos ahorrando en Fonalmerque y ya tengo mas de $4 millones
               ahorrados. Lo mejor es que ni lo siento porque se descuenta directo de la
               nomina. Cuando necesite un prestamo para una emergencia, me lo aprobaron
               en dias y la tasa fue mucho mas baja que la del banco.&rdquo;
@@ -228,7 +228,7 @@ function FondoIncentiveLanding() {
           <div className="bg-white/80 rounded-xl p-4 border border-orange-100">
             <p className="text-sm text-gray-700 italic leading-relaxed">
               &ldquo;Pedi un credito para la matricula de mi hijo y me salio al 1% mensual.
-              En el banco me pedian casi el triple. El fondo me ha ayudado a planificar
+              En el banco me pedian casi el triple. Fonalmerque me ha ayudado a planificar
               mejor mis finanzas.&rdquo;
             </p>
             <p className="text-[10px] text-gray-400 mt-2 font-semibold uppercase tracking-wider">
@@ -242,7 +242,7 @@ function FondoIncentiveLanding() {
       <div>
         <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
           <Target className="w-5 h-5 text-[#ff9900]" />
-          Beneficios del fondo
+          Beneficios de Fonalmerque
         </h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {benefits.map((b) => (
@@ -267,7 +267,7 @@ function FondoIncentiveLanding() {
         </div>
         <h3 className="text-lg font-bold text-gray-900 mb-2">Quieres afiliarte?</h3>
         <p className="text-sm text-gray-500 max-w-md mx-auto mb-4">
-          Comunicate con el area de bienestar o con el administrador del fondo.
+          Comunicate con el area de bienestar o con el administrador de Fonalmerque.
           La afiliacion es rapida y tu ahorro empieza desde la siguiente nomina.
         </p>
         <div className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#ff9900] text-white font-semibold text-sm shadow-md shadow-[#ff9900]/25">
@@ -341,7 +341,7 @@ export default function FondoUserView() {
       const res = await fetch("/api/fondo/saldos");
       if (!res.ok) {
         if (res.status === 401) throw new Error("NO_AUTH");
-        throw new Error("Error al cargar datos del fondo");
+        throw new Error("Error al cargar datos de Fonalmerque");
       }
       const json: FondoData = await res.json();
       setData(json);
@@ -366,7 +366,7 @@ export default function FondoUserView() {
       <div className="flex items-center justify-center py-20">
         <div className="text-center">
           <Loader2 className="w-8 h-8 animate-spin text-orange-500 mx-auto mb-3" />
-          <p className="text-gray-500 text-sm">Cargando tu fondo...</p>
+          <p className="text-gray-500 text-sm">Cargando tu Fonalmerque...</p>
         </div>
       </div>
     );
@@ -414,7 +414,7 @@ export default function FondoUserView() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">Mi Fondo</h1>
+          <h1 className="text-2xl font-bold text-gray-800">Mi Fonalmerque</h1>
           <p className="text-sm text-gray-500 mt-1">
             Bienvenido, {session?.user?.nombre || "Usuario"}
           </p>
@@ -438,7 +438,7 @@ export default function FondoUserView() {
             <div className="flex-1">
               <h3 className="font-semibold text-amber-800 text-sm">Reinversion de intereses - Noviembre</h3>
               <p className="text-xs text-amber-700 mt-1">
-                Es momento de decidir cuanto de tus intereses deseas reinvertir en el fondo. Ingresa el monto que deseas reinvertir.
+                Es momento de decidir cuanto de tus intereses deseas reinvertir en Fonalmerque. Ingresa el monto que deseas reinvertir.
               </p>
               <div className="flex items-center gap-3 mt-3">
                 <div className="relative flex-1 max-w-xs">
@@ -733,7 +733,7 @@ export default function FondoUserView() {
                           {credit.estado === "pendiente" && (
                             <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-800 flex items-center gap-2">
                               <Clock className="w-4 h-4" />
-                              Tu solicitud está esperando aprobación del fondo. Te notificaremos cuando haya una respuesta.
+                              Tu solicitud está esperando aprobación de Fonalmerque. Te notificaremos cuando haya una respuesta.
                             </div>
                           )}
                           {credit.estado === "rechazado" && credit.motivo_respuesta && (

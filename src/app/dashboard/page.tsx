@@ -692,7 +692,7 @@ useEffect(() => {
             ) : (
               <>
                 <LayoutDashboard className="h-5 w-5" />
-                <span className="text-sm font-bold hidden sm:inline">{userRole === "fondo" ? "Panel Fondo" : "Vista admin"}</span>
+                <span className="text-sm font-bold hidden sm:inline">{userRole === "fondo" ? "Panel Fonalmerque" : "Vista admin"}</span>
               </>
             )}
           </button>
@@ -710,7 +710,7 @@ useEffect(() => {
           <main className="pt-20 sm:pt-24 text-center">
             <a href="/dashboard/fondo" className="inline-flex items-center gap-2 px-6 py-3 bg-[#ff9900] text-black font-bold rounded-xl hover:bg-[#ffae33] transition">
               <LayoutDashboard className="h-5 w-5" />
-              Ir al Panel del Fondo
+              Ir al Panel del Fonalmerque
             </a>
           </main>
         )}
