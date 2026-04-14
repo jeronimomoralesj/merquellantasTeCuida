@@ -249,10 +249,6 @@ export default function AdminElearningPage() {
     if (!selectedCourse) return;
 
     const totalFiles = existingFiles.length + newFiles.length;
-    if (totalFiles === 0) {
-      setVideoError("Debes agregar al menos 1 archivo");
-      return;
-    }
     if (totalFiles > 5) {
       setVideoError("Máximo 5 archivos");
       return;
@@ -285,12 +281,6 @@ export default function AdminElearningPage() {
       }
 
       const combined = [...existingFiles, ...uploaded];
-      if (!combined.some((f) => f.category === "video")) {
-        setVideoError("La lección debe incluir al menos un video");
-        setUploading(false);
-        setUploadProgress("");
-        return;
-      }
 
       setUploadProgress("Guardando lección...");
       if (editingVideoId) {
@@ -691,7 +681,7 @@ export default function AdminElearningPage() {
                   <label className="text-xs font-semibold text-gray-600 uppercase tracking-wider">
                     Archivos ({existingFiles.length + newFiles.length}/5)
                   </label>
-                  <p className="text-xs text-gray-400">Al menos 1 video. Máx 50MB c/u.</p>
+                  <p className="text-xs text-gray-400">Opcional. Máx 5 archivos, 50MB c/u.</p>
                 </div>
 
                 <div className="space-y-2 mb-3">

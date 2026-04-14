@@ -28,14 +28,11 @@ export async function PUT(
   if (body.files !== undefined) {
     const files = sanitizeFiles(body.files);
     if (!files) {
-      return NextResponse.json({ error: 'Se requiere al menos 1 archivo (máx 5)' }, { status: 400 });
+      return NextResponse.json({ error: 'Máximo 5 archivos por lección' }, { status: 400 });
     }
-    if (!files.some((f) => f.category === 'video')) {
-      return NextResponse.json({ error: 'La lección debe incluir al menos un video' }, { status: 400 });
-    }
-    const primaryVideo = files.find((f) => f.category === 'video')!;
+    const primaryVideo = files.find((f) => f.category === 'video') || null;
     setDoc.files = files;
-    setDoc.video_url = primaryVideo.url;
+    setDoc.video_url = primaryVideo?.url || null;
   }
 
   if (Object.keys(setDoc).length === 0) {

@@ -21,10 +21,7 @@ export async function POST(req: NextRequest) {
 
   const files = sanitizeFiles(body.files);
   if (!files) {
-    return NextResponse.json({ error: 'Se requiere al menos 1 archivo (máx 5)' }, { status: 400 });
-  }
-  if (!files.some((f) => f.category === 'video')) {
-    return NextResponse.json({ error: 'La lección debe incluir al menos un video' }, { status: 400 });
+    return NextResponse.json({ error: 'Máximo 5 archivos por lección' }, { status: 400 });
   }
 
   const db = await getDb();
@@ -40,13 +37,13 @@ export async function POST(req: NextRequest) {
     .toArray();
   const nextOrder = lastOrder.length > 0 ? (lastOrder[0].order ?? 0) + 1 : 0;
 
-  const primaryVideo = files.find((f) => f.category === 'video')!;
+  const primaryVideo = files.find((f) => f.category === 'video') || null;
 
   const result = await db.collection('course_videos').insertOne({
     course_id: body.course_id,
     title: body.title.trim(),
     description: body.description?.trim() || '',
-    video_url: primaryVideo.url,
+    video_url: primaryVideo?.url || null,
     files,
     order: typeof body.order === 'number' ? body.order : nextOrder,
     created_at: new Date(),

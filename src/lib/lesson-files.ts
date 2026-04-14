@@ -7,8 +7,9 @@ export interface LessonFile {
 }
 
 export function sanitizeFiles(raw: unknown): LessonFile[] | null {
+  if (raw === undefined || raw === null) return [];
   if (!Array.isArray(raw)) return null;
-  if (raw.length === 0 || raw.length > 5) return null;
+  if (raw.length > 5) return null;
   const clean: LessonFile[] = [];
   for (const item of raw) {
     if (!item || typeof item !== 'object') return null;

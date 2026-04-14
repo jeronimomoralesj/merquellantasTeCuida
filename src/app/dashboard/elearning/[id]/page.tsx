@@ -34,7 +34,7 @@ interface Video {
   id: string;
   title: string;
   description: string;
-  video_url: string;
+  video_url: string | null;
   files: LessonFile[];
   order: number;
   completed: boolean;
@@ -289,12 +289,24 @@ export default function CoursePage({ params }: { params: Promise<{ id: string }>
           <div className="lg:col-span-2 space-y-6">
             {activeVideo ? (
               <>
-                <VideoPlayer
-                  key={activeVideo.id}
-                  src={activeVideo.video_url}
-                  onEnded={handleVideoEnded}
-                  poster={course.thumbnail || undefined}
-                />
+                {activeVideo.video_url ? (
+                  <VideoPlayer
+                    key={activeVideo.id}
+                    src={activeVideo.video_url}
+                    onEnded={handleVideoEnded}
+                    poster={course.thumbnail || undefined}
+                  />
+                ) : (
+                  <div className="bg-gradient-to-br from-orange-50 via-amber-50 to-orange-50 rounded-2xl border border-orange-200 p-8 sm:p-10 flex flex-col sm:flex-row items-center gap-6 shadow-sm">
+                    <div className="w-24 h-24 rounded-full bg-[#ff9900]/15 flex items-center justify-center flex-shrink-0">
+                      <FileText className="w-12 h-12 text-[#ff9900]" />
+                    </div>
+                    <div className="flex-1 text-center sm:text-left">
+                      <p className="text-xs font-bold uppercase tracking-wider text-[#ff9900] mb-1">Lección de lectura</p>
+                      <p className="text-sm text-gray-700">Cuando termines de leer el contenido, marca esta lección como completada para avanzar con el curso.</p>
+                    </div>
+                  </div>
+                )}
                 {/* Additional resources */}
                 {activeVideo.files && activeVideo.files.filter((f) => f.url !== activeVideo.video_url).length > 0 && (
                   <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
@@ -328,6 +340,15 @@ export default function CoursePage({ params }: { params: Promise<{ id: string }>
                     <p className="text-sm text-gray-600 mt-3 whitespace-pre-wrap leading-relaxed">
                       {activeVideo.description}
                     </p>
+                  )}
+                  {!activeVideo.video_url && !activeVideo.completed && (
+                    <button
+                      onClick={handleVideoEnded}
+                      className="mt-5 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#ff9900] text-white font-semibold text-sm hover:bg-[#ffae33] shadow transition"
+                    >
+                      <CheckCircle2 className="w-4 h-4" />
+                      Marcar como completada
+                    </button>
                   )}
                 </div>
 
