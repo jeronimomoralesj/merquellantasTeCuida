@@ -64,17 +64,20 @@ async function handle(req: NextRequest) {
 
   const db = await getDb();
 
-  const chunks = await db.collection('upload_chunks')
+  // Fetch unsorted — sorting on the server hits the 32MB in-memory-sort cap
+  // for large uploads. We already load all chunks into Node so sort there.
+  const rawChunks = await db.collection('upload_chunks')
     .find({ upload_id, uploaded_by: session.user.id })
-    .sort({ chunk_index: 1 })
     .toArray();
 
-  if (chunks.length !== total_chunks) {
+  if (rawChunks.length !== total_chunks) {
     return NextResponse.json(
-      { error: `Faltan chunks (${chunks.length}/${total_chunks})` },
+      { error: `Faltan chunks (${rawChunks.length}/${total_chunks})` },
       { status: 400 }
     );
   }
+
+  const chunks = rawChunks.sort((a, b) => (a.chunk_index ?? 0) - (b.chunk_index ?? 0));
 
   // Validate continuity
   for (let i = 0; i < chunks.length; i++) {
