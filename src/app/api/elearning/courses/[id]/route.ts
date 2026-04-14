@@ -103,13 +103,14 @@ export async function GET(
 
   merged.sort((a, b) => a.order - b.order);
 
-  // Apply sequential locking (admins see everything unlocked)
+  // Apply strict sequential locking (admins see everything unlocked).
+  // Only the first non-completed item is unlocked — completed items to the
+  // left and future items to the right are both locked for navigation.
   const isAdmin = session.user.rol === 'admin';
   if (!isAdmin) {
-    let seenIncomplete = false;
-    for (const item of merged) {
-      if (seenIncomplete) item.locked = true;
-      if (!item.completed) seenIncomplete = true;
+    const currentIdx = merged.findIndex((item) => !item.completed);
+    for (let i = 0; i < merged.length; i++) {
+      if (i !== currentIdx) merged[i].locked = true;
     }
   }
 

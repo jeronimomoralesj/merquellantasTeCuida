@@ -107,9 +107,18 @@ export default function CoursePage({ params }: { params: Promise<{ id: string }>
       }
       const data: Course = await res.json();
       setCourse(data);
-      if (!activeItemId && data.items.length > 0) {
-        const firstAvailable = data.items.find((it) => !it.locked) || data.items[0];
-        setActiveItemId(firstAvailable.id);
+
+      // Always snap to the single unlocked item (the current one).
+      // This makes navigation strictly sequential: after a video/quiz is
+      // completed, the server's next load returns a new "current" item
+      // and we auto-advance there.
+      const currentItem = data.items.find((it) => !it.locked);
+      if (currentItem) {
+        setActiveItemId(currentItem.id);
+      } else if (data.items.length > 0) {
+        // Course complete — keep showing the last item so the completion
+        // banner/certificate link stays in view.
+        setActiveItemId(data.items[data.items.length - 1].id);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error");
@@ -173,14 +182,14 @@ export default function CoursePage({ params }: { params: Promise<{ id: string }>
   };
 
   const handleQuizPassed = async () => {
-    // Quiz pass is already persisted by the attempt endpoint.
-    // Reload to refresh lock state + show Merquito celebration.
     setShowMerquito(true);
     setTimeout(() => setShowMerquito(false), 3500);
     const res = await fetch(`/api/elearning/courses/${courseId}`);
     if (res.ok) {
       const data: Course = await res.json();
       setCourse(data);
+      const next = data.items.find((it) => !it.locked);
+      if (next) setActiveItemId(next.id);
       if (data.is_complete) setCourseJustCompleted(true);
     }
   };
