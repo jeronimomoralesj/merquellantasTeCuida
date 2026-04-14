@@ -16,6 +16,7 @@ import {
   Save,
 } from "lucide-react";
 import DashboardNavbar from "../../navbar";
+import { uploadFileChunked } from "../../../../lib/uploadChunked";
 
 interface Course {
   id: string;
@@ -188,15 +189,7 @@ export default function AdminElearningPage() {
           setUploading(false);
           return;
         }
-        const fd = new FormData();
-        fd.append("file", videoFile);
-        fd.append("folder", "elearning");
-        const upRes = await fetch("/api/upload", { method: "POST", body: fd });
-        if (!upRes.ok) {
-          const d = await upRes.json().catch(() => ({}));
-          throw new Error(d.error || "Error al subir el video");
-        }
-        const upData = await upRes.json();
+        const upData = await uploadFileChunked(videoFile, { folder: "elearning" });
         finalUrl = upData.url;
       }
 

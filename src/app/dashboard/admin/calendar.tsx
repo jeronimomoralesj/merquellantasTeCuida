@@ -12,6 +12,7 @@ import {
   Cake,
   Trash2,
 } from "lucide-react";
+import { uploadFileChunked } from "../../../lib/uploadChunked";
 
 
 interface CalendarEvent {
@@ -199,12 +200,7 @@ const uploadBirthdayMedia = async (
 
     const doUpload = async () => {
       try {
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('folder', 'calendar');
-        const uploadRes = await fetch('/api/upload', { method: 'POST', body: formData });
-        if (!uploadRes.ok) throw new Error('Upload failed');
-        const uploadData = await uploadRes.json();
+        const uploadData = await uploadFileChunked(file, { folder: 'calendar' });
         const fileUrl = uploadData.url || uploadData.webUrl;
 
         const updateBody: Record<string, unknown> = { id: eventId };
@@ -375,12 +371,7 @@ const uploadBirthdayMedia = async (
       let imageUrl = "";
 
       if (selectedImage) {
-        const formData = new FormData();
-        formData.append('file', selectedImage);
-        formData.append('folder', 'calendar');
-        const uploadRes = await fetch('/api/upload', { method: 'POST', body: formData });
-        if (!uploadRes.ok) throw new Error('Image upload failed');
-        const uploadData = await uploadRes.json();
+        const uploadData = await uploadFileChunked(selectedImage, { folder: 'calendar' });
         imageUrl = uploadData.url;
       } else if (newEvent.type === "birthday") {
         imageUrl = "https://img.freepik.com/vector-gratis/concepto-letras-feliz-cumpleanos_23-2148499329.jpg?semt=ais_hybrid&w=740&q=80";
@@ -400,12 +391,7 @@ const uploadBirthdayMedia = async (
       let videoPath = "";
 
       if (selectedVideo) {
-        const formData = new FormData();
-        formData.append('file', selectedVideo);
-        formData.append('folder', 'calendar');
-        const uploadRes = await fetch('/api/upload', { method: 'POST', body: formData });
-        if (!uploadRes.ok) throw new Error('Media upload failed');
-        const uploadData = await uploadRes.json();
+        const uploadData = await uploadFileChunked(selectedVideo, { folder: 'calendar' });
         const mediaUrl = uploadData.url || uploadData.webUrl;
 
         if (selectedVideo.type.startsWith("video/")) {
