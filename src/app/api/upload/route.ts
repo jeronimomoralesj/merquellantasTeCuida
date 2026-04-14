@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { GridFSBucket } from 'mongodb';
+import { Readable } from 'stream';
 import { getDb } from '../../../lib/db';
 import { auth } from '../../../lib/auth';
 
@@ -11,7 +13,7 @@ const ALLOWED_EXTENSIONS = new Set([
   '.mp4', '.webm', '.mov',
 ]);
 
-// POST /api/upload — upload a file, store in MongoDB
+// POST /api/upload — upload a file, store in MongoDB GridFS
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
@@ -37,26 +39,33 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Tipo de archivo no permitido' }, { status: 400 });
   }
 
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const base64 = buffer.toString('base64');
-
-  // For calendar uploads, set an expiration date (next day) for auto-cleanup
+  // For calendar uploads, set an expiration date (2 days) for auto-cleanup
   const isCalendar = folder === 'calendar';
   const expiresAt = isCalendar ? new Date(Date.now() + 2 * 24 * 60 * 60 * 1000) : null;
 
   const db = await getDb();
-  const result = await db.collection('file_uploads').insertOne({
-    name: file.name,
-    folder,
-    mimeType: file.type || 'application/octet-stream',
-    size: file.size,
-    data: base64,
-    uploaded_by: session.user.id,
-    uploaded_at: new Date(),
-    expires_at: expiresAt,
+  const bucket = new GridFSBucket(db, { bucketName: 'uploads' });
+
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const readable = Readable.from(buffer);
+
+  const uploadStream = bucket.openUploadStream(file.name, {
+    metadata: {
+      contentType: file.type || 'application/octet-stream',
+      folder,
+      uploaded_by: session.user.id,
+      uploaded_at: new Date(),
+      expires_at: expiresAt,
+    },
   });
 
-  const fileId = result.insertedId.toString();
+  await new Promise<void>((resolve, reject) => {
+    readable.pipe(uploadStream)
+      .on('error', reject)
+      .on('finish', () => resolve());
+  });
+
+  const fileId = uploadStream.id.toString();
   const fileUrl = `/api/upload/${fileId}`;
 
   return NextResponse.json({
