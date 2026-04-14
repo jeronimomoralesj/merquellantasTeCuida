@@ -22,6 +22,7 @@ import {
   User as UserIcon,
   Search,
   CheckCircle2,
+  GripVertical,
 } from "lucide-react";
 import DashboardNavbar from "../../navbar";
 import { uploadFileChunked } from "../../../../lib/uploadChunked";
@@ -151,6 +152,50 @@ export default function AdminElearningPage() {
   const [quizQuestions, setQuizQuestions] = useState<QuizQuestion[]>([]);
   const [savingQuiz, setSavingQuiz] = useState(false);
   const [quizError, setQuizError] = useState<string | null>(null);
+
+  // Drag and drop reorder
+  const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
+  const [savingOrder, setSavingOrder] = useState(false);
+
+  const persistOrder = async (newItems: CourseDetailItem[]) => {
+    if (!selectedCourse) return;
+    setSavingOrder(true);
+    try {
+      const res = await fetch(`/api/elearning/courses/${selectedCourse.id}/reorder`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: newItems.map((it) => ({ type: it.type, id: it.id })),
+        }),
+      });
+      if (res.ok) {
+        await loadCourseDetail(selectedCourse.id);
+      }
+    } finally {
+      setSavingOrder(false);
+    }
+  };
+
+  const handleDrop = (targetId: string) => {
+    setDragOverId(null);
+    if (!draggedId || !selectedCourse || draggedId === targetId) {
+      setDraggedId(null);
+      return;
+    }
+    const items = [...(selectedCourse.items || [])];
+    const fromIdx = items.findIndex((it) => it.id === draggedId);
+    const toIdx = items.findIndex((it) => it.id === targetId);
+    if (fromIdx < 0 || toIdx < 0) {
+      setDraggedId(null);
+      return;
+    }
+    const [moved] = items.splice(fromIdx, 1);
+    items.splice(toIdx, 0, moved);
+    setSelectedCourse({ ...selectedCourse, items });
+    setDraggedId(null);
+    persistOrder(items);
+  };
 
   useEffect(() => {
     if (status === "authenticated" && session?.user.rol !== "admin") {
@@ -741,8 +786,20 @@ export default function AdminElearningPage() {
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="font-bold text-gray-900">Contenido ({selectedCourse.items?.length ?? 0})</h3>
+                <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-bold text-gray-900">Contenido ({selectedCourse.items?.length ?? 0})</h3>
+                    {(selectedCourse.items?.length ?? 0) > 1 && (
+                      <span className="text-xs text-gray-400 hidden sm:inline">
+                        · arrastra para reordenar
+                      </span>
+                    )}
+                    {savingOrder && (
+                      <span className="inline-flex items-center gap-1 text-xs text-[#f4a900]">
+                        <Loader2 className="w-3 h-3 animate-spin" /> Guardando orden...
+                      </span>
+                    )}
+                  </div>
                   <div className="flex gap-2">
                     <button
                       onClick={openNewQuiz}
@@ -769,8 +826,38 @@ export default function AdminElearningPage() {
                     (selectedCourse.items || []).map((it, idx) => (
                       <div
                         key={it.id}
-                        className="bg-white rounded-xl border border-gray-100 p-4 flex items-center gap-4 shadow-sm"
+                        draggable
+                        onDragStart={(e) => {
+                          setDraggedId(it.id);
+                          e.dataTransfer.effectAllowed = "move";
+                        }}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          e.dataTransfer.dropEffect = "move";
+                          if (draggedId && draggedId !== it.id) setDragOverId(it.id);
+                        }}
+                        onDragLeave={() => {
+                          if (dragOverId === it.id) setDragOverId(null);
+                        }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          handleDrop(it.id);
+                        }}
+                        onDragEnd={() => {
+                          setDraggedId(null);
+                          setDragOverId(null);
+                        }}
+                        className={`bg-white rounded-xl border p-4 flex items-center gap-4 shadow-sm transition cursor-grab active:cursor-grabbing ${
+                          draggedId === it.id
+                            ? "opacity-40 border-[#f4a900]"
+                            : dragOverId === it.id
+                            ? "border-[#f4a900] border-2 -translate-y-0.5 shadow-md"
+                            : "border-gray-100"
+                        }`}
                       >
+                        <div className="text-gray-300 hover:text-[#f4a900] flex-shrink-0">
+                          <GripVertical className="w-5 h-5" />
+                        </div>
                         <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0 ${
                           it.type === "quiz" ? "bg-[#f4a900] text-white" : "bg-[#f4a900]/10 text-[#f4a900]"
                         }`}>
