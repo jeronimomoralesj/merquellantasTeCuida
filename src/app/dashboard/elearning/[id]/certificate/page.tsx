@@ -8,6 +8,8 @@ interface CertData {
   course_title: string;
   user_name: string;
   completed_at: string;
+  score_percent: number;
+  has_quizzes: boolean;
 }
 
 export default function CertificatePage({ params }: { params: Promise<{ id: string }> }) {
@@ -137,6 +139,12 @@ export default function CertificatePage({ params }: { params: Promise<{ id: stri
               </p>
               <p className="mt-3 text-lg sm:text-2xl font-semibold text-gray-800 italic max-w-3xl">
                 “{data.course_title}”
+              </p>
+              <p className="mt-4 text-sm text-gray-600">
+                con una calificación final de
+              </p>
+              <p className="mt-1 text-3xl sm:text-4xl font-black text-[#f4a900]">
+                {data.score_percent}%
               </p>
             </div>
 
