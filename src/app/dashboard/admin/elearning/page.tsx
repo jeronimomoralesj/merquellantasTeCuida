@@ -14,9 +14,13 @@ import {
   X,
   Upload,
   Save,
+  Image as ImageIconLucide,
+  FileText,
+  FileIcon,
 } from "lucide-react";
 import DashboardNavbar from "../../navbar";
 import { uploadFileChunked } from "../../../../lib/uploadChunked";
+import { categoryFromMime, type LessonFile } from "../../../../lib/lesson-files";
 
 interface Course {
   id: string;
@@ -32,6 +36,7 @@ interface Video {
   title: string;
   description: string;
   video_url: string;
+  files?: LessonFile[];
   order: number;
 }
 
@@ -43,6 +48,17 @@ interface CourseDetail {
   videos: Video[];
 }
 
+const ALLOWED_VIDEO_MIMES = ["video/mp4", "video/webm", "video/quicktime"];
+const ALLOWED_DOC_MIMES = [
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+];
+const ALLOWED_IMAGE_MIMES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+const MAX_FILE_SIZE = 50 * 1024 * 1024;
+
 export default function AdminElearningPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -52,21 +68,25 @@ export default function AdminElearningPage() {
   const [selectedCourse, setSelectedCourse] = useState<CourseDetail | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
 
-  // New/edit course modal
+  // Course form
   const [showCourseForm, setShowCourseForm] = useState(false);
   const [editingCourseId, setEditingCourseId] = useState<string | null>(null);
   const [courseTitle, setCourseTitle] = useState("");
   const [courseDescription, setCourseDescription] = useState("");
+  const [coverFile, setCoverFile] = useState<File | null>(null);
+  const [coverUrl, setCoverUrl] = useState<string | null>(null);
   const [savingCourse, setSavingCourse] = useState(false);
+  const [courseError, setCourseError] = useState<string | null>(null);
 
-  // New/edit video modal
+  // Lesson form
   const [showVideoForm, setShowVideoForm] = useState(false);
   const [editingVideoId, setEditingVideoId] = useState<string | null>(null);
   const [videoTitle, setVideoTitle] = useState("");
   const [videoDescription, setVideoDescription] = useState("");
-  const [videoFile, setVideoFile] = useState<File | null>(null);
-  const [videoUrl, setVideoUrl] = useState("");
+  const [existingFiles, setExistingFiles] = useState<LessonFile[]>([]);
+  const [newFiles, setNewFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<string>("");
   const [videoError, setVideoError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -108,6 +128,9 @@ export default function AdminElearningPage() {
     setEditingCourseId(null);
     setCourseTitle("");
     setCourseDescription("");
+    setCoverFile(null);
+    setCoverUrl(null);
+    setCourseError(null);
     setShowCourseForm(true);
   };
 
@@ -115,29 +138,48 @@ export default function AdminElearningPage() {
     setEditingCourseId(c.id);
     setCourseTitle(c.title);
     setCourseDescription(c.description);
+    setCoverFile(null);
+    setCoverUrl(c.thumbnail);
+    setCourseError(null);
     setShowCourseForm(true);
   };
 
   const saveCourse = async () => {
     if (!courseTitle.trim()) return;
     setSavingCourse(true);
+    setCourseError(null);
     try {
+      let thumbnail = coverUrl;
+      if (coverFile) {
+        if (coverFile.size > MAX_FILE_SIZE) {
+          setCourseError("La portada no debe superar 50MB");
+          setSavingCourse(false);
+          return;
+        }
+        const up = await uploadFileChunked(coverFile, { folder: "elearning" });
+        thumbnail = up.url;
+      }
+
       if (editingCourseId) {
-        await fetch(`/api/elearning/courses/${editingCourseId}`, {
+        const res = await fetch(`/api/elearning/courses/${editingCourseId}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ title: courseTitle, description: courseDescription }),
+          body: JSON.stringify({ title: courseTitle, description: courseDescription, thumbnail }),
         });
+        if (!res.ok) throw new Error("No se pudo guardar");
       } else {
-        await fetch("/api/elearning/courses", {
+        const res = await fetch("/api/elearning/courses", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ title: courseTitle, description: courseDescription }),
+          body: JSON.stringify({ title: courseTitle, description: courseDescription, thumbnail }),
         });
+        if (!res.ok) throw new Error("No se pudo crear");
       }
       setShowCourseForm(false);
       await loadCourses();
       if (selectedCourseId) await loadCourseDetail(selectedCourseId);
+    } catch (err) {
+      setCourseError(err instanceof Error ? err.message : "Error");
     } finally {
       setSavingCourse(false);
     }
@@ -154,8 +196,8 @@ export default function AdminElearningPage() {
     setEditingVideoId(null);
     setVideoTitle("");
     setVideoDescription("");
-    setVideoFile(null);
-    setVideoUrl("");
+    setExistingFiles([]);
+    setNewFiles([]);
     setVideoError(null);
     setShowVideoForm(true);
   };
@@ -164,10 +206,39 @@ export default function AdminElearningPage() {
     setEditingVideoId(v.id);
     setVideoTitle(v.title);
     setVideoDescription(v.description);
-    setVideoFile(null);
-    setVideoUrl(v.video_url);
+    // Backfill files array if legacy
+    const files: LessonFile[] = v.files && v.files.length > 0
+      ? v.files
+      : (v.video_url
+          ? [{ url: v.video_url, name: "video", mime_type: "video/mp4", size: 0, category: "video" }]
+          : []);
+    setExistingFiles(files);
+    setNewFiles([]);
     setVideoError(null);
     setShowVideoForm(true);
+  };
+
+  const removeExistingFile = (idx: number) => {
+    setExistingFiles((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const removeNewFile = (idx: number) => {
+    setNewFiles((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const onAddFiles = (list: FileList | null) => {
+    if (!list) return;
+    const incoming = Array.from(list);
+    setNewFiles((prev) => {
+      const total = existingFiles.length + prev.length + incoming.length;
+      if (total > 5) {
+        setVideoError(`Máximo 5 archivos por lección (actual: ${existingFiles.length + prev.length})`);
+        const room = Math.max(0, 5 - existingFiles.length - prev.length);
+        return [...prev, ...incoming.slice(0, room)];
+      }
+      setVideoError(null);
+      return [...prev, ...incoming];
+    });
   };
 
   const saveVideo = async () => {
@@ -177,49 +248,80 @@ export default function AdminElearningPage() {
     }
     if (!selectedCourse) return;
 
+    const totalFiles = existingFiles.length + newFiles.length;
+    if (totalFiles === 0) {
+      setVideoError("Debes agregar al menos 1 archivo");
+      return;
+    }
+    if (totalFiles > 5) {
+      setVideoError("Máximo 5 archivos");
+      return;
+    }
+
+    // Size check
+    for (const f of newFiles) {
+      if (f.size > MAX_FILE_SIZE) {
+        setVideoError(`${f.name} supera 50MB`);
+        return;
+      }
+    }
+
     setUploading(true);
     setVideoError(null);
 
     try {
-      let finalUrl = videoUrl;
-
-      if (videoFile) {
-        if (videoFile.size > 50 * 1024 * 1024) {
-          setVideoError("El video no debe superar 50MB");
-          setUploading(false);
-          return;
-        }
-        const upData = await uploadFileChunked(videoFile, { folder: "elearning" });
-        finalUrl = upData.url;
+      const uploaded: LessonFile[] = [];
+      for (let i = 0; i < newFiles.length; i++) {
+        const f = newFiles[i];
+        setUploadProgress(`Subiendo ${i + 1}/${newFiles.length}: ${f.name}`);
+        const res = await uploadFileChunked(f, { folder: "elearning" });
+        uploaded.push({
+          url: res.url,
+          name: f.name,
+          mime_type: f.type || "application/octet-stream",
+          size: f.size,
+          category: categoryFromMime(f.type || ""),
+        });
       }
 
-      if (!finalUrl) {
-        setVideoError("Debes subir un video");
+      const combined = [...existingFiles, ...uploaded];
+      if (!combined.some((f) => f.category === "video")) {
+        setVideoError("La lección debe incluir al menos un video");
         setUploading(false);
+        setUploadProgress("");
         return;
       }
 
+      setUploadProgress("Guardando lección...");
       if (editingVideoId) {
-        await fetch(`/api/elearning/videos/${editingVideoId}`, {
+        const res = await fetch(`/api/elearning/videos/${editingVideoId}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             title: videoTitle,
             description: videoDescription,
-            video_url: finalUrl,
+            files: combined,
           }),
         });
+        if (!res.ok) {
+          const d = await res.json().catch(() => ({}));
+          throw new Error(d.error || "Error al guardar");
+        }
       } else {
-        await fetch("/api/elearning/videos", {
+        const res = await fetch("/api/elearning/videos", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             course_id: selectedCourse.id,
             title: videoTitle,
             description: videoDescription,
-            video_url: finalUrl,
+            files: combined,
           }),
         });
+        if (!res.ok) {
+          const d = await res.json().catch(() => ({}));
+          throw new Error(d.error || "Error al crear");
+        }
       }
       setShowVideoForm(false);
       await loadCourseDetail(selectedCourse.id);
@@ -228,6 +330,7 @@ export default function AdminElearningPage() {
       setVideoError(err instanceof Error ? err.message : "Error");
     } finally {
       setUploading(false);
+      setUploadProgress("");
     }
   };
 
@@ -283,9 +386,9 @@ export default function AdminElearningPage() {
         </div>
 
         {!selectedCourseId ? (
-          <div className="space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {courses.length === 0 ? (
-              <div className="bg-white rounded-2xl p-12 text-center border border-gray-100">
+              <div className="col-span-full bg-white rounded-2xl p-12 text-center border border-gray-100">
                 <GraduationCap className="w-12 h-12 text-gray-300 mx-auto mb-3" />
                 <p className="text-gray-500">Aún no has creado ningún curso.</p>
               </div>
@@ -293,32 +396,43 @@ export default function AdminElearningPage() {
               courses.map((c) => (
                 <div
                   key={c.id}
-                  className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm flex items-center justify-between gap-4 hover:shadow-md transition"
+                  className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition overflow-hidden"
                 >
                   <button
                     onClick={() => setSelectedCourseId(c.id)}
-                    className="flex-1 text-left min-w-0"
+                    className="block w-full text-left"
                   >
-                    <h3 className="font-bold text-gray-900 text-base mb-1">{c.title}</h3>
-                    <p className="text-xs text-gray-500 line-clamp-1 mb-1">
-                      {c.description || "Sin descripción"}
-                    </p>
-                    <span className="text-xs text-[#ff9900] font-semibold inline-flex items-center gap-1">
-                      <PlayCircle className="w-3.5 h-3.5" />
-                      {c.video_count} {c.video_count === 1 ? "lección" : "lecciones"}
-                    </span>
+                    <div className="aspect-video bg-gradient-to-br from-orange-100 to-amber-100 relative overflow-hidden">
+                      {c.thumbnail ? (
+                        <img src={c.thumbnail} alt={c.title} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="flex items-center justify-center h-full">
+                          <PlayCircle className="w-12 h-12 text-[#ff9900] opacity-50" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="p-4">
+                      <h3 className="font-bold text-gray-900 text-base mb-1 line-clamp-1">{c.title}</h3>
+                      <p className="text-xs text-gray-500 line-clamp-2 mb-2 min-h-[2rem]">
+                        {c.description || "Sin descripción"}
+                      </p>
+                      <span className="text-xs text-[#ff9900] font-semibold inline-flex items-center gap-1">
+                        <PlayCircle className="w-3.5 h-3.5" />
+                        {c.video_count} {c.video_count === 1 ? "lección" : "lecciones"}
+                      </span>
+                    </div>
                   </button>
-                  <div className="flex items-center gap-2 flex-shrink-0">
+                  <div className="flex items-center justify-end gap-1 p-2 border-t border-gray-100 bg-gray-50/50">
                     <button
                       onClick={() => openEditCourse(c)}
-                      className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-[#ff9900]"
+                      className="p-2 rounded-lg text-gray-500 hover:bg-white hover:text-[#ff9900]"
                       title="Editar"
                     >
                       <Edit3 className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => deleteCourse(c.id)}
-                      className="p-2 rounded-lg text-gray-500 hover:bg-red-50 hover:text-red-600"
+                      className="p-2 rounded-lg text-gray-500 hover:bg-white hover:text-red-600"
                       title="Eliminar"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -343,19 +457,26 @@ export default function AdminElearningPage() {
               </div>
             ) : (
               <>
-                <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm mb-5 flex items-start justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    <h2 className="text-xl font-bold text-gray-900">{selectedCourse.title}</h2>
-                    {selectedCourse.description && (
-                      <p className="text-sm text-gray-500 mt-1">{selectedCourse.description}</p>
-                    )}
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm mb-5 overflow-hidden">
+                  {selectedCourse.thumbnail && (
+                    <div className="aspect-[4/1] bg-gray-100 relative overflow-hidden">
+                      <img src={selectedCourse.thumbnail} alt={selectedCourse.title} className="w-full h-full object-cover" />
+                    </div>
+                  )}
+                  <div className="p-6 flex items-start justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      <h2 className="text-xl font-bold text-gray-900">{selectedCourse.title}</h2>
+                      {selectedCourse.description && (
+                        <p className="text-sm text-gray-500 mt-1">{selectedCourse.description}</p>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => openEditCourse(selectedCourse)}
+                      className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-gray-100 text-gray-700 text-sm font-medium hover:bg-gray-200"
+                    >
+                      <Edit3 className="w-4 h-4" /> Editar curso
+                    </button>
                   </div>
-                  <button
-                    onClick={() => openEditCourse(selectedCourse)}
-                    className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-gray-100 text-gray-700 text-sm font-medium hover:bg-gray-200"
-                  >
-                    <Edit3 className="w-4 h-4" /> Editar curso
-                  </button>
                 </div>
 
                 <div className="flex items-center justify-between mb-3">
@@ -375,38 +496,46 @@ export default function AdminElearningPage() {
                       <p className="text-gray-500 text-sm">Aún no has agregado lecciones.</p>
                     </div>
                   ) : (
-                    selectedCourse.videos.map((v, idx) => (
-                      <div
-                        key={v.id}
-                        className="bg-white rounded-xl border border-gray-100 p-4 flex items-center gap-4 shadow-sm"
-                      >
-                        <div className="w-10 h-10 rounded-full bg-[#ff9900]/10 flex items-center justify-center text-[#ff9900] font-bold text-sm flex-shrink-0">
-                          {idx + 1}
+                    selectedCourse.videos.map((v, idx) => {
+                      const files = v.files && v.files.length > 0 ? v.files : [];
+                      return (
+                        <div
+                          key={v.id}
+                          className="bg-white rounded-xl border border-gray-100 p-4 flex items-center gap-4 shadow-sm"
+                        >
+                          <div className="w-10 h-10 rounded-full bg-[#ff9900]/10 flex items-center justify-center text-[#ff9900] font-bold text-sm flex-shrink-0">
+                            {idx + 1}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-semibold text-gray-900">{v.title}</p>
+                            {v.description && (
+                              <p className="text-xs text-gray-500 line-clamp-1 mt-0.5">{v.description}</p>
+                            )}
+                            {files.length > 0 && (
+                              <p className="text-xs text-gray-400 mt-1">
+                                {files.length} {files.length === 1 ? "archivo" : "archivos"}
+                              </p>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            <button
+                              onClick={() => openEditVideo(v)}
+                              className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-[#ff9900]"
+                              title="Editar"
+                            >
+                              <Edit3 className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => deleteVideo(v.id)}
+                              className="p-2 rounded-lg text-gray-500 hover:bg-red-50 hover:text-red-600"
+                              title="Eliminar"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-semibold text-gray-900">{v.title}</p>
-                          {v.description && (
-                            <p className="text-xs text-gray-500 line-clamp-1 mt-0.5">{v.description}</p>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-1 flex-shrink-0">
-                          <button
-                            onClick={() => openEditVideo(v)}
-                            className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-[#ff9900]"
-                            title="Editar"
-                          >
-                            <Edit3 className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => deleteVideo(v.id)}
-                            className="p-2 rounded-lg text-gray-500 hover:bg-red-50 hover:text-red-600"
-                            title="Eliminar"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-                    ))
+                      );
+                    })
                   )}
                 </div>
               </>
@@ -418,7 +547,7 @@ export default function AdminElearningPage() {
       {/* Course form modal */}
       {showCourseForm && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden max-h-[90vh] flex flex-col">
             <div className="p-5 border-b border-gray-200 flex items-center justify-between">
               <h3 className="text-lg font-bold text-gray-900">
                 {editingCourseId ? "Editar curso" : "Nuevo curso"}
@@ -427,7 +556,52 @@ export default function AdminElearningPage() {
                 <X className="w-5 h-5 text-gray-500" />
               </button>
             </div>
-            <div className="p-5 space-y-4">
+            <div className="p-5 space-y-4 overflow-y-auto">
+              {/* Cover image */}
+              <div>
+                <label className="text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                  Portada del curso
+                </label>
+                <div className="mt-2">
+                  {coverFile ? (
+                    <div className="relative rounded-xl overflow-hidden border border-gray-200">
+                      <img
+                        src={URL.createObjectURL(coverFile)}
+                        alt="preview"
+                        className="w-full aspect-video object-cover"
+                      />
+                      <button
+                        onClick={() => setCoverFile(null)}
+                        className="absolute top-2 right-2 p-1.5 bg-black/60 hover:bg-black/80 text-white rounded-full"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : coverUrl ? (
+                    <div className="relative rounded-xl overflow-hidden border border-gray-200">
+                      <img src={coverUrl} alt="cover" className="w-full aspect-video object-cover" />
+                      <button
+                        onClick={() => setCoverUrl(null)}
+                        className="absolute top-2 right-2 p-1.5 bg-black/60 hover:bg-black/80 text-white rounded-full"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <label className="flex flex-col items-center justify-center aspect-video border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-[#ff9900] hover:bg-orange-50/40 transition">
+                      <ImageIconLucide className="w-8 h-8 text-gray-400 mb-2" />
+                      <p className="text-sm text-gray-600 font-medium">Agregar portada</p>
+                      <p className="text-xs text-gray-400">JPG, PNG, WEBP</p>
+                      <input
+                        type="file"
+                        accept={ALLOWED_IMAGE_MIMES.join(",")}
+                        onChange={(e) => setCoverFile(e.target.files?.[0] || null)}
+                        className="hidden"
+                      />
+                    </label>
+                  )}
+                </div>
+              </div>
               <div>
                 <label className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Título</label>
                 <input
@@ -449,11 +623,17 @@ export default function AdminElearningPage() {
                   className="mt-1 w-full px-3 py-2 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#ff9900] focus:border-[#ff9900] resize-y text-gray-900"
                 />
               </div>
+              {courseError && (
+                <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700">
+                  {courseError}
+                </div>
+              )}
             </div>
-            <div className="p-5 bg-gray-50 flex justify-end gap-2">
+            <div className="p-5 bg-gray-50 flex justify-end gap-2 border-t border-gray-200">
               <button
                 onClick={() => setShowCourseForm(false)}
-                className="px-4 py-2 rounded-xl bg-white border border-gray-300 text-gray-700 font-medium hover:bg-gray-100"
+                disabled={savingCourse}
+                className="px-4 py-2 rounded-xl bg-white border border-gray-300 text-gray-700 font-medium hover:bg-gray-100 disabled:opacity-50"
               >
                 Cancelar
               </button>
@@ -470,15 +650,15 @@ export default function AdminElearningPage() {
         </div>
       )}
 
-      {/* Video form modal */}
+      {/* Lesson form modal */}
       {showVideoForm && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-xl w-full overflow-hidden max-h-[90vh] flex flex-col">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full overflow-hidden max-h-[90vh] flex flex-col">
             <div className="p-5 border-b border-gray-200 flex items-center justify-between">
               <h3 className="text-lg font-bold text-gray-900">
                 {editingVideoId ? "Editar lección" : "Nueva lección"}
               </h3>
-              <button onClick={() => setShowVideoForm(false)} className="p-2 hover:bg-gray-100 rounded-full">
+              <button onClick={() => setShowVideoForm(false)} className="p-2 hover:bg-gray-100 rounded-full" disabled={uploading}>
                 <X className="w-5 h-5 text-gray-500" />
               </button>
             </div>
@@ -504,26 +684,66 @@ export default function AdminElearningPage() {
                   className="mt-1 w-full px-3 py-2 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#ff9900] focus:border-[#ff9900] resize-y text-gray-900"
                 />
               </div>
+
+              {/* Files */}
               <div>
-                <label className="text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  Archivo de video {editingVideoId && "(opcional — deja vacío para mantener el actual)"}
-                </label>
-                <p className="text-xs text-gray-400 mt-1 mb-2">Máx 50MB. Formatos: MP4, WebM, MOV.</p>
-                <input
-                  type="file"
-                  accept="video/mp4,video/webm,video/quicktime"
-                  onChange={(e) => setVideoFile(e.target.files?.[0] || null)}
-                  className="block w-full text-sm text-gray-700 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-[#ff9900] file:text-white hover:file:bg-[#ffae33]"
-                />
-                {videoFile && (
-                  <p className="text-xs text-gray-600 mt-2">
-                    {videoFile.name} — {(videoFile.size / 1024 / 1024).toFixed(1)}MB
-                  </p>
-                )}
-                {editingVideoId && videoUrl && !videoFile && (
-                  <p className="text-xs text-gray-500 mt-2">Video actual conservado.</p>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                    Archivos ({existingFiles.length + newFiles.length}/5)
+                  </label>
+                  <p className="text-xs text-gray-400">Al menos 1 video. Máx 50MB c/u.</p>
+                </div>
+
+                <div className="space-y-2 mb-3">
+                  {existingFiles.map((f, i) => (
+                    <FileRow
+                      key={`e-${i}`}
+                      name={f.name}
+                      mime={f.mime_type}
+                      size={f.size}
+                      existing
+                      onRemove={() => removeExistingFile(i)}
+                      disabled={uploading}
+                    />
+                  ))}
+                  {newFiles.map((f, i) => (
+                    <FileRow
+                      key={`n-${i}`}
+                      name={f.name}
+                      mime={f.type}
+                      size={f.size}
+                      onRemove={() => removeNewFile(i)}
+                      disabled={uploading}
+                    />
+                  ))}
+                </div>
+
+                {existingFiles.length + newFiles.length < 5 && (
+                  <label className="flex flex-col items-center justify-center py-6 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-[#ff9900] hover:bg-orange-50/40 transition">
+                    <Upload className="w-6 h-6 text-gray-400 mb-1" />
+                    <p className="text-sm text-gray-600 font-medium">Agregar archivos</p>
+                    <p className="text-xs text-gray-400 mt-1">Video (MP4/WebM/MOV), PDF, DOCX, XLSX o imágenes</p>
+                    <input
+                      type="file"
+                      multiple
+                      accept={[...ALLOWED_VIDEO_MIMES, ...ALLOWED_DOC_MIMES, ...ALLOWED_IMAGE_MIMES].join(",")}
+                      onChange={(e) => {
+                        onAddFiles(e.target.files);
+                        e.currentTarget.value = "";
+                      }}
+                      disabled={uploading}
+                      className="hidden"
+                    />
+                  </label>
                 )}
               </div>
+
+              {uploading && uploadProgress && (
+                <div className="p-3 rounded-xl bg-orange-50 border border-orange-200 text-sm text-orange-700 flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  {uploadProgress}
+                </div>
+              )}
               {videoError && (
                 <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700">
                   {videoError}
@@ -550,7 +770,7 @@ export default function AdminElearningPage() {
                   </>
                 ) : (
                   <>
-                    <Upload className="w-4 h-4" />
+                    <Save className="w-4 h-4" />
                     Guardar lección
                   </>
                 )}
@@ -559,6 +779,71 @@ export default function AdminElearningPage() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function FileRow({
+  name,
+  mime,
+  size,
+  existing,
+  onRemove,
+  disabled,
+}: {
+  name: string;
+  mime: string;
+  size: number;
+  existing?: boolean;
+  onRemove: () => void;
+  disabled?: boolean;
+}) {
+  const cat = categoryFromMime(mime);
+  const icon = cat === "video" ? (
+    <PlayCircle className="w-5 h-5" />
+  ) : cat === "document" ? (
+    <FileText className="w-5 h-5" />
+  ) : cat === "image" ? (
+    <ImageIconLucide className="w-5 h-5" />
+  ) : (
+    <FileIcon className="w-5 h-5" />
+  );
+  const color = cat === "video"
+    ? "bg-orange-50 text-[#ff9900]"
+    : cat === "document"
+    ? "bg-red-50 text-red-600"
+    : cat === "image"
+    ? "bg-emerald-50 text-emerald-600"
+    : "bg-gray-100 text-gray-600";
+
+  return (
+    <div className="flex items-center gap-3 p-3 rounded-xl border border-gray-100 bg-gray-50/50">
+      <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${color}`}>
+        {icon}
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-semibold text-gray-900 truncate">{name}</p>
+        <p className="text-xs text-gray-500">
+          {size > 0 && (
+            <>
+              {size < 1024 * 1024
+                ? `${(size / 1024).toFixed(0)} KB`
+                : `${(size / 1024 / 1024).toFixed(1)} MB`}
+              {" · "}
+            </>
+          )}
+          {mime || "archivo"}
+          {existing && " · ya guardado"}
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={onRemove}
+        disabled={disabled}
+        className="p-2 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 disabled:opacity-40"
+      >
+        <X className="w-4 h-4" />
+      </button>
     </div>
   );
 }

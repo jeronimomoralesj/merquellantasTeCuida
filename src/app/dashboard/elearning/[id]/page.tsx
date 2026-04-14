@@ -14,14 +14,28 @@ import {
   Award,
   PlayCircle,
   Sparkles,
+  FileText,
+  ImageIcon,
+  FileIcon,
+  Download,
 } from "lucide-react";
 import DashboardNavbar from "../../navbar";
+import VideoPlayer from "../video-player";
+
+interface LessonFile {
+  url: string;
+  name: string;
+  mime_type: string;
+  size: number;
+  category: "video" | "document" | "image" | "other";
+}
 
 interface Video {
   id: string;
   title: string;
   description: string;
   video_url: string;
+  files: LessonFile[];
   order: number;
   completed: boolean;
 }
@@ -275,16 +289,28 @@ export default function CoursePage({ params }: { params: Promise<{ id: string }>
           <div className="lg:col-span-2 space-y-6">
             {activeVideo ? (
               <>
-                <div className="bg-black rounded-2xl overflow-hidden shadow-lg">
-                  <video
-                    key={activeVideo.id}
-                    src={activeVideo.video_url}
-                    controls
-                    controlsList="nodownload"
-                    onEnded={handleVideoEnded}
-                    className="w-full aspect-video bg-black"
-                  />
-                </div>
+                <VideoPlayer
+                  key={activeVideo.id}
+                  src={activeVideo.video_url}
+                  onEnded={handleVideoEnded}
+                  poster={course.thumbnail || undefined}
+                />
+                {/* Additional resources */}
+                {activeVideo.files && activeVideo.files.filter((f) => f.url !== activeVideo.video_url).length > 0 && (
+                  <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
+                    <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2 mb-3">
+                      <FileText className="w-4 h-4 text-[#ff9900]" />
+                      Recursos adicionales
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {activeVideo.files
+                        .filter((f) => f.url !== activeVideo.video_url)
+                        .map((f, i) => (
+                          <ResourceItem key={i} file={f} />
+                        ))}
+                    </div>
+                  </div>
+                )}
                 <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
                   <div className="flex items-center gap-2 mb-2">
                     {activeVideo.completed ? (
@@ -430,5 +456,49 @@ export default function CoursePage({ params }: { params: Promise<{ id: string }>
         .animate-spin-slow { animation: spin-slow 3s linear infinite; }
       `}</style>
     </div>
+  );
+}
+
+function ResourceItem({ file }: { file: LessonFile }) {
+  const formatSize = (n: number) => {
+    if (!n) return "";
+    if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
+    return `${(n / 1024 / 1024).toFixed(1)} MB`;
+  };
+
+  const icon = file.category === "document" ? (
+    <FileText className="w-5 h-5" />
+  ) : file.category === "image" ? (
+    <ImageIcon className="w-5 h-5" />
+  ) : file.category === "video" ? (
+    <PlayCircle className="w-5 h-5" />
+  ) : (
+    <FileIcon className="w-5 h-5" />
+  );
+
+  const colorClass = file.category === "document"
+    ? "bg-red-50 text-red-600"
+    : file.category === "image"
+    ? "bg-emerald-50 text-emerald-600"
+    : file.category === "video"
+    ? "bg-orange-50 text-[#ff9900]"
+    : "bg-gray-100 text-gray-600";
+
+  return (
+    <a
+      href={`${file.url}?download=1`}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="flex items-center gap-3 p-3 rounded-xl border border-gray-100 hover:border-[#ff9900]/40 hover:bg-orange-50/30 transition group"
+    >
+      <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${colorClass}`}>
+        {icon}
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-semibold text-gray-900 truncate">{file.name}</p>
+        <p className="text-xs text-gray-500">{formatSize(file.size)} · {file.mime_type}</p>
+      </div>
+      <Download className="w-4 h-4 text-gray-400 group-hover:text-[#ff9900] flex-shrink-0" />
+    </a>
   );
 }

@@ -38,14 +38,22 @@ export async function GET(
     description: course.description,
     thumbnail: course.thumbnail || null,
     created_at: course.created_at,
-    videos: videos.map((v, idx) => ({
-      id: v._id.toString(),
-      title: v.title,
-      description: v.description || '',
-      video_url: v.video_url,
-      order: v.order ?? idx,
-      completed: completedIds.has(v._id.toString()),
-    })),
+    videos: videos.map((v, idx) => {
+      const files = Array.isArray(v.files) && v.files.length > 0
+        ? v.files
+        : (v.video_url
+            ? [{ url: v.video_url, name: 'video', mime_type: 'video/mp4', size: 0, category: 'video' }]
+            : []);
+      return {
+        id: v._id.toString(),
+        title: v.title,
+        description: v.description || '',
+        video_url: v.video_url,
+        files,
+        order: v.order ?? idx,
+        completed: completedIds.has(v._id.toString()),
+      };
+    }),
     total_videos: videos.length,
     completed_videos: progress.length,
     is_complete: videos.length > 0 && progress.length >= videos.length,
