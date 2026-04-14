@@ -388,7 +388,7 @@ export default function SolicitudesCard() {
   // Status accent helpers
   const accentBar = (st: string) => {
     switch (st?.toLowerCase()) {
-      case "pendiente": return "bg-[#ff9900]";
+      case "pendiente": return "bg-[#f4a900]";
       case "aprobado": return "bg-green-500";
       case "rechazado": return "bg-red-500";
       default: return "bg-gray-300";
@@ -665,11 +665,11 @@ export default function SolicitudesCard() {
           onClick={() => setTab("pendiente")}
           className={`text-left p-4 rounded-xl border transition-all ${
             tab === "pendiente"
-              ? "bg-black text-white border-[#ff9900] shadow-md"
-              : "bg-white border-gray-200 hover:border-[#ff9900]/50"
+              ? "bg-black text-white border-[#f4a900] shadow-md"
+              : "bg-white border-gray-200 hover:border-[#f4a900]/50"
           }`}
         >
-          <p className={`text-xs font-semibold uppercase tracking-wider ${tab === "pendiente" ? "text-[#ff9900]" : "text-gray-500"}`}>
+          <p className={`text-xs font-semibold uppercase tracking-wider ${tab === "pendiente" ? "text-[#f4a900]" : "text-gray-500"}`}>
             Pendientes
           </p>
           <p className="text-2xl font-extrabold mt-1">{pendingCount}</p>
@@ -678,11 +678,11 @@ export default function SolicitudesCard() {
           onClick={() => setTab("gestionada")}
           className={`text-left p-4 rounded-xl border transition-all ${
             tab === "gestionada"
-              ? "bg-black text-white border-[#ff9900] shadow-md"
-              : "bg-white border-gray-200 hover:border-[#ff9900]/50"
+              ? "bg-black text-white border-[#f4a900] shadow-md"
+              : "bg-white border-gray-200 hover:border-[#f4a900]/50"
           }`}
         >
-          <p className={`text-xs font-semibold uppercase tracking-wider ${tab === "gestionada" ? "text-[#ff9900]" : "text-gray-500"}`}>
+          <p className={`text-xs font-semibold uppercase tracking-wider ${tab === "gestionada" ? "text-[#f4a900]" : "text-gray-500"}`}>
             Gestionadas
           </p>
           <p className="text-2xl font-extrabold mt-1">{handledCount}</p>
@@ -694,11 +694,11 @@ export default function SolicitudesCard() {
           onClick={() => setTab("todas")}
           className={`text-left p-4 rounded-xl border transition-all ${
             tab === "todas"
-              ? "bg-black text-white border-[#ff9900] shadow-md"
-              : "bg-white border-gray-200 hover:border-[#ff9900]/50"
+              ? "bg-black text-white border-[#f4a900] shadow-md"
+              : "bg-white border-gray-200 hover:border-[#f4a900]/50"
           }`}
         >
-          <p className={`text-xs font-semibold uppercase tracking-wider ${tab === "todas" ? "text-[#ff9900]" : "text-gray-500"}`}>
+          <p className={`text-xs font-semibold uppercase tracking-wider ${tab === "todas" ? "text-[#f4a900]" : "text-gray-500"}`}>
             Todas
           </p>
           <p className="text-2xl font-extrabold mt-1">{requests.length}</p>
@@ -709,7 +709,7 @@ export default function SolicitudesCard() {
       <div className="flex justify-end">
         <button
           onClick={() => window.location.reload()}
-          className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-600 hover:text-[#ff9900] transition"
+          className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-600 hover:text-[#f4a900] transition"
           title="Recargar solicitudes"
         >
           <RefreshCw className="h-3.5 w-3.5" /> Recargar
@@ -718,7 +718,7 @@ export default function SolicitudesCard() {
 
       {loading ? (
         <div className="w-full flex justify-center items-center py-12 border border-gray-100 rounded-xl bg-gray-50">
-          <Loader2 className="h-6 w-6 text-[#ff9900] animate-spin" />
+          <Loader2 className="h-6 w-6 text-[#f4a900] animate-spin" />
           <span className="ml-2 text-gray-600 text-sm">Cargando solicitudes...</span>
         </div>
       ) : tabFiltered.length === 0 ? (
@@ -744,7 +744,7 @@ export default function SolicitudesCard() {
         <div className="text-center mt-2">
           <button
             onClick={() => setShowAll(true)}
-            className="inline-flex items-center px-4 py-2 bg-black text-white rounded-full hover:bg-[#ff9900] hover:text-black transition-colors text-sm font-semibold"
+            className="inline-flex items-center px-4 py-2 bg-black text-white rounded-full hover:bg-[#f4a900] hover:text-black transition-colors text-sm font-semibold"
           >
             <List className="mr-2 h-4 w-4" />
             Ver todas ({tabFiltered.length})
@@ -779,7 +779,7 @@ export default function SolicitudesCard() {
                   placeholder="Buscar por nombre, cédula, tipo, descripción..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ff9900] focus:border-[#ff9900] outline-none text-black placeholder:text-gray-400"
+                  className="pl-10 w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f4a900] focus:border-[#f4a900] outline-none text-black placeholder:text-gray-400"
                 />
               </div>
               
@@ -857,12 +857,12 @@ export default function SolicitudesCard() {
                 className="pointer-events-none absolute inset-0 opacity-30"
                 style={{
                   backgroundImage:
-                    "radial-gradient(circle at 90% 30%, #ff9900 0, transparent 50%)",
+                    "radial-gradient(circle at 90% 30%, #f4a900 0, transparent 50%)",
                 }}
               />
               <div className="relative flex justify-between items-start gap-3">
                 <div className="flex items-center min-w-0">
-                  <div className="w-12 h-12 rounded-xl bg-[#ff9900]/20 text-[#ff9900] flex items-center justify-center mr-3 flex-shrink-0">
+                  <div className="w-12 h-12 rounded-xl bg-[#f4a900]/20 text-[#f4a900] flex items-center justify-center mr-3 flex-shrink-0">
                     {typeIcon(selected.type)}
                   </div>
                   <div className="min-w-0">
@@ -886,7 +886,7 @@ export default function SolicitudesCard() {
             <div className="overflow-y-auto p-5 sm:p-6">
             <div className="bg-gray-50 p-4 rounded-lg mb-6 border border-gray-100">
               <p className="text-xs text-gray-500 flex items-center">
-                <Calendar className="h-3.5 w-3.5 mr-1 text-[#ff9900]" />
+                <Calendar className="h-3.5 w-3.5 mr-1 text-[#f4a900]" />
                 Enviada el {formatDate(selected.date)}
               </p>
             </div>
@@ -1071,7 +1071,7 @@ export default function SolicitudesCard() {
                 className="pointer-events-none absolute inset-0 opacity-30"
                 style={{
                   backgroundImage:
-                    "radial-gradient(circle at 90% 30%, #ff9900 0, transparent 50%)",
+                    "radial-gradient(circle at 90% 30%, #f4a900 0, transparent 50%)",
                 }}
               />
               <div className="relative flex justify-between items-start">
@@ -1104,7 +1104,7 @@ export default function SolicitudesCard() {
                     : "Motivo del rechazo..."
                 }
                 rows={4}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#ff9900] text-black placeholder:text-gray-400 text-sm resize-none"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#f4a900] text-black placeholder:text-gray-400 text-sm resize-none"
               />
 
               <div className="flex justify-end gap-2">

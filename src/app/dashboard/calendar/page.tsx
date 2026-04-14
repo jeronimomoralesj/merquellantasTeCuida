@@ -194,7 +194,7 @@ export default function CalendarPage() {
               className="pointer-events-none absolute inset-0 opacity-40"
               style={{
                 backgroundImage:
-                  "radial-gradient(circle at 12% 20%, #ff9900 0, transparent 45%), radial-gradient(circle at 88% 90%, #ff9900 0, transparent 35%)",
+                  "radial-gradient(circle at 12% 20%, #f4a900 0, transparent 45%), radial-gradient(circle at 88% 90%, #f4a900 0, transparent 35%)",
               }}
             />
             <div
@@ -206,15 +206,15 @@ export default function CalendarPage() {
                 backgroundSize: "36px 36px",
               }}
             />
-            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-[#ff9900] to-transparent" />
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-[#f4a900] to-transparent" />
 
             <div className="relative p-6 sm:p-8 flex flex-col md:flex-row md:items-center md:justify-between gap-5">
               <div>
-                <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#ff9900]/15 text-[#ff9900] text-xs font-semibold uppercase tracking-wider border border-[#ff9900]/30">
+                <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#f4a900]/15 text-[#f4a900] text-xs font-semibold uppercase tracking-wider border border-[#f4a900]/30">
                   <Sparkles className="h-3.5 w-3.5" /> Calendario
                 </span>
                 <h1 className="mt-3 text-2xl sm:text-3xl lg:text-4xl font-extrabold leading-tight">
-                  Eventos <span className="text-[#ff9900]">Merquellantas</span>
+                  Eventos <span className="text-[#f4a900]">Merquellantas</span>
                 </h1>
                 <p className="mt-2 text-sm sm:text-base text-white/70 capitalize">{monthLabel}</p>
               </div>
@@ -223,7 +223,7 @@ export default function CalendarPage() {
               <div className="flex items-center gap-2">
                 <button
                   onClick={goToToday}
-                  className="px-4 py-2 rounded-xl bg-[#ff9900] text-black text-sm font-bold hover:bg-[#ffae33] active:scale-95 transition-all shadow-lg shadow-[#ff9900]/20"
+                  className="px-4 py-2 rounded-xl bg-[#f4a900] text-black text-sm font-bold hover:bg-[#f4a900] active:scale-95 transition-all shadow-lg shadow-[#f4a900]/20"
                 >
                   Hoy
                 </button>
@@ -252,7 +252,7 @@ export default function CalendarPage() {
             <div className="lg:col-span-2">
               {loading ? (
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 flex justify-center items-center">
-                  <div className="animate-spin rounded-full h-10 w-10 border-2 border-[#ff9900] border-t-transparent" />
+                  <div className="animate-spin rounded-full h-10 w-10 border-2 border-[#f4a900] border-t-transparent" />
                 </div>
               ) : (
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
@@ -283,14 +283,14 @@ export default function CalendarPage() {
                           className={`relative text-left min-h-20 sm:min-h-28 p-1.5 sm:p-2 transition-all
                             ${colIdx !== 0 ? "border-l border-gray-100" : ""}
                             ${rowIdx !== 0 ? "border-t border-gray-100" : ""}
-                            ${!day.isCurrentMonth ? "bg-gray-50/50 text-gray-400" : "bg-white hover:bg-[#ff9900]/5"}
-                            ${selected ? "ring-2 ring-[#ff9900] z-10" : ""}
+                            ${!day.isCurrentMonth ? "bg-gray-50/50 text-gray-400" : "bg-white hover:bg-[#f4a900]/5"}
+                            ${selected ? "ring-2 ring-[#f4a900] z-10" : ""}
                           `}
                         >
                           <div
                             className={`flex items-center justify-center h-7 w-7 rounded-full text-xs font-bold mb-1 transition-colors
-                              ${today ? "bg-[#ff9900] text-black shadow-md" : ""}
-                              ${selected && !today ? "bg-black text-[#ff9900]" : ""}
+                              ${today ? "bg-[#f4a900] text-black shadow-md" : ""}
+                              ${selected && !today ? "bg-black text-[#f4a900]" : ""}
                               ${!today && !selected ? "text-gray-700" : ""}
                             `}
                           >
@@ -307,7 +307,7 @@ export default function CalendarPage() {
                                     className={`hidden sm:flex items-center text-[10px] px-1.5 py-0.5 rounded truncate ${
                                       bday
                                         ? "bg-pink-100 text-pink-700"
-                                        : "bg-[#ff9900]/15 text-[#ff9900]"
+                                        : "bg-[#f4a900]/15 text-[#f4a900]"
                                     }`}
                                   >
                                     {bday ? (
@@ -330,7 +330,7 @@ export default function CalendarPage() {
                                   <span
                                     key={e.id}
                                     className={`w-1.5 h-1.5 rounded-full ${
-                                      isBirthday(e) ? "bg-pink-500" : "bg-[#ff9900]"
+                                      isBirthday(e) ? "bg-pink-500" : "bg-[#f4a900]"
                                     }`}
                                   />
                                 ))}
@@ -350,7 +350,7 @@ export default function CalendarPage() {
               <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                 <div className="p-5 border-b border-gray-100">
                   <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
-                    <CalendarIcon className="h-4 w-4 text-[#ff9900]" /> Próximos eventos
+                    <CalendarIcon className="h-4 w-4 text-[#f4a900]" /> Próximos eventos
                   </h3>
                 </div>
                 <div className="p-3">
@@ -365,13 +365,13 @@ export default function CalendarPage() {
                         <button
                           key={evt.id}
                           onClick={() => handleDateClick(evt._next)}
-                          className="w-full text-left flex items-start gap-3 p-3 rounded-xl hover:bg-[#ff9900]/5 transition-colors"
+                          className="w-full text-left flex items-start gap-3 p-3 rounded-xl hover:bg-[#f4a900]/5 transition-colors"
                         >
                           <div
                             className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
                               bday
                                 ? "bg-pink-100 text-pink-600"
-                                : "bg-[#ff9900]/10 text-[#ff9900]"
+                                : "bg-[#f4a900]/10 text-[#f4a900]"
                             }`}
                           >
                             {bday ? <Gift size={16} /> : <CalendarIcon size={16} />}
@@ -413,12 +413,12 @@ export default function CalendarPage() {
               className="pointer-events-none absolute inset-0 opacity-30"
               style={{
                 backgroundImage:
-                  "radial-gradient(circle at 90% 30%, #ff9900 0, transparent 50%)",
+                  "radial-gradient(circle at 90% 30%, #f4a900 0, transparent 50%)",
               }}
             />
             <div className="relative flex justify-between items-start">
               <div className="min-w-0">
-                <p className="text-xs font-semibold uppercase tracking-wider text-[#ff9900]">
+                <p className="text-xs font-semibold uppercase tracking-wider text-[#f4a900]">
                   Detalles del día
                 </p>
                 <h2 className="mt-1 text-lg font-extrabold capitalize truncate">
@@ -448,7 +448,7 @@ export default function CalendarPage() {
                     >
                       <div
                         className={`absolute top-0 left-0 w-1 h-full ${
-                          bday ? "bg-pink-500" : "bg-[#ff9900]"
+                          bday ? "bg-pink-500" : "bg-[#f4a900]"
                         }`}
                       />
                       <div className="p-4 pl-5">
@@ -457,7 +457,7 @@ export default function CalendarPage() {
                             className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
                               bday
                                 ? "bg-pink-100 text-pink-600"
-                                : "bg-[#ff9900]/10 text-[#ff9900]"
+                                : "bg-[#f4a900]/10 text-[#f4a900]"
                             }`}
                           >
                             {bday ? <Gift size={18} /> : <CalendarIcon size={18} />}
@@ -482,7 +482,7 @@ export default function CalendarPage() {
               </div>
             ) : (
               <div className="text-center py-16">
-                <div className="w-16 h-16 mx-auto rounded-2xl bg-[#ff9900]/10 text-[#ff9900] flex items-center justify-center mb-4">
+                <div className="w-16 h-16 mx-auto rounded-2xl bg-[#f4a900]/10 text-[#f4a900] flex items-center justify-center mb-4">
                   <CalendarIcon size={28} />
                 </div>
                 <h4 className="text-gray-700 font-bold">Sin eventos</h4>

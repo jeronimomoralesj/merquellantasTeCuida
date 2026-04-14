@@ -213,7 +213,7 @@ export default function VideoPlayer({ src, onEnded, poster }: VideoPlayerProps) 
           aria-label="Reproducir"
           className="absolute inset-0 flex items-center justify-center group/play"
         >
-          <div className="w-20 h-20 rounded-full bg-[#ff9900]/90 hover:bg-[#ff9900] shadow-2xl flex items-center justify-center transition-transform group-hover/play:scale-110">
+          <div className="w-20 h-20 rounded-full bg-[#f4a900]/90 hover:bg-[#f4a900] shadow-2xl flex items-center justify-center transition-transform group-hover/play:scale-110">
             <Play className="w-10 h-10 text-white fill-white ml-1" />
           </div>
         </button>
@@ -259,11 +259,11 @@ export default function VideoPlayer({ src, onEnded, poster }: VideoPlayerProps) 
             style={{ width: `${bufferPct}%` }}
           />
           <div
-            className="absolute inset-y-0 left-0 bg-[#ff9900] rounded-full"
+            className="absolute inset-y-0 left-0 bg-[#f4a900] rounded-full"
             style={{ width: `${progressPct}%` }}
           />
           <div
-            className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-[#ff9900] shadow-lg scale-0 group-hover/bar:scale-100 transition-transform"
+            className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-[#f4a900] shadow-lg scale-0 group-hover/bar:scale-100 transition-transform"
             style={{ left: `calc(${progressPct}% - 6px)` }}
           />
         </div>
@@ -292,7 +292,7 @@ export default function VideoPlayer({ src, onEnded, poster }: VideoPlayerProps) 
               step={0.05}
               value={muted ? 0 : volume}
               onChange={(e) => setVol(Number(e.target.value))}
-              className="w-0 group-hover/vol:w-20 transition-all accent-[#ff9900] cursor-pointer"
+              className="w-0 group-hover/vol:w-20 transition-all accent-[#f4a900] cursor-pointer"
             />
           </div>
 
@@ -320,7 +320,7 @@ export default function VideoPlayer({ src, onEnded, poster }: VideoPlayerProps) 
                       key={r}
                       onClick={() => changeRate(r)}
                       className={`block w-full text-left px-3 py-1.5 text-xs rounded hover:bg-white/15 ${
-                        r === rate ? "text-[#ff9900] font-semibold" : "text-white"
+                        r === rate ? "text-[#f4a900] font-semibold" : "text-white"
                       }`}
                     >
                       {r}x {r === 1 && "(normal)"}

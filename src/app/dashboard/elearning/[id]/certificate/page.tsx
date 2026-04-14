@@ -51,7 +51,7 @@ export default function CertificatePage({ params }: { params: Promise<{ id: stri
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-[#ff9900]" />
+        <Loader2 className="h-8 w-8 animate-spin text-[#f4a900]" />
       </div>
     );
   }
@@ -84,7 +84,7 @@ export default function CertificatePage({ params }: { params: Promise<{ id: stri
         </a>
         <button
           onClick={() => window.print()}
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#ff9900] text-white font-semibold text-sm hover:bg-[#ffae33] shadow"
+          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#f4a900] text-white font-semibold text-sm hover:bg-[#f4a900] shadow"
         >
           <Download className="w-4 h-4" />
           Descargar / Imprimir
@@ -95,14 +95,14 @@ export default function CertificatePage({ params }: { params: Promise<{ id: stri
       <div className="max-w-5xl mx-auto bg-white shadow-2xl rounded-lg overflow-hidden print:shadow-none print:rounded-none print:max-w-none">
         <div className="relative aspect-[1.414/1] bg-white p-8 sm:p-14">
           {/* Decorative border */}
-          <div className="absolute inset-4 border-[3px] border-[#ff9900] rounded pointer-events-none" />
-          <div className="absolute inset-6 border border-[#ff9900]/40 rounded pointer-events-none" />
+          <div className="absolute inset-4 border-[3px] border-[#f4a900] rounded pointer-events-none" />
+          <div className="absolute inset-6 border border-[#f4a900]/40 rounded pointer-events-none" />
 
           {/* Corner ornaments */}
-          <div className="absolute top-4 left-4 w-16 h-16 border-t-[6px] border-l-[6px] border-[#ff7300] rounded-tl pointer-events-none" />
-          <div className="absolute top-4 right-4 w-16 h-16 border-t-[6px] border-r-[6px] border-[#ff7300] rounded-tr pointer-events-none" />
-          <div className="absolute bottom-4 left-4 w-16 h-16 border-b-[6px] border-l-[6px] border-[#ff7300] rounded-bl pointer-events-none" />
-          <div className="absolute bottom-4 right-4 w-16 h-16 border-b-[6px] border-r-[6px] border-[#ff7300] rounded-br pointer-events-none" />
+          <div className="absolute top-4 left-4 w-16 h-16 border-t-[6px] border-l-[6px] border-[#f4a900] rounded-tl pointer-events-none" />
+          <div className="absolute top-4 right-4 w-16 h-16 border-t-[6px] border-r-[6px] border-[#f4a900] rounded-tr pointer-events-none" />
+          <div className="absolute bottom-4 left-4 w-16 h-16 border-b-[6px] border-l-[6px] border-[#f4a900] rounded-bl pointer-events-none" />
+          <div className="absolute bottom-4 right-4 w-16 h-16 border-b-[6px] border-r-[6px] border-[#f4a900] rounded-br pointer-events-none" />
 
           {/* Content */}
           <div className="relative h-full flex flex-col items-center justify-between text-center">
@@ -114,9 +114,9 @@ export default function CertificatePage({ params }: { params: Promise<{ id: stri
                 className="h-16 sm:h-20 w-auto mb-4"
               />
               <div className="flex items-center gap-2">
-                <div className="h-px w-12 bg-[#ff9900]" />
-                <Award className="w-6 h-6 text-[#ff9900]" />
-                <div className="h-px w-12 bg-[#ff9900]" />
+                <div className="h-px w-12 bg-[#f4a900]" />
+                <Award className="w-6 h-6 text-[#f4a900]" />
+                <div className="h-px w-12 bg-[#f4a900]" />
               </div>
             </div>
 
@@ -129,7 +129,7 @@ export default function CertificatePage({ params }: { params: Promise<{ id: stri
                 ¡Felicidades!
               </h1>
               <p className="text-sm sm:text-base text-gray-600 mb-2">Se otorga el presente certificado a</p>
-              <h2 className="text-2xl sm:text-4xl font-bold text-[#ff7300] my-3 px-6 border-b-2 border-[#ff9900]/40 pb-2">
+              <h2 className="text-2xl sm:text-4xl font-bold text-[#f4a900] my-3 px-6 border-b-2 border-[#f4a900]/40 pb-2">
                 {data.user_name}
               </h2>
               <p className="text-sm sm:text-base text-gray-600 mt-4 max-w-2xl leading-relaxed">
@@ -148,10 +148,10 @@ export default function CertificatePage({ params }: { params: Promise<{ id: stri
                 <p className="text-sm font-semibold text-gray-800">{formatDate(data.completed_at)}</p>
               </div>
               <div className="flex flex-col items-center">
-                <div className="w-16 h-16 rounded-full border-4 border-[#ff9900] flex items-center justify-center bg-white">
-                  <Award className="w-8 h-8 text-[#ff9900]" />
+                <div className="w-16 h-16 rounded-full border-4 border-[#f4a900] flex items-center justify-center bg-white">
+                  <Award className="w-8 h-8 text-[#f4a900]" />
                 </div>
-                <p className="text-[10px] font-bold text-[#ff7300] mt-1 uppercase tracking-wider">Merquellantas</p>
+                <p className="text-[10px] font-bold text-[#f4a900] mt-1 uppercase tracking-wider">Merquellantas</p>
               </div>
               <div className="text-center">
                 <div className="h-px w-40 bg-gray-400 mb-1" />

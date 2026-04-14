@@ -292,7 +292,7 @@ export default function BienestarChat() {
       {/* Toggle button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center justify-center w-14 h-14 rounded-full bg-[#ff9900] text-black shadow-2xl ring-2 ring-black hover:bg-[#ffae33] active:scale-95 transition-all"
+        className="flex items-center justify-center w-14 h-14 rounded-full bg-[#f4a900] text-black shadow-2xl ring-2 ring-black hover:bg-[#f4a900] active:scale-95 transition-all"
         aria-label="Abrir chat de bienestar"
       >
         {isOpen ? <X size={24} /> : <MessageCircle size={24} />}
@@ -308,7 +308,7 @@ export default function BienestarChat() {
               className="pointer-events-none absolute inset-0 opacity-30"
               style={{
                 backgroundImage:
-                  "radial-gradient(circle at 90% 30%, #ff9900 0, transparent 50%)",
+                  "radial-gradient(circle at 90% 30%, #f4a900 0, transparent 50%)",
               }}
             />
             <div className="relative flex justify-between items-center">
@@ -363,7 +363,7 @@ export default function BienestarChat() {
                     <div
                       className={`inline-block max-w-[80%] px-4 py-2 rounded-2xl text-sm leading-relaxed ${
                         m.role === "user"
-                          ? "bg-[#ff9900] text-black rounded-br-none font-medium"
+                          ? "bg-[#f4a900] text-black rounded-br-none font-medium"
                           : "bg-white text-gray-800 rounded-bl-none border border-gray-200 shadow-sm"
                       }`}
                     >
@@ -379,7 +379,7 @@ export default function BienestarChat() {
                       <button
                         key={opt.label}
                         onClick={() => pickOption(opt)}
-                        className="px-3 py-1.5 rounded-full bg-white border border-[#ff9900] text-[#ff9900] text-xs font-semibold hover:bg-[#ff9900] hover:text-black active:scale-95 transition-all"
+                        className="px-3 py-1.5 rounded-full bg-white border border-[#f4a900] text-[#f4a900] text-xs font-semibold hover:bg-[#f4a900] hover:text-black active:scale-95 transition-all"
                       >
                         {opt.label}
                       </button>
@@ -396,7 +396,7 @@ export default function BienestarChat() {
                         className="pointer-events-none absolute inset-0 opacity-30"
                         style={{
                           backgroundImage:
-                            "radial-gradient(circle at 100% 0%, #ff9900 0, transparent 50%)",
+                            "radial-gradient(circle at 100% 0%, #f4a900 0, transparent 50%)",
                         }}
                       />
                       <div className="relative">
@@ -406,7 +406,7 @@ export default function BienestarChat() {
                         </p>
                         <button
                           onClick={goToPqrsf}
-                          className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#ff9900] text-black text-sm font-bold hover:bg-[#ffae33] active:scale-95 transition-all"
+                          className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#f4a900] text-black text-sm font-bold hover:bg-[#f4a900] active:scale-95 transition-all"
                         >
                           <MessageSquare size={16} /> Ir a PQRSF
                         </button>
@@ -414,7 +414,7 @@ export default function BienestarChat() {
                     </div>
                     <button
                       onClick={restart}
-                      className="w-full text-xs text-gray-500 hover:text-[#ff9900] underline"
+                      className="w-full text-xs text-gray-500 hover:text-[#f4a900] underline"
                     >
                       Iniciar otra conversación
                     </button>
@@ -434,7 +434,7 @@ export default function BienestarChat() {
                       onChange={(e) => setInput(e.target.value.slice(0, maxChars))}
                       onKeyDown={handleKeyDown}
                       placeholder="Escribe lo que sientes..."
-                      className="text-black flex-1 px-4 py-2 bg-gray-100 rounded-full focus:outline-none focus:ring-2 focus:ring-[#ff9900] resize-none max-h-20 text-sm placeholder:text-gray-400"
+                      className="text-black flex-1 px-4 py-2 bg-gray-100 rounded-full focus:outline-none focus:ring-2 focus:ring-[#f4a900] resize-none max-h-20 text-sm placeholder:text-gray-400"
                       rows={1}
                       maxLength={maxChars}
                     />
@@ -444,7 +444,7 @@ export default function BienestarChat() {
                       className={`ml-2 p-2 rounded-full ${
                         !input.trim()
                           ? "bg-gray-200 text-gray-400"
-                          : "bg-[#ff9900] text-black hover:bg-[#ffae33]"
+                          : "bg-[#f4a900] text-black hover:bg-[#f4a900]"
                       } transition-colors`}
                       aria-label="Enviar mensaje"
                     >

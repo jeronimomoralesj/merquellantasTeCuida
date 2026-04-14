@@ -336,7 +336,7 @@ export default function AdminElearningPage() {
       <div className="min-h-screen bg-gray-50">
         <DashboardNavbar activePage="elearning" />
         <div className="flex items-center justify-center py-24">
-          <Loader2 className="h-8 w-8 animate-spin text-[#ff9900]" />
+          <Loader2 className="h-8 w-8 animate-spin text-[#f4a900]" />
         </div>
       </div>
     );
@@ -350,8 +350,8 @@ export default function AdminElearningPage() {
       <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 pb-16">
         <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-[#ff9900]/20 flex items-center justify-center">
-              <GraduationCap className="w-5 h-5 text-[#ff9900]" />
+            <div className="w-10 h-10 rounded-full bg-[#f4a900]/20 flex items-center justify-center">
+              <GraduationCap className="w-5 h-5 text-[#f4a900]" />
             </div>
             <div>
               <h1 className="text-2xl font-extrabold text-gray-900">E-Learning</h1>
@@ -367,7 +367,7 @@ export default function AdminElearningPage() {
             </a>
             <button
               onClick={openNewCourse}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#ff9900] text-white font-semibold text-sm hover:bg-[#ffae33] shadow"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#f4a900] text-white font-semibold text-sm hover:bg-[#f4a900] shadow"
             >
               <Plus className="w-4 h-4" />
               Nuevo curso
@@ -397,7 +397,7 @@ export default function AdminElearningPage() {
                         <img src={c.thumbnail} alt={c.title} className="w-full h-full object-cover" />
                       ) : (
                         <div className="flex items-center justify-center h-full">
-                          <PlayCircle className="w-12 h-12 text-[#ff9900] opacity-50" />
+                          <PlayCircle className="w-12 h-12 text-[#f4a900] opacity-50" />
                         </div>
                       )}
                     </div>
@@ -406,7 +406,7 @@ export default function AdminElearningPage() {
                       <p className="text-xs text-gray-500 line-clamp-2 mb-2 min-h-[2rem]">
                         {c.description || "Sin descripción"}
                       </p>
-                      <span className="text-xs text-[#ff9900] font-semibold inline-flex items-center gap-1">
+                      <span className="text-xs text-[#f4a900] font-semibold inline-flex items-center gap-1">
                         <PlayCircle className="w-3.5 h-3.5" />
                         {c.video_count} {c.video_count === 1 ? "lección" : "lecciones"}
                       </span>
@@ -415,7 +415,7 @@ export default function AdminElearningPage() {
                   <div className="flex items-center justify-end gap-1 p-2 border-t border-gray-100 bg-gray-50/50">
                     <button
                       onClick={() => openEditCourse(c)}
-                      className="p-2 rounded-lg text-gray-500 hover:bg-white hover:text-[#ff9900]"
+                      className="p-2 rounded-lg text-gray-500 hover:bg-white hover:text-[#f4a900]"
                       title="Editar"
                     >
                       <Edit3 className="w-4 h-4" />
@@ -436,14 +436,14 @@ export default function AdminElearningPage() {
           <>
             <button
               onClick={() => setSelectedCourseId(null)}
-              className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-[#ff9900] mb-4"
+              className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-[#f4a900] mb-4"
             >
               <ArrowLeft className="w-4 h-4" /> Todos los cursos
             </button>
 
             {loadingDetail || !selectedCourse ? (
               <div className="flex items-center justify-center py-12">
-                <Loader2 className="h-6 w-6 animate-spin text-[#ff9900]" />
+                <Loader2 className="h-6 w-6 animate-spin text-[#f4a900]" />
               </div>
             ) : (
               <>
@@ -473,7 +473,7 @@ export default function AdminElearningPage() {
                   <h3 className="font-bold text-gray-900">Lecciones ({selectedCourse.videos.length})</h3>
                   <button
                     onClick={openNewVideo}
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#ff9900] text-white font-semibold text-sm hover:bg-[#ffae33] shadow"
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#f4a900] text-white font-semibold text-sm hover:bg-[#f4a900] shadow"
                   >
                     <Plus className="w-4 h-4" /> Nueva lección
                   </button>
@@ -493,7 +493,7 @@ export default function AdminElearningPage() {
                           key={v.id}
                           className="bg-white rounded-xl border border-gray-100 p-4 flex items-center gap-4 shadow-sm"
                         >
-                          <div className="w-10 h-10 rounded-full bg-[#ff9900]/10 flex items-center justify-center text-[#ff9900] font-bold text-sm flex-shrink-0">
+                          <div className="w-10 h-10 rounded-full bg-[#f4a900]/10 flex items-center justify-center text-[#f4a900] font-bold text-sm flex-shrink-0">
                             {idx + 1}
                           </div>
                           <div className="flex-1 min-w-0">
@@ -510,7 +510,7 @@ export default function AdminElearningPage() {
                           <div className="flex items-center gap-1 flex-shrink-0">
                             <button
                               onClick={() => openEditVideo(v)}
-                              className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-[#ff9900]"
+                              className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-[#f4a900]"
                               title="Editar"
                             >
                               <Edit3 className="w-4 h-4" />
@@ -578,7 +578,7 @@ export default function AdminElearningPage() {
                       </button>
                     </div>
                   ) : (
-                    <label className="flex flex-col items-center justify-center aspect-video border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-[#ff9900] hover:bg-orange-50/40 transition">
+                    <label className="flex flex-col items-center justify-center aspect-video border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-[#f4a900] hover:bg-orange-50/40 transition">
                       <ImageIconLucide className="w-8 h-8 text-gray-400 mb-2" />
                       <p className="text-sm text-gray-600 font-medium">Agregar portada</p>
                       <p className="text-xs text-gray-400">JPG, PNG, WEBP</p>
@@ -599,7 +599,7 @@ export default function AdminElearningPage() {
                   onChange={(e) => setCourseTitle(e.target.value)}
                   placeholder="Ej: Seguridad en el trabajo"
                   maxLength={200}
-                  className="mt-1 w-full px-3 py-2 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#ff9900] focus:border-[#ff9900] text-gray-900"
+                  className="mt-1 w-full px-3 py-2 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#f4a900] focus:border-[#f4a900] text-gray-900"
                 />
               </div>
               <div>
@@ -610,7 +610,7 @@ export default function AdminElearningPage() {
                   rows={4}
                   maxLength={1000}
                   placeholder="De qué trata el curso..."
-                  className="mt-1 w-full px-3 py-2 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#ff9900] focus:border-[#ff9900] resize-y text-gray-900"
+                  className="mt-1 w-full px-3 py-2 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#f4a900] focus:border-[#f4a900] resize-y text-gray-900"
                 />
               </div>
               {courseError && (
@@ -630,7 +630,7 @@ export default function AdminElearningPage() {
               <button
                 onClick={saveCourse}
                 disabled={savingCourse || !courseTitle.trim()}
-                className="px-5 py-2 rounded-xl bg-[#ff9900] text-white font-semibold hover:bg-[#ffae33] disabled:opacity-50 flex items-center gap-2"
+                className="px-5 py-2 rounded-xl bg-[#f4a900] text-white font-semibold hover:bg-[#f4a900] disabled:opacity-50 flex items-center gap-2"
               >
                 {savingCourse ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                 Guardar
@@ -660,7 +660,7 @@ export default function AdminElearningPage() {
                   onChange={(e) => setVideoTitle(e.target.value)}
                   maxLength={200}
                   placeholder="Ej: Introducción al curso"
-                  className="mt-1 w-full px-3 py-2 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#ff9900] focus:border-[#ff9900] text-gray-900"
+                  className="mt-1 w-full px-3 py-2 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#f4a900] focus:border-[#f4a900] text-gray-900"
                 />
               </div>
               <div>
@@ -671,7 +671,7 @@ export default function AdminElearningPage() {
                   rows={4}
                   maxLength={2000}
                   placeholder="Explica qué se aprende en esta lección..."
-                  className="mt-1 w-full px-3 py-2 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#ff9900] focus:border-[#ff9900] resize-y text-gray-900"
+                  className="mt-1 w-full px-3 py-2 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#f4a900] focus:border-[#f4a900] resize-y text-gray-900"
                 />
               </div>
 
@@ -709,7 +709,7 @@ export default function AdminElearningPage() {
                 </div>
 
                 {existingFiles.length + newFiles.length < 5 && (
-                  <label className="flex flex-col items-center justify-center py-6 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-[#ff9900] hover:bg-orange-50/40 transition">
+                  <label className="flex flex-col items-center justify-center py-6 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-[#f4a900] hover:bg-orange-50/40 transition">
                     <Upload className="w-6 h-6 text-gray-400 mb-1" />
                     <p className="text-sm text-gray-600 font-medium">Agregar archivos</p>
                     <p className="text-xs text-gray-400 mt-1">Video (MP4/WebM/MOV), PDF, DOCX, XLSX o imágenes</p>
@@ -751,7 +751,7 @@ export default function AdminElearningPage() {
               <button
                 onClick={saveVideo}
                 disabled={uploading || !videoTitle.trim()}
-                className="px-5 py-2 rounded-xl bg-[#ff9900] text-white font-semibold hover:bg-[#ffae33] disabled:opacity-50 flex items-center gap-2"
+                className="px-5 py-2 rounded-xl bg-[#f4a900] text-white font-semibold hover:bg-[#f4a900] disabled:opacity-50 flex items-center gap-2"
               >
                 {uploading ? (
                   <>
@@ -799,7 +799,7 @@ function FileRow({
     <FileIcon className="w-5 h-5" />
   );
   const color = cat === "video"
-    ? "bg-orange-50 text-[#ff9900]"
+    ? "bg-orange-50 text-[#f4a900]"
     : cat === "document"
     ? "bg-red-50 text-red-600"
     : cat === "image"

@@ -29,7 +29,7 @@ export default function AdminPage({ embedded = false }: AdminPageProps) {
   if (status === "loading") {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin h-8 w-8 border-4 border-[#ff9900] border-t-transparent rounded-full" />
+        <div className="animate-spin h-8 w-8 border-4 border-[#f4a900] border-t-transparent rounded-full" />
       </div>
     );
   }
@@ -56,7 +56,7 @@ export default function AdminPage({ embedded = false }: AdminPageProps) {
               className="pointer-events-none absolute inset-0 opacity-40"
               style={{
                 backgroundImage:
-                  "radial-gradient(circle at 12% 20%, #ff9900 0, transparent 45%), radial-gradient(circle at 88% 90%, #ff9900 0, transparent 35%)",
+                  "radial-gradient(circle at 12% 20%, #f4a900 0, transparent 45%), radial-gradient(circle at 88% 90%, #f4a900 0, transparent 35%)",
               }}
             />
             <div
@@ -68,15 +68,15 @@ export default function AdminPage({ embedded = false }: AdminPageProps) {
                 backgroundSize: "36px 36px",
               }}
             />
-            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-[#ff9900] to-transparent" />
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-[#f4a900] to-transparent" />
 
             <div className="relative p-6 sm:p-8 lg:p-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
-                <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#ff9900]/15 text-[#ff9900] text-xs font-semibold uppercase tracking-wider border border-[#ff9900]/30">
+                <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#f4a900]/15 text-[#f4a900] text-xs font-semibold uppercase tracking-wider border border-[#f4a900]/30">
                   <LayoutDashboard className="h-3.5 w-3.5" /> Panel de Administración
                 </span>
                 <h1 className="mt-3 text-2xl sm:text-3xl lg:text-4xl font-extrabold leading-tight">
-                  Centro de <span className="text-[#ff9900]">control</span>
+                  Centro de <span className="text-[#f4a900]">control</span>
                 </h1>
                 <p className="mt-2 text-sm sm:text-base text-white/70">
                   Gestiona usuarios, solicitudes, eventos y más desde un solo lugar.
@@ -95,7 +95,7 @@ export default function AdminPage({ embedded = false }: AdminPageProps) {
                     key={c.label}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-xs font-semibold text-white/80"
                   >
-                    <c.icon className="h-3.5 w-3.5 text-[#ff9900]" />
+                    <c.icon className="h-3.5 w-3.5 text-[#f4a900]" />
                     {c.label}
                   </span>
                 ))}
@@ -144,10 +144,10 @@ function SectionCard({
 }) {
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow duration-300 relative overflow-hidden">
-      <div className="absolute top-0 left-0 w-1 h-full bg-[#ff9900]" />
+      <div className="absolute top-0 left-0 w-1 h-full bg-[#f4a900]" />
       <div className="p-5 sm:p-6">
         <div className="flex items-center gap-2 mb-4">
-          <div className="w-9 h-9 rounded-lg bg-[#ff9900]/10 text-[#ff9900] flex items-center justify-center">
+          <div className="w-9 h-9 rounded-lg bg-[#f4a900]/10 text-[#f4a900] flex items-center justify-center">
             {icon}
           </div>
           <h2 className="text-base sm:text-lg font-bold text-gray-900">{title}</h2>

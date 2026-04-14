@@ -47,11 +47,11 @@ export default function Stats() {
           className="pointer-events-none absolute inset-0 opacity-30"
           style={{
             backgroundImage:
-              "radial-gradient(circle at 90% 20%, #ff9900 0, transparent 45%)",
+              "radial-gradient(circle at 90% 20%, #f4a900 0, transparent 45%)",
           }}
         />
         <div className="relative flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-[#ff9900]/20 text-[#ff9900] flex items-center justify-center">
+          <div className="w-10 h-10 rounded-xl bg-[#f4a900]/20 text-[#f4a900] flex items-center justify-center">
             <BarChart3 className="h-5 w-5" />
           </div>
           <div>
@@ -69,16 +69,16 @@ export default function Stats() {
             <button
               key={item.view}
               onClick={() => setCurrentView(item.view)}
-              className="group w-full flex items-center gap-3 p-3 rounded-xl hover:bg-[#ff9900]/10 active:scale-[0.99] transition-all text-left"
+              className="group w-full flex items-center gap-3 p-3 rounded-xl hover:bg-[#f4a900]/10 active:scale-[0.99] transition-all text-left"
             >
-              <div className="w-11 h-11 rounded-xl bg-gray-100 group-hover:bg-[#ff9900] text-gray-600 group-hover:text-black flex items-center justify-center transition-colors">
+              <div className="w-11 h-11 rounded-xl bg-gray-100 group-hover:bg-[#f4a900] text-gray-600 group-hover:text-black flex items-center justify-center transition-colors">
                 <Icon className="h-5 w-5" />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-bold text-gray-900 truncate">{item.label}</p>
                 <p className="text-xs text-gray-500 truncate">{item.description}</p>
               </div>
-              <ChevronRight className="h-4 w-4 text-gray-400 group-hover:text-[#ff9900] group-hover:translate-x-0.5 transition-all" />
+              <ChevronRight className="h-4 w-4 text-gray-400 group-hover:text-[#f4a900] group-hover:translate-x-0.5 transition-all" />
             </button>
           );
         })}

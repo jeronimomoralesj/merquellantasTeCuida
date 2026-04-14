@@ -33,7 +33,7 @@ const SolicitudPage = () => {
           <div className="flex items-center text-sm text-gray-500 mb-2">
             <a href="/dashboard" className="hover:text-gray-700">Inicio</a>
             <ChevronRight className="h-4 w-4 mx-1" />
-            <span className="text-[#ff9900] font-medium">Nueva Solicitud</span>
+            <span className="text-[#f4a900] font-medium">Nueva Solicitud</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Nueva Solicitud</h1>
           <p className="mt-2 text-gray-600">Complete el formulario para enviar su solicitud</p>
@@ -46,7 +46,7 @@ const SolicitudPage = () => {
               type="button"
               className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-all mb-1 sm:mb-0 sm:mr-1 ${
                 requestType === 'permiso' 
-                  ? 'bg-white text-[#ff9900] shadow-sm' 
+                  ? 'bg-white text-[#f4a900] shadow-sm' 
                   : 'text-gray-500 hover:text-gray-700'
               }`}
               onClick={() => setRequestType('permiso')}
@@ -57,7 +57,7 @@ const SolicitudPage = () => {
               type="button"
               className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-all mb-1 sm:mb-0 sm:mx-0.5 ${
                 requestType === 'incapacidad' 
-                  ? 'bg-white text-[#ff9900] shadow-sm' 
+                  ? 'bg-white text-[#f4a900] shadow-sm' 
                   : 'text-gray-500 hover:text-gray-700'
               }`}
               onClick={() => setRequestType('incapacidad')}
@@ -68,7 +68,7 @@ const SolicitudPage = () => {
               type="button"
               className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-all sm:ml-1 ${
                 requestType === 'vacaciones' 
-                  ? 'bg-white text-[#ff9900] shadow-sm' 
+                  ? 'bg-white text-[#f4a900] shadow-sm' 
                   : 'text-gray-500 hover:text-gray-700'
               }`}
               onClick={() => setRequestType('vacaciones')}

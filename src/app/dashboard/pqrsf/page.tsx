@@ -167,7 +167,7 @@ export default function PqrsfPage() {
                 }}
                 className="absolute top-1/2 left-1/2 pointer-events-none"
               >
-                <Sparkles className={`h-${4 + (i % 3)} w-${4 + (i % 3)} text-[#ff9900]`} />
+                <Sparkles className={`h-${4 + (i % 3)} w-${4 + (i % 3)} text-[#f4a900]`} />
               </motion.div>
             ))}
           </AnimatePresence>
@@ -186,7 +186,7 @@ export default function PqrsfPage() {
                   opacity: [0.4, 0.7, 0.4],
                 }}
                 transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
-                className="absolute inset-0 bg-[#ff9900] rounded-full blur-2xl"
+                className="absolute inset-0 bg-[#f4a900] rounded-full blur-2xl"
               />
               <motion.div
                 initial={{ scale: 0, rotate: -180 }}
@@ -216,7 +216,7 @@ export default function PqrsfPage() {
                     width={160}
                     height={160}
                     priority
-                    className="rounded-full ring-4 ring-[#ff9900] shadow-xl object-cover w-full h-full"
+                    className="rounded-full ring-4 ring-[#f4a900] shadow-xl object-cover w-full h-full"
                   />
                 </motion.div>
               </motion.div>
@@ -228,7 +228,7 @@ export default function PqrsfPage() {
               transition={{ delay: 0.5, duration: 0.5 }}
               className="text-2xl sm:text-3xl font-extrabold text-gray-900 mb-3"
             >
-              ¡Gracias por tus <span className="text-[#ff9900]">aportes</span>!
+              ¡Gracias por tus <span className="text-[#f4a900]">aportes</span>!
             </motion.h2>
 
             <motion.p
@@ -256,7 +256,7 @@ export default function PqrsfPage() {
               whileHover={{ scale: 1.03 }}
               whileTap={{ scale: 0.97 }}
               onClick={() => setSubmitted(false)}
-              className="px-6 py-3 bg-gradient-to-r from-[#ff9900] to-amber-500 text-black font-bold rounded-full hover:shadow-lg hover:shadow-[#ff9900]/40 transition-all flex items-center justify-center gap-2 w-full sm:w-auto mx-auto"
+              className="px-6 py-3 bg-gradient-to-r from-[#f4a900] to-amber-500 text-black font-bold rounded-full hover:shadow-lg hover:shadow-[#f4a900]/40 transition-all flex items-center justify-center gap-2 w-full sm:w-auto mx-auto"
             >
               <Send size={18} />
               Enviar otra PQRSF

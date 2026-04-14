@@ -58,7 +58,7 @@ export default function MerqeuBienestarLogin() {
         className="pointer-events-none absolute inset-0 opacity-[0.18]"
         style={{
           backgroundImage:
-            'radial-gradient(circle at 20% 10%, #ff9900 0, transparent 40%), radial-gradient(circle at 80% 90%, #ff9900 0, transparent 35%)',
+            'radial-gradient(circle at 20% 10%, #f4a900 0, transparent 40%), radial-gradient(circle at 80% 90%, #f4a900 0, transparent 35%)',
         }}
       />
       <div
@@ -75,15 +75,15 @@ export default function MerqeuBienestarLogin() {
         {/* LEFT — Mascot / brand panel */}
         <section className="hidden lg:flex flex-col justify-between p-10 xl:p-14">
           <div className="flex items-center gap-3">
-            <div className="bg-[#ff9900] rounded-xl p-2">
+            <div className="bg-[#f4a900] rounded-xl p-2">
               <Sparkles className="h-5 w-5 text-black" />
             </div>
             <span className="font-bold tracking-wide text-lg">Merquellantas · Nuestra Gente</span>
           </div>
 
           <div className="relative flex-1 flex items-center justify-center">
-            <div className="absolute w-[420px] h-[420px] xl:w-[520px] xl:h-[520px] rounded-full bg-[#ff9900] blur-3xl opacity-30" />
-            <div className="absolute w-[360px] h-[360px] xl:w-[460px] xl:h-[460px] rounded-full border-2 border-[#ff9900]/40" />
+            <div className="absolute w-[420px] h-[420px] xl:w-[520px] xl:h-[520px] rounded-full bg-[#f4a900] blur-3xl opacity-30" />
+            <div className="absolute w-[360px] h-[360px] xl:w-[460px] xl:h-[460px] rounded-full border-2 border-[#f4a900]/40" />
             <div className="absolute w-[280px] h-[280px] xl:w-[360px] xl:h-[360px] rounded-full border border-white/10" />
             <Image
               src="/merquito.jpeg"
@@ -91,13 +91,13 @@ export default function MerqeuBienestarLogin() {
               width={420}
               height={420}
               priority
-              className="relative rounded-3xl shadow-2xl ring-4 ring-[#ff9900]/60 object-cover"
+              className="relative rounded-3xl shadow-2xl ring-4 ring-[#f4a900]/60 object-cover"
             />
           </div>
 
           <div className="max-w-md">
             <h2 className="text-3xl xl:text-4xl font-extrabold leading-tight">
-              Bienvenido a <span className="text-[#ff9900]">Nuestra Gente</span>
+              Bienvenido a <span className="text-[#f4a900]">Nuestra Gente</span>
             </h2>
             <p className="mt-3 text-white/70">
               Tu portal de bienestar, beneficios y comunicación con el equipo Merquellantas.
@@ -110,29 +110,29 @@ export default function MerqeuBienestarLogin() {
           {/* Mobile mascot header */}
           <div className="lg:hidden flex flex-col items-center mb-8">
             <div className="relative">
-              <div className="absolute -inset-3 bg-[#ff9900] rounded-full blur-2xl opacity-40" />
+              <div className="absolute -inset-3 bg-[#f4a900] rounded-full blur-2xl opacity-40" />
               <Image
                 src="/merquito.jpeg"
                 alt="Merquito - Mascota Merquellantas"
                 width={140}
                 height={140}
                 priority
-                className="relative rounded-2xl ring-4 ring-[#ff9900] object-cover"
+                className="relative rounded-2xl ring-4 ring-[#f4a900] object-cover"
               />
             </div>
             <h1 className="mt-4 text-2xl font-extrabold text-white text-center">
-              Nuestra <span className="text-[#ff9900]">Gente</span>
+              Nuestra <span className="text-[#f4a900]">Gente</span>
             </h1>
             <p className="text-white/60 text-sm mt-1">Merquellantas</p>
           </div>
 
           <div className="w-full max-w-md">
             <div className="relative">
-              <div className="absolute -inset-1 bg-gradient-to-br from-[#ff9900] via-[#ff9900]/40 to-transparent rounded-3xl blur-xl opacity-60" />
+              <div className="absolute -inset-1 bg-gradient-to-br from-[#f4a900] via-[#f4a900]/40 to-transparent rounded-3xl blur-xl opacity-60" />
               <div className="relative bg-white rounded-3xl shadow-2xl p-6 sm:p-8 md:p-10 text-black">
                 <div className="flex items-center gap-2 mb-1">
-                  <div className="h-1 w-10 rounded-full bg-[#ff9900]" />
-                  <span className="text-xs font-semibold uppercase tracking-wider text-[#ff9900]">
+                  <div className="h-1 w-10 rounded-full bg-[#f4a900]" />
+                  <span className="text-xs font-semibold uppercase tracking-wider text-[#f4a900]">
                     Acceso seguro
                   </span>
                 </div>
@@ -159,7 +159,7 @@ export default function MerqeuBienestarLogin() {
                         required
                         value={cedula}
                         onChange={e => setCedula(e.target.value.replace(/\D/g, ''))}
-                        className="block w-full pl-10 pr-3 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#ff9900] focus:border-transparent transition"
+                        className="block w-full pl-10 pr-3 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#f4a900] focus:border-transparent transition"
                         placeholder="Ej. 1023456789"
                       />
                     </div>
@@ -181,14 +181,14 @@ export default function MerqeuBienestarLogin() {
                         required
                         value={password}
                         onChange={e => setPassword(e.target.value)}
-                        className="block w-full pl-10 pr-12 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#ff9900] focus:border-transparent transition"
+                        className="block w-full pl-10 pr-12 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#f4a900] focus:border-transparent transition"
                         placeholder="••••••••"
                       />
                       <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
                         aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
-                        className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-[#ff9900] transition"
+                        className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-[#f4a900] transition"
                       >
                         {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                       </button>
@@ -201,12 +201,12 @@ export default function MerqeuBienestarLogin() {
                         type="checkbox"
                         checked={rememberMe}
                         onChange={e => setRememberMe(e.target.checked)}
-                        className="h-4 w-4 accent-[#ff9900] border-gray-300 rounded focus:ring-[#ff9900]"
+                        className="h-4 w-4 accent-[#f4a900] border-gray-300 rounded focus:ring-[#f4a900]"
                       />
                       <span className="ml-2">Recordarme</span>
                     </label>
                     <span className="flex items-center text-xs text-gray-500">
-                      <ShieldCheck className="h-4 w-4 mr-1 text-[#ff9900]" />
+                      <ShieldCheck className="h-4 w-4 mr-1 text-[#f4a900]" />
                       Conexión segura
                     </span>
                   </div>
@@ -223,7 +223,7 @@ export default function MerqeuBienestarLogin() {
                   <button
                     type="submit"
                     disabled={loading || !cedula || !password}
-                    className="w-full flex justify-center items-center py-3.5 rounded-xl bg-[#ff9900] text-black font-bold text-base hover:bg-[#ffae33] active:scale-[0.99] transition disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-[#ff9900]/30"
+                    className="w-full flex justify-center items-center py-3.5 rounded-xl bg-[#f4a900] text-black font-bold text-base hover:bg-[#f4a900] active:scale-[0.99] transition disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-[#f4a900]/30"
                   >
                     {loading ? 'Ingresando...' : 'Iniciar sesión'}
                     {!loading && <ArrowRight className="ml-2 h-5 w-5" />}

@@ -193,7 +193,7 @@ export default function FondoPage() {
   if (status === "loading") {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin h-8 w-8 border-4 border-[#ff9900] border-t-transparent rounded-full" />
+        <div className="animate-spin h-8 w-8 border-4 border-[#f4a900] border-t-transparent rounded-full" />
       </div>
     );
   }
@@ -227,7 +227,7 @@ export default function FondoPage() {
               className="pointer-events-none absolute inset-0 opacity-40"
               style={{
                 backgroundImage:
-                  "radial-gradient(circle at 12% 20%, #ff9900 0, transparent 45%), radial-gradient(circle at 88% 90%, #ff9900 0, transparent 35%)",
+                  "radial-gradient(circle at 12% 20%, #f4a900 0, transparent 45%), radial-gradient(circle at 88% 90%, #f4a900 0, transparent 35%)",
               }}
             />
             <div
@@ -239,15 +239,15 @@ export default function FondoPage() {
                 backgroundSize: "36px 36px",
               }}
             />
-            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-[#ff9900] to-transparent" />
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-[#f4a900] to-transparent" />
 
             <div className="relative p-6 sm:p-8 lg:p-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
-                <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#ff9900]/15 text-[#ff9900] text-xs font-semibold uppercase tracking-wider border border-[#ff9900]/30">
+                <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#f4a900]/15 text-[#f4a900] text-xs font-semibold uppercase tracking-wider border border-[#f4a900]/30">
                   <Landmark className="h-3.5 w-3.5" /> Fonalmerque
                 </span>
                 <h1 className="mt-3 text-2xl sm:text-3xl lg:text-4xl font-extrabold leading-tight">
-                  Panel del <span className="text-[#ff9900]">Fonalmerque</span>
+                  Panel del <span className="text-[#f4a900]">Fonalmerque</span>
                 </h1>
                 <p className="mt-2 text-sm sm:text-base text-white/70">
                   Gestiona ciclos, aportes y afiliados de Fonalmerque.
@@ -264,7 +264,7 @@ export default function FondoPage() {
                     key={c.label}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-xs font-semibold text-white/80"
                   >
-                    <c.icon className="h-3.5 w-3.5 text-[#ff9900]" />
+                    <c.icon className="h-3.5 w-3.5 text-[#f4a900]" />
                     {c.label}
                   </span>
                 ))}
@@ -280,8 +280,8 @@ export default function FondoPage() {
                 onClick={() => setActiveTab(t.id)}
                 className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 ${
                   activeTab === t.id
-                    ? "bg-[#ff9900] text-white shadow-md shadow-[#ff9900]/25"
-                    : "bg-white text-gray-600 border border-gray-200 hover:border-[#ff9900]/40 hover:text-[#ff9900]"
+                    ? "bg-[#f4a900] text-white shadow-md shadow-[#f4a900]/25"
+                    : "bg-white text-gray-600 border border-gray-200 hover:border-[#f4a900]/40 hover:text-[#f4a900]"
                 }`}
               >
                 {t.icon}
@@ -623,7 +623,7 @@ function CicloActualTab() {
   if (loading) {
     return (
       <div className="flex justify-center py-16">
-        <div className="animate-spin h-8 w-8 border-4 border-[#ff9900] border-t-transparent rounded-full" />
+        <div className="animate-spin h-8 w-8 border-4 border-[#f4a900] border-t-transparent rounded-full" />
       </div>
     );
   }
@@ -662,7 +662,7 @@ function CicloActualTab() {
       <div className="p-5 sm:p-6 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-            <Clock size={20} className="text-[#ff9900]" />
+            <Clock size={20} className="text-[#f4a900]" />
             Ciclo Actual
             {isAjustesMode && (
               <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-300">
@@ -688,13 +688,13 @@ function CicloActualTab() {
               placeholder="Filtrar por nombre o cédula..."
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
-              className="pl-9 pr-4 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff9900]/40 focus:border-[#ff9900] w-56"
+              className="pl-9 pr-4 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#f4a900]/40 focus:border-[#f4a900] w-56"
             />
           </div>
           <button
             onClick={handleSubmit}
             disabled={submitting}
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#ff9900] text-white font-semibold text-sm shadow-md shadow-[#ff9900]/25 hover:bg-[#e68a00] disabled:opacity-50 transition-all"
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#f4a900] text-white font-semibold text-sm shadow-md shadow-[#f4a900]/25 hover:bg-[#e68a00] disabled:opacity-50 transition-all"
           >
             {submitting ? (
               <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
@@ -716,14 +716,14 @@ function CicloActualTab() {
       {/* PDF Upload Section */}
       <div className="mx-5 mt-4 p-4 rounded-xl bg-gray-50 border border-gray-200">
         <div className="flex items-center gap-3 mb-3">
-          <FileText size={18} className="text-[#ff9900]" />
+          <FileText size={18} className="text-[#f4a900]" />
           <div>
             <p className="text-sm font-semibold text-gray-900">Cargar nómina (PDF)</p>
             <p className="text-xs text-gray-500">Sube el PDF de nómina para actualizar automáticamente los datos del ciclo actual.</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <label className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-gray-200 text-sm font-semibold text-gray-700 cursor-pointer hover:border-[#ff9900]/40 hover:text-[#ff9900] transition-all">
+          <label className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-gray-200 text-sm font-semibold text-gray-700 cursor-pointer hover:border-[#f4a900]/40 hover:text-[#f4a900] transition-all">
             <Upload size={16} />
             {uploading ? "Procesando..." : "Seleccionar PDF"}
             <input
@@ -738,7 +738,7 @@ function CicloActualTab() {
               }}
             />
           </label>
-          {uploading && <div className="animate-spin h-5 w-5 border-2 border-[#ff9900] border-t-transparent rounded-full" />}
+          {uploading && <div className="animate-spin h-5 w-5 border-2 border-[#f4a900] border-t-transparent rounded-full" />}
         </div>
 
         {uploadError && (
@@ -834,7 +834,7 @@ function CicloActualTab() {
                   <select
                     value={row.frecuencia}
                     onChange={(e) => updateRowField(idx, "frecuencia", e.target.value)}
-                    className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#ff9900]/40 focus:border-[#ff9900]"
+                    className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#f4a900]/40 focus:border-[#f4a900]"
                   >
                     <option value="quincenal">Quincenal</option>
                     <option value="mensual">Mensual</option>
@@ -847,7 +847,7 @@ function CicloActualTab() {
                     min={0}
                     value={row.aporte}
                     onChange={(e) => updateRowField(idx, "aporte", e.target.value)}
-                    className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff9900]/40 focus:border-[#ff9900]"
+                    className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#f4a900]/40 focus:border-[#f4a900]"
                   />
                   <p className="text-[9px] text-gray-400 mt-0.5">Permanente: {fmt(row.permanente)} · Social: {fmt(row.social)}</p>
                 </div>
@@ -858,7 +858,7 @@ function CicloActualTab() {
                     min={0}
                     value={row.actividad}
                     onChange={(e) => updateRowField(idx, "actividad", e.target.value)}
-                    className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff9900]/40 focus:border-[#ff9900]"
+                    className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#f4a900]/40 focus:border-[#f4a900]"
                   />
                 </div>
               </div>
@@ -881,7 +881,7 @@ function CicloActualTab() {
                           min={0}
                           value={cr.monto}
                           onChange={(e) => updateCreditPayment(idx, ci, e.target.value)}
-                          className="w-32 text-right rounded-lg border border-gray-200 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff9900]/40 focus:border-[#ff9900]"
+                          className="w-32 text-right rounded-lg border border-gray-200 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#f4a900]/40 focus:border-[#f4a900]"
                         />
                       </div>
                     ))}
@@ -966,7 +966,7 @@ function CicloActualTab() {
             {!showAddUser ? (
               <button
                 onClick={() => setShowAddUser(true)}
-                className="w-full py-3 rounded-xl border-2 border-dashed border-gray-300 text-gray-500 hover:border-[#ff9900] hover:text-[#ff9900] transition-colors flex items-center justify-center gap-2 text-sm font-semibold"
+                className="w-full py-3 rounded-xl border-2 border-dashed border-gray-300 text-gray-500 hover:border-[#f4a900] hover:text-[#f4a900] transition-colors flex items-center justify-center gap-2 text-sm font-semibold"
               >
                 <UserPlus size={16} />
                 Agregar usuario no incluido en el PDF
@@ -1031,7 +1031,7 @@ function HistorialTab() {
   if (loading) {
     return (
       <div className="flex justify-center py-16">
-        <div className="animate-spin h-8 w-8 border-4 border-[#ff9900] border-t-transparent rounded-full" />
+        <div className="animate-spin h-8 w-8 border-4 border-[#f4a900] border-t-transparent rounded-full" />
       </div>
     );
   }
@@ -1048,7 +1048,7 @@ function HistorialTab() {
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
       <div className="p-5 sm:p-6 border-b border-gray-100">
         <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-          <History size={20} className="text-[#ff9900]" />
+          <History size={20} className="text-[#f4a900]" />
           Historial de Ciclos
         </h2>
       </div>
@@ -1307,7 +1307,7 @@ function BuscarAfiliadoTab() {
       {/* Search bar */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 sm:p-6">
         <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2 mb-4">
-          <Search size={20} className="text-[#ff9900]" />
+          <Search size={20} className="text-[#f4a900]" />
           Buscar Afiliado
         </h2>
         <div className="flex gap-3">
@@ -1322,13 +1322,13 @@ function BuscarAfiliadoTab() {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-              className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff9900]/40 focus:border-[#ff9900]"
+              className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#f4a900]/40 focus:border-[#f4a900]"
             />
           </div>
           <button
             onClick={handleSearch}
             disabled={searching}
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#ff9900] text-white font-semibold text-sm shadow-md shadow-[#ff9900]/25 hover:bg-[#e68a00] disabled:opacity-50 transition-all"
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#f4a900] text-white font-semibold text-sm shadow-md shadow-[#f4a900]/25 hover:bg-[#e68a00] disabled:opacity-50 transition-all"
           >
             {searching ? (
               <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
@@ -1346,7 +1346,7 @@ function BuscarAfiliadoTab() {
               <button
                 key={u.id}
                 onClick={() => selectUser(u)}
-                className="w-full flex items-center justify-between px-4 py-3 hover:bg-[#ff9900]/[0.04] transition-colors text-left"
+                className="w-full flex items-center justify-between px-4 py-3 hover:bg-[#f4a900]/[0.04] transition-colors text-left"
               >
                 <div>
                   <p className="font-medium text-gray-900">{u.nombre || 'Sin nombre'}</p>
@@ -1361,7 +1361,7 @@ function BuscarAfiliadoTab() {
         {/* Loading state */}
         {!selected && searching && (
           <div className="mt-4 p-6 rounded-xl border border-gray-200 text-center text-sm text-gray-500 flex items-center justify-center gap-2">
-            <div className="animate-spin h-4 w-4 border-2 border-[#ff9900] border-t-transparent rounded-full" />
+            <div className="animate-spin h-4 w-4 border-2 border-[#f4a900] border-t-transparent rounded-full" />
             Buscando...
           </div>
         )}
@@ -1402,14 +1402,14 @@ function BuscarAfiliadoTab() {
 
           {loadingProfile ? (
             <div className="flex justify-center py-12">
-              <div className="animate-spin h-8 w-8 border-4 border-[#ff9900] border-t-transparent rounded-full" />
+              <div className="animate-spin h-8 w-8 border-4 border-[#f4a900] border-t-transparent rounded-full" />
             </div>
           ) : (
             <>
               {/* Saldos */}
               <CollapsibleSection
                 title="Saldos"
-                icon={<Wallet size={18} className="text-[#ff9900]" />}
+                icon={<Wallet size={18} className="text-[#f4a900]" />}
                 open={openSections.saldos}
                 onToggle={() => toggleSection("saldos")}
               >
@@ -1436,7 +1436,7 @@ function BuscarAfiliadoTab() {
                             if (v !== s.value) handleSaveSaldo(s.field, v);
                           }}
                           onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-                          className="w-full text-lg font-bold text-gray-900 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-[#ff9900] focus:outline-none transition-colors"
+                          className="w-full text-lg font-bold text-gray-900 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-[#f4a900] focus:outline-none transition-colors"
                         />
                       </div>
                     ))}
@@ -1451,7 +1451,7 @@ function BuscarAfiliadoTab() {
               {/* Estado de Cuenta (Aportes) */}
               <CollapsibleSection
                 title="Estado de Cuenta"
-                icon={<DollarSign size={18} className="text-[#ff9900]" />}
+                icon={<DollarSign size={18} className="text-[#f4a900]" />}
                 open={openSections.aportes}
                 onToggle={() => toggleSection("aportes")}
               >
@@ -1503,7 +1503,7 @@ function BuscarAfiliadoTab() {
               {/* Actividades */}
               <CollapsibleSection
                 title="Actividades"
-                icon={<Activity size={18} className="text-[#ff9900]" />}
+                icon={<Activity size={18} className="text-[#f4a900]" />}
                 open={openSections.actividades}
                 onToggle={() => toggleSection("actividades")}
               >
@@ -1559,7 +1559,7 @@ function BuscarAfiliadoTab() {
               {/* Cartera / Creditos */}
               <CollapsibleSection
                 title="Cartera"
-                icon={<CreditCard size={18} className="text-[#ff9900]" />}
+                icon={<CreditCard size={18} className="text-[#f4a900]" />}
                 open={openSections.cartera}
                 onToggle={() => toggleSection("cartera")}
               >
@@ -1583,16 +1583,16 @@ function BuscarAfiliadoTab() {
                                   value={editCreditIdValue}
                                   onChange={(e) => setEditCreditIdValue(e.target.value)}
                                   onKeyDown={(e) => e.key === "Enter" && handleSaveCreditId(cr._id!)}
-                                  className="w-24 px-2 py-1 rounded-lg border border-[#ff9900] text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-[#ff9900]/40"
+                                  className="w-24 px-2 py-1 rounded-lg border border-[#f4a900] text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-[#f4a900]/40"
                                   autoFocus
                                 />
-                                <button onClick={() => handleSaveCreditId(cr._id!)} disabled={saving} className="p-1 rounded-lg bg-[#ff9900] text-white hover:bg-[#e68a00] disabled:opacity-50"><Check size={14} /></button>
+                                <button onClick={() => handleSaveCreditId(cr._id!)} disabled={saving} className="p-1 rounded-lg bg-[#f4a900] text-white hover:bg-[#e68a00] disabled:opacity-50"><Check size={14} /></button>
                                 <button onClick={() => setEditingCreditId(null)} className="p-1 rounded-lg bg-gray-200 text-gray-600 hover:bg-gray-300"><X size={14} /></button>
                               </div>
                             ) : (
                               <button
                                 onClick={() => { setEditingCreditId(cr._id!); setEditCreditIdValue(cr.credito_id || cr._id || ""); }}
-                                className="font-semibold text-gray-900 text-sm hover:text-[#ff9900] transition-colors cursor-pointer"
+                                className="font-semibold text-gray-900 text-sm hover:text-[#f4a900] transition-colors cursor-pointer"
                                 title="Click para editar ID"
                               >
                                 Crédito {cr.credito_id || cr._id}
@@ -1603,7 +1603,7 @@ function BuscarAfiliadoTab() {
                           <select
                             defaultValue={cr.estado}
                             onChange={(e) => handleSaveCreditFields(cr._id!, { estado: e.target.value })}
-                            className="text-xs font-semibold rounded-full px-2.5 py-0.5 border bg-white focus:outline-none focus:ring-2 focus:ring-[#ff9900]/40"
+                            className="text-xs font-semibold rounded-full px-2.5 py-0.5 border bg-white focus:outline-none focus:ring-2 focus:ring-[#f4a900]/40"
                           >
                             <option value="activo">activo</option>
                             <option value="pagado">pagado</option>
@@ -1632,7 +1632,7 @@ function BuscarAfiliadoTab() {
                                 <select
                                   defaultValue={String(f.value)}
                                   onChange={(e) => handleSaveCreditFields(cr._id!, { [f.field]: e.target.value })}
-                                  className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#ff9900]/40"
+                                  className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#f4a900]/40"
                                 >
                                   <option value="mensual">Mensual</option>
                                   <option value="quincenal">Quincenal</option>
@@ -1646,7 +1646,7 @@ function BuscarAfiliadoTab() {
                                     if (String(v) !== String(f.value)) handleSaveCreditFields(cr._id!, { [f.field]: v });
                                   }}
                                   onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-                                  className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff9900]/40 focus:border-[#ff9900]"
+                                  className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#f4a900]/40 focus:border-[#f4a900]"
                                   step={f.field === "tasa_interes" ? "0.01" : undefined}
                                 />
                               )}
@@ -1766,7 +1766,7 @@ function NuevoAfiliadoTab() {
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
       <div className="p-5 sm:p-6 border-b border-gray-100">
         <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-          <UserPlus size={20} className="text-[#ff9900]" />
+          <UserPlus size={20} className="text-[#f4a900]" />
           Nuevo Afiliado
         </h2>
         <p className="text-sm text-gray-500 mt-1">
@@ -1804,7 +1804,7 @@ function NuevoAfiliadoTab() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-                className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff9900]/40 focus:border-[#ff9900]"
+                className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#f4a900]/40 focus:border-[#f4a900]"
               />
             </div>
             <button
@@ -1827,7 +1827,7 @@ function NuevoAfiliadoTab() {
                 <button
                   key={u.id}
                   onClick={() => setSelectedUser(u)}
-                  className="w-full flex items-center justify-between px-4 py-3 hover:bg-[#ff9900]/[0.04] transition-colors text-left"
+                  className="w-full flex items-center justify-between px-4 py-3 hover:bg-[#f4a900]/[0.04] transition-colors text-left"
                 >
                   <div>
                     <p className="font-medium text-gray-900">{u.nombre}</p>
@@ -1840,8 +1840,8 @@ function NuevoAfiliadoTab() {
           )}
 
           {selectedUser && (
-            <div className="mt-3 flex items-center gap-3 p-3 rounded-xl bg-[#ff9900]/[0.06] border border-[#ff9900]/20">
-              <Users size={18} className="text-[#ff9900]" />
+            <div className="mt-3 flex items-center gap-3 p-3 rounded-xl bg-[#f4a900]/[0.06] border border-[#f4a900]/20">
+              <Users size={18} className="text-[#f4a900]" />
               <div className="flex-1">
                 <p className="font-semibold text-gray-900 text-sm">
                   {selectedUser.nombre}
@@ -1877,7 +1877,7 @@ function NuevoAfiliadoTab() {
                   value={montoAporte}
                   onChange={(e) => setMontoAporte(e.target.value)}
                   placeholder="Ej: 100000"
-                  className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff9900]/40 focus:border-[#ff9900]"
+                  className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#f4a900]/40 focus:border-[#f4a900]"
                 />
               </div>
               <div>
@@ -1891,7 +1891,7 @@ function NuevoAfiliadoTab() {
                       e.target.value as "quincenal" | "mensual"
                     )
                   }
-                  className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff9900]/40 focus:border-[#ff9900] bg-white"
+                  className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#f4a900]/40 focus:border-[#f4a900] bg-white"
                 >
                   <option value="quincenal">Quincenal</option>
                   <option value="mensual">Mensual</option>
@@ -1902,7 +1902,7 @@ function NuevoAfiliadoTab() {
             <button
               onClick={handleSubmit}
               disabled={submitting || !montoAporte}
-              className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-[#ff9900] text-white font-semibold text-sm shadow-md shadow-[#ff9900]/25 hover:bg-[#e68a00] disabled:opacity-50 transition-all"
+              className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-[#f4a900] text-white font-semibold text-sm shadow-md shadow-[#f4a900]/25 hover:bg-[#e68a00] disabled:opacity-50 transition-all"
             >
               {submitting ? (
                 <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
@@ -2015,7 +2015,7 @@ function CargarCsvTab() {
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
       <div className="mb-6">
         <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-          <Wallet className="h-5 w-5 text-[#ff9900]" />
+          <Wallet className="h-5 w-5 text-[#f4a900]" />
           Cargar Saldos desde CSV
         </h2>
         <p className="text-sm text-gray-500 mt-1">
@@ -2039,7 +2039,7 @@ function CargarCsvTab() {
       </div>
 
       {/* Upload area */}
-      <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-[#ff9900] transition-colors">
+      <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-[#f4a900] transition-colors">
         <input
           type="file"
           id="csv-file"
@@ -2048,8 +2048,8 @@ function CargarCsvTab() {
           className="hidden"
         />
         <label htmlFor="csv-file" className="cursor-pointer flex flex-col items-center gap-3">
-          <div className="w-16 h-16 bg-[#ff9900]/10 rounded-2xl flex items-center justify-center">
-            <Wallet className="h-8 w-8 text-[#ff9900]" />
+          <div className="w-16 h-16 bg-[#f4a900]/10 rounded-2xl flex items-center justify-center">
+            <Wallet className="h-8 w-8 text-[#f4a900]" />
           </div>
           <div>
             <p className="font-bold text-gray-900">{file ? file.name : "Selecciona un archivo CSV"}</p>
@@ -2062,7 +2062,7 @@ function CargarCsvTab() {
       <button
         onClick={handleUpload}
         disabled={!file || uploading}
-        className="mt-5 w-full inline-flex items-center justify-center gap-2 px-6 py-3 bg-[#ff9900] text-black font-bold rounded-xl hover:bg-[#ffae33] active:scale-[0.99] transition disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-[#ff9900]/30"
+        className="mt-5 w-full inline-flex items-center justify-center gap-2 px-6 py-3 bg-[#f4a900] text-black font-bold rounded-xl hover:bg-[#f4a900] active:scale-[0.99] transition disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-[#f4a900]/30"
       >
         {uploading ? (
           <>
@@ -2097,8 +2097,8 @@ function CargarCsvTab() {
               <p className="text-xs text-emerald-700 font-semibold uppercase">Actualizados</p>
               <p className="text-2xl font-bold text-emerald-900 mt-1">{result.actualizados}</p>
             </div>
-            <div className="bg-[#ff9900]/10 border border-[#ff9900]/30 rounded-xl p-4 text-center">
-              <p className="text-xs text-[#ff9900] font-semibold uppercase">Creados</p>
+            <div className="bg-[#f4a900]/10 border border-[#f4a900]/30 rounded-xl p-4 text-center">
+              <p className="text-xs text-[#f4a900] font-semibold uppercase">Creados</p>
               <p className="text-2xl font-bold text-orange-900 mt-1">{result.creados}</p>
             </div>
             <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-center">
@@ -2347,7 +2347,7 @@ function SolicitudesTab() {
   if (loading) {
     return (
       <div className="flex justify-center py-16">
-        <div className="animate-spin h-8 w-8 border-4 border-[#ff9900] border-t-transparent rounded-full" />
+        <div className="animate-spin h-8 w-8 border-4 border-[#f4a900] border-t-transparent rounded-full" />
       </div>
     );
   }
@@ -2362,12 +2362,12 @@ function SolicitudesTab() {
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 sm:p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-            <CreditCard size={20} className="text-[#ff9900]" />
+            <CreditCard size={20} className="text-[#f4a900]" />
             Crear crédito manual
           </h2>
           <button
             onClick={() => setShowManual((v) => !v)}
-            className="text-sm font-semibold text-[#ff9900] hover:text-orange-700"
+            className="text-sm font-semibold text-[#f4a900] hover:text-orange-700"
           >
             {showManual ? "Cerrar" : "Crear nuevo"}
           </button>
@@ -2381,11 +2381,11 @@ function SolicitudesTab() {
                 value={manualSearch}
                 onChange={(e) => setManualSearch(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && searchManualUser()}
-                className="flex-1 rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff9900]/40 focus:border-[#ff9900]"
+                className="flex-1 rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#f4a900]/40 focus:border-[#f4a900]"
               />
               <button
                 onClick={searchManualUser}
-                className="px-4 py-2.5 rounded-xl bg-[#ff9900] text-black font-semibold text-sm hover:bg-[#ffae33]"
+                className="px-4 py-2.5 rounded-xl bg-[#f4a900] text-black font-semibold text-sm hover:bg-[#f4a900]"
               >
                 Buscar
               </button>
@@ -2463,7 +2463,7 @@ function SolicitudesTab() {
                         min={1}
                         value={manualValor}
                         onChange={(e) => setManualValor(e.target.value)}
-                        className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff9900]/40 focus:border-[#ff9900]"
+                        className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#f4a900]/40 focus:border-[#f4a900]"
                         placeholder="Ej: 5000000"
                       />
                     </div>
@@ -2475,7 +2475,7 @@ function SolicitudesTab() {
                         max={120}
                         value={manualCuotas}
                         onChange={(e) => setManualCuotas(e.target.value)}
-                        className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff9900]/40 focus:border-[#ff9900]"
+                        className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#f4a900]/40 focus:border-[#f4a900]"
                         placeholder="Ej: 12"
                       />
                       <p className="text-[9px] text-gray-500 mt-0.5">
@@ -2487,7 +2487,7 @@ function SolicitudesTab() {
                       <select
                         value={manualFrecuencia}
                         onChange={(e) => setManualFrecuencia(e.target.value as "mensual" | "quincenal")}
-                        className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#ff9900]/40 focus:border-[#ff9900]"
+                        className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#f4a900]/40 focus:border-[#f4a900]"
                       >
                         <option value="mensual">Mensual (30 días)</option>
                         <option value="quincenal">Quincenal (15 días)</option>
@@ -2531,7 +2531,7 @@ function SolicitudesTab() {
                             min={0}
                             value={manualExtraPago}
                             onChange={(e) => setManualExtraPago(e.target.value)}
-                            className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff9900]/40 focus:border-[#ff9900]"
+                            className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#f4a900]/40 focus:border-[#f4a900]"
                             placeholder="0"
                           />
                         </div>
@@ -2587,14 +2587,14 @@ function SolicitudesTab() {
       {/* Bulk credit upload */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 sm:p-6">
         <div className="flex items-center gap-3 mb-3">
-          <FileText size={18} className="text-[#ff9900]" />
+          <FileText size={18} className="text-[#f4a900]" />
           <div>
             <p className="text-sm font-semibold text-gray-900">Carga masiva de créditos (PDF)</p>
             <p className="text-xs text-gray-500">Sube el archivo de reporte de créditos (Excel o PDF) para crear o actualizar créditos de todos los usuarios.</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <label className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-gray-200 text-sm font-semibold text-gray-700 cursor-pointer hover:border-[#ff9900]/40 hover:text-[#ff9900] transition-all">
+          <label className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-gray-200 text-sm font-semibold text-gray-700 cursor-pointer hover:border-[#f4a900]/40 hover:text-[#f4a900] transition-all">
             <Upload size={16} />
             {bulkUploading ? "Procesando..." : "Seleccionar archivo (Excel/PDF)"}
             <input
@@ -2609,7 +2609,7 @@ function SolicitudesTab() {
               }}
             />
           </label>
-          {bulkUploading && <div className="animate-spin h-5 w-5 border-2 border-[#ff9900] border-t-transparent rounded-full" />}
+          {bulkUploading && <div className="animate-spin h-5 w-5 border-2 border-[#f4a900] border-t-transparent rounded-full" />}
         </div>
 
         {bulkError && (
@@ -2690,7 +2690,7 @@ function SolicitudesTab() {
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="p-5 border-b border-gray-100">
           <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-            <CreditCard size={20} className="text-[#ff9900]" />
+            <CreditCard size={20} className="text-[#f4a900]" />
             Solicitudes de Crédito ({pendingCreditos.length})
           </h2>
         </div>

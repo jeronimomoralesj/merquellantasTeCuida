@@ -202,7 +202,7 @@ const VacacionesForm = () => {
         </p>
         <button
           onClick={handleNewRequest}
-          className="bg-[#ff9900] hover:bg-[#e68a00] text-white font-medium px-6 py-3 rounded-lg transition-all"
+          className="bg-[#f4a900] hover:bg-[#e68a00] text-white font-medium px-6 py-3 rounded-lg transition-all"
         >
           Nueva Solicitud
         </button>
@@ -212,7 +212,7 @@ const VacacionesForm = () => {
 
   return (
     <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
-      <div className="bg-gradient-to-r from-[#ff9900]/10 to-white p-4 sm:p-6 border-b border-gray-100">
+      <div className="bg-gradient-to-r from-[#f4a900]/10 to-white p-4 sm:p-6 border-b border-gray-100">
         <h2 className="text-lg sm:text-xl font-semibold text-gray-800">Solicitud de Vacaciones</h2>
         <p className="text-gray-600 text-sm mt-1">Complete todos los campos requeridos</p>
       </div>
@@ -229,7 +229,7 @@ const VacacionesForm = () => {
           {/* Description */}
           <div>
             <h3 className="text-base sm:text-lg font-medium text-gray-800 flex items-center mb-4">
-              <Info className="w-5 h-5 mr-2 text-[#ff9900]" />
+              <Info className="w-5 h-5 mr-2 text-[#f4a900]" />
               Descripción de las Vacaciones
             </h3>
             <div>
@@ -242,7 +242,7 @@ const VacacionesForm = () => {
                 value={formData.description}
                 onChange={handleChange}
                 rows={4}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ff9900] focus:border-transparent transition-all resize-none"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f4a900] focus:border-transparent transition-all resize-none"
                 placeholder="Describa el motivo de su solicitud de vacaciones"
                 maxLength={500}
               ></textarea>
@@ -255,7 +255,7 @@ const VacacionesForm = () => {
           {/* Date Range */}
           <div>
             <h3 className="text-base sm:text-lg font-medium text-gray-800 flex items-center mb-4">
-              <Calendar className="w-5 h-5 mr-2 text-[#ff9900]" />
+              <Calendar className="w-5 h-5 mr-2 text-[#f4a900]" />
               Período de Vacaciones
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
@@ -269,7 +269,7 @@ const VacacionesForm = () => {
                   name="fechaInicio"
                   value={formData.fechaInicio}
                   onChange={handleChange}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ff9900] focus:border-transparent transition-all"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f4a900] focus:border-transparent transition-all"
                 />
               </div>
               <div>
@@ -282,7 +282,7 @@ const VacacionesForm = () => {
                   name="fechaFin"
                   value={formData.fechaFin}
                   onChange={handleChange}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ff9900] focus:border-transparent transition-all"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f4a900] focus:border-transparent transition-all"
                 />
               </div>
             </div>
@@ -303,14 +303,14 @@ const VacacionesForm = () => {
           {/* File Upload */}
           <div>
             <h3 className="text-base sm:text-lg font-medium text-gray-800 flex items-center mb-4">
-              <Upload className="w-5 h-5 mr-2 text-[#ff9900]" />
+              <Upload className="w-5 h-5 mr-2 text-[#f4a900]" />
               Documentación
             </h3>
-            <div className={`border-2 border-dashed rounded-lg p-6 text-center transition-all ${fileError ? 'border-red-300 bg-red-50' : formData.documents.length > 0 ? 'border-green-300 bg-green-50' : 'border-gray-300 hover:border-[#ff9900]'}`}>
+            <div className={`border-2 border-dashed rounded-lg p-6 text-center transition-all ${fileError ? 'border-red-300 bg-red-50' : formData.documents.length > 0 ? 'border-green-300 bg-green-50' : 'border-gray-300 hover:border-[#f4a900]'}`}>
               {formData.documents.length < 5 && (
                 <label className="cursor-pointer flex flex-col items-center justify-center">
-                  <div className="w-12 h-12 bg-[#ff9900]/10 rounded-full flex items-center justify-center mb-3">
-                    <Upload className="h-6 w-6 text-[#ff9900]" />
+                  <div className="w-12 h-12 bg-[#f4a900]/10 rounded-full flex items-center justify-center mb-3">
+                    <Upload className="h-6 w-6 text-[#f4a900]" />
                   </div>
                   <span className="font-medium text-gray-700 mb-1 text-sm">Adjuntar documentos</span>
                   <span className="text-xs text-gray-500">Hasta 5 archivos, máx. 50MB c/u</span>
@@ -322,7 +322,7 @@ const VacacionesForm = () => {
                   {formData.documents.map((f, i) => (
                     <div key={i} className="flex items-center justify-between p-2 bg-white rounded-lg border border-gray-200">
                       <div className="flex items-center min-w-0">
-                        <FileText className="h-5 w-5 text-[#ff9900] mr-2 flex-shrink-0" />
+                        <FileText className="h-5 w-5 text-[#f4a900] mr-2 flex-shrink-0" />
                         <p className="text-sm text-gray-700 truncate">{f.name}</p>
                         <span className="text-xs text-gray-400 ml-2 flex-shrink-0">{(f.size / 1024 / 1024).toFixed(1)}MB</span>
                       </div>
@@ -347,7 +347,7 @@ const VacacionesForm = () => {
             <button
               type="submit"
               disabled={isSubmitting}
-              className={`w-full sm:w-auto px-6 py-3 bg-[#ff9900] text-white font-medium rounded-lg shadow-sm hover:bg-[#e68a00] focus:outline-none focus:ring-2 focus:ring-[#ff9900] focus:ring-offset-2 transition-all ${
+              className={`w-full sm:w-auto px-6 py-3 bg-[#f4a900] text-white font-medium rounded-lg shadow-sm hover:bg-[#e68a00] focus:outline-none focus:ring-2 focus:ring-[#f4a900] focus:ring-offset-2 transition-all ${
                 isSubmitting ? 'opacity-75 cursor-not-allowed' : ''
               }`}
             >

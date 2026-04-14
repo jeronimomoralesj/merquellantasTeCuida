@@ -44,7 +44,7 @@ export default function ElearningPage() {
       <div className="min-h-screen bg-gray-50">
         <DashboardNavbar activePage="elearning" />
         <div className="flex items-center justify-center py-24">
-          <Loader2 className="h-8 w-8 animate-spin text-[#ff9900]" />
+          <Loader2 className="h-8 w-8 animate-spin text-[#f4a900]" />
         </div>
       </div>
     );
@@ -61,20 +61,20 @@ export default function ElearningPage() {
             className="pointer-events-none absolute inset-0 opacity-30"
             style={{
               backgroundImage:
-                "radial-gradient(circle at 20% 30%, #ff9900 0, transparent 50%), radial-gradient(circle at 80% 80%, #ff9900 0, transparent 40%)",
+                "radial-gradient(circle at 20% 30%, #f4a900 0, transparent 50%), radial-gradient(circle at 80% 80%, #f4a900 0, transparent 40%)",
             }}
           />
           <div className="relative">
             <div className="flex items-center gap-2 mb-3">
-              <div className="w-10 h-10 rounded-full bg-[#ff9900]/20 flex items-center justify-center">
-                <GraduationCap className="w-5 h-5 text-[#ff9900]" />
+              <div className="w-10 h-10 rounded-full bg-[#f4a900]/20 flex items-center justify-center">
+                <GraduationCap className="w-5 h-5 text-[#f4a900]" />
               </div>
-              <span className="text-xs font-semibold uppercase tracking-wider text-[#ff9900]">
+              <span className="text-xs font-semibold uppercase tracking-wider text-[#f4a900]">
                 E-Learning Merquellantas
               </span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-extrabold leading-tight mb-2">
-              Aprende, crece y recibe tu <span className="text-[#ff9900]">certificado</span>
+              Aprende, crece y recibe tu <span className="text-[#f4a900]">certificado</span>
             </h1>
             <p className="text-sm sm:text-base text-white/70 max-w-lg">
               Mira las clases, completa los cursos y obtén tu certificado de participación.
@@ -117,7 +117,7 @@ export default function ElearningPage() {
                     {c.thumbnail ? (
                       <img src={c.thumbnail} alt={c.title} className="w-full h-full object-cover" />
                     ) : (
-                      <PlayCircle className="w-14 h-14 text-[#ff9900] opacity-60" />
+                      <PlayCircle className="w-14 h-14 text-[#f4a900] opacity-60" />
                     )}
                     {complete && (
                       <div className="absolute top-3 right-3 bg-emerald-500 text-white text-xs font-bold px-2 py-1 rounded-full flex items-center gap-1">
@@ -127,7 +127,7 @@ export default function ElearningPage() {
                     )}
                   </div>
                   <div className="p-5">
-                    <h3 className="font-bold text-gray-900 text-base mb-1 line-clamp-2 group-hover:text-[#ff9900] transition-colors">
+                    <h3 className="font-bold text-gray-900 text-base mb-1 line-clamp-2 group-hover:text-[#f4a900] transition-colors">
                       {c.title}
                     </h3>
                     <p className="text-xs text-gray-500 line-clamp-2 mb-3 min-h-[2rem]">
@@ -145,7 +145,7 @@ export default function ElearningPage() {
                     </div>
                     <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
                       <div
-                        className={`h-full transition-all ${complete ? "bg-emerald-500" : "bg-[#ff9900]"}`}
+                        className={`h-full transition-all ${complete ? "bg-emerald-500" : "bg-[#f4a900]"}`}
                         style={{ width: `${progress}%` }}
                       />
                     </div>

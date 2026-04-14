@@ -177,7 +177,7 @@ export default function CoursePage({ params }: { params: Promise<{ id: string }>
       <div className="min-h-screen bg-gray-50">
         <DashboardNavbar activePage="elearning" />
         <div className="flex items-center justify-center py-24">
-          <Loader2 className="h-8 w-8 animate-spin text-[#ff9900]" />
+          <Loader2 className="h-8 w-8 animate-spin text-[#f4a900]" />
         </div>
       </div>
     );
@@ -188,7 +188,7 @@ export default function CoursePage({ params }: { params: Promise<{ id: string }>
       <div className="min-h-screen bg-gray-50">
         <DashboardNavbar activePage="elearning" />
         <main className="max-w-6xl mx-auto px-4 pt-24">
-          <a href="/dashboard/elearning" className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-[#ff9900] mb-4">
+          <a href="/dashboard/elearning" className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-[#f4a900] mb-4">
             <ArrowLeft className="w-4 h-4" /> Volver a cursos
           </a>
           <div className="bg-white rounded-2xl p-8 text-center">
@@ -210,8 +210,8 @@ export default function CoursePage({ params }: { params: Promise<{ id: string }>
         <div className="fixed inset-0 z-[100] pointer-events-none flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fadeIn">
           <div className="flex flex-col items-center text-center animate-merquitoPop">
             <div className="relative">
-              <div className="absolute inset-0 bg-[#ff9900] rounded-full blur-3xl opacity-40 animate-pulse" />
-              <div className="relative w-40 h-40 rounded-full overflow-hidden border-4 border-[#ff9900] shadow-2xl bg-white">
+              <div className="absolute inset-0 bg-[#f4a900] rounded-full blur-3xl opacity-40 animate-pulse" />
+              <div className="relative w-40 h-40 rounded-full overflow-hidden border-4 border-[#f4a900] shadow-2xl bg-white">
                 <Image
                   src="/merquito.jpeg"
                   alt="Merquito"
@@ -230,7 +230,7 @@ export default function CoursePage({ params }: { params: Promise<{ id: string }>
       )}
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 pb-16">
-        <a href="/dashboard/elearning" className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-[#ff9900] mb-4">
+        <a href="/dashboard/elearning" className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-[#f4a900] mb-4">
           <ArrowLeft className="w-4 h-4" /> Volver a cursos
         </a>
 
@@ -246,7 +246,7 @@ export default function CoursePage({ params }: { params: Promise<{ id: string }>
             {course.is_complete && (
               <a
                 href={`/dashboard/elearning/${courseId}/certificate`}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#ff9900] text-white font-semibold text-sm hover:bg-[#ffae33] transition shadow"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#f4a900] text-white font-semibold text-sm hover:bg-[#f4a900] transition shadow"
               >
                 <Award className="w-4 h-4" />
                 Ver certificado
@@ -260,7 +260,7 @@ export default function CoursePage({ params }: { params: Promise<{ id: string }>
             </div>
             <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
               <div
-                className={`h-full transition-all ${course.is_complete ? "bg-emerald-500" : "bg-[#ff9900]"}`}
+                className={`h-full transition-all ${course.is_complete ? "bg-emerald-500" : "bg-[#f4a900]"}`}
                 style={{ width: `${progressPct}%` }}
               />
             </div>
@@ -298,11 +298,11 @@ export default function CoursePage({ params }: { params: Promise<{ id: string }>
                   />
                 ) : (
                   <div className="bg-gradient-to-br from-orange-50 via-amber-50 to-orange-50 rounded-2xl border border-orange-200 p-8 sm:p-10 flex flex-col sm:flex-row items-center gap-6 shadow-sm">
-                    <div className="w-24 h-24 rounded-full bg-[#ff9900]/15 flex items-center justify-center flex-shrink-0">
-                      <FileText className="w-12 h-12 text-[#ff9900]" />
+                    <div className="w-24 h-24 rounded-full bg-[#f4a900]/15 flex items-center justify-center flex-shrink-0">
+                      <FileText className="w-12 h-12 text-[#f4a900]" />
                     </div>
                     <div className="flex-1 text-center sm:text-left">
-                      <p className="text-xs font-bold uppercase tracking-wider text-[#ff9900] mb-1">Lección de lectura</p>
+                      <p className="text-xs font-bold uppercase tracking-wider text-[#f4a900] mb-1">Lección de lectura</p>
                       <p className="text-sm text-gray-700">Cuando termines de leer el contenido, marca esta lección como completada para avanzar con el curso.</p>
                     </div>
                   </div>
@@ -311,7 +311,7 @@ export default function CoursePage({ params }: { params: Promise<{ id: string }>
                 {activeVideo.files && activeVideo.files.filter((f) => f.url !== activeVideo.video_url).length > 0 && (
                   <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
                     <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2 mb-3">
-                      <FileText className="w-4 h-4 text-[#ff9900]" />
+                      <FileText className="w-4 h-4 text-[#f4a900]" />
                       Recursos adicionales
                     </h3>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -344,7 +344,7 @@ export default function CoursePage({ params }: { params: Promise<{ id: string }>
                   {!activeVideo.video_url && !activeVideo.completed && (
                     <button
                       onClick={handleVideoEnded}
-                      className="mt-5 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#ff9900] text-white font-semibold text-sm hover:bg-[#ffae33] shadow transition"
+                      className="mt-5 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#f4a900] text-white font-semibold text-sm hover:bg-[#f4a900] shadow transition"
                     >
                       <CheckCircle2 className="w-4 h-4" />
                       Marcar como completada
@@ -355,7 +355,7 @@ export default function CoursePage({ params }: { params: Promise<{ id: string }>
                 {/* Comments */}
                 <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
                   <h3 className="text-base font-bold text-gray-900 flex items-center gap-2 mb-4">
-                    <MessageSquare className="w-5 h-5 text-[#ff9900]" />
+                    <MessageSquare className="w-5 h-5 text-[#f4a900]" />
                     Comentarios ({comments.length})
                   </h3>
                   <div className="flex gap-2 mb-5">
@@ -365,12 +365,12 @@ export default function CoursePage({ params }: { params: Promise<{ id: string }>
                       placeholder="Deja tu comentario o duda..."
                       rows={2}
                       maxLength={2000}
-                      className="flex-1 p-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#ff9900] focus:border-[#ff9900] text-sm resize-none text-gray-900"
+                      className="flex-1 p-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#f4a900] focus:border-[#f4a900] text-sm resize-none text-gray-900"
                     />
                     <button
                       onClick={submitComment}
                       disabled={commentLoading || !commentText.trim()}
-                      className="px-4 rounded-xl bg-[#ff9900] text-white font-semibold hover:bg-[#ffae33] disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2 self-start h-[68px]"
+                      className="px-4 rounded-xl bg-[#f4a900] text-white font-semibold hover:bg-[#f4a900] disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2 self-start h-[68px]"
                     >
                       {commentLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                     </button>
@@ -383,7 +383,7 @@ export default function CoursePage({ params }: { params: Promise<{ id: string }>
                     <div className="space-y-4">
                       {comments.map((c) => (
                         <div key={c.id} className="flex gap-3">
-                          <div className="w-9 h-9 rounded-full bg-gradient-to-r from-[#ff9900] to-[#ff7300] text-white flex items-center justify-center font-bold text-xs flex-shrink-0">
+                          <div className="w-9 h-9 rounded-full bg-gradient-to-r from-[#f4a900] to-[#f4a900] text-white flex items-center justify-center font-bold text-xs flex-shrink-0">
                             {c.user_name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase()}
                           </div>
                           <div className="flex-1">
@@ -427,7 +427,7 @@ export default function CoursePage({ params }: { params: Promise<{ id: string }>
                     onClick={() => setActiveVideoId(v.id)}
                     className={`w-full text-left flex items-start gap-3 p-3 rounded-xl transition-all ${
                       v.id === activeVideoId
-                        ? "bg-[#ff9900]/10 border border-[#ff9900]/30"
+                        ? "bg-[#f4a900]/10 border border-[#f4a900]/30"
                         : "hover:bg-gray-50 border border-transparent"
                     }`}
                   >
@@ -441,7 +441,7 @@ export default function CoursePage({ params }: { params: Promise<{ id: string }>
                     <div className="flex-1 min-w-0">
                       <p className="text-xs text-gray-400 font-semibold">LECCIÓN {idx + 1}</p>
                       <p className={`text-sm font-medium line-clamp-2 ${
-                        v.id === activeVideoId ? "text-[#ff9900]" : "text-gray-800"
+                        v.id === activeVideoId ? "text-[#f4a900]" : "text-gray-800"
                       }`}>
                         {v.title}
                       </p>
@@ -502,7 +502,7 @@ function ResourceItem({ file }: { file: LessonFile }) {
     : file.category === "image"
     ? "bg-emerald-50 text-emerald-600"
     : file.category === "video"
-    ? "bg-orange-50 text-[#ff9900]"
+    ? "bg-orange-50 text-[#f4a900]"
     : "bg-gray-100 text-gray-600";
 
   return (
@@ -510,7 +510,7 @@ function ResourceItem({ file }: { file: LessonFile }) {
       href={`${file.url}?download=1`}
       target="_blank"
       rel="noopener noreferrer"
-      className="flex items-center gap-3 p-3 rounded-xl border border-gray-100 hover:border-[#ff9900]/40 hover:bg-orange-50/30 transition group"
+      className="flex items-center gap-3 p-3 rounded-xl border border-gray-100 hover:border-[#f4a900]/40 hover:bg-orange-50/30 transition group"
     >
       <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${colorClass}`}>
         {icon}
@@ -519,7 +519,7 @@ function ResourceItem({ file }: { file: LessonFile }) {
         <p className="text-sm font-semibold text-gray-900 truncate">{file.name}</p>
         <p className="text-xs text-gray-500">{formatSize(file.size)} · {file.mime_type}</p>
       </div>
-      <Download className="w-4 h-4 text-gray-400 group-hover:text-[#ff9900] flex-shrink-0" />
+      <Download className="w-4 h-4 text-gray-400 group-hover:text-[#f4a900] flex-shrink-0" />
     </a>
   );
 }

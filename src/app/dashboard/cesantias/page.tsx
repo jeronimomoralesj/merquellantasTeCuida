@@ -176,7 +176,7 @@ export default function CesantiasPage() {
           <div className="flex items-center text-sm text-gray-500 mb-2">
             <a href="/dashboard" className="hover:text-gray-700">Inicio</a>
             <ChevronRight className="h-4 w-4 mx-1" />
-            <span className="text-[#ff9900] font-medium">Solicitud de Cesantías</span>
+            <span className="text-[#f4a900] font-medium">Solicitud de Cesantías</span>
           </div>
           <h1 className="text-3xl font-bold text-gray-900">Solicitud de Cesantías</h1>
           <p className="mt-2 text-gray-600">Complete el formulario para solicitar sus cesantías</p>
@@ -192,7 +192,7 @@ export default function CesantiasPage() {
             <p className="text-gray-600 mb-6">Su solicitud de cesantías ha sido registrada exitosamente. Le notificaremos cuando sea procesada.</p>
             <button
               onClick={handleNewRequest}
-              className="bg-[#ff9900] hover:bg-[#e68a00] text-white font-medium px-6 py-3 rounded-lg transition-all"
+              className="bg-[#f4a900] hover:bg-[#e68a00] text-white font-medium px-6 py-3 rounded-lg transition-all"
             >
               Nueva Solicitud
             </button>
@@ -200,7 +200,7 @@ export default function CesantiasPage() {
         ) : (
           <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
             {/* Form header */}
-            <div className="bg-gradient-to-r from-[#ff9900]/10 to-white p-6 border-b border-gray-100">
+            <div className="bg-gradient-to-r from-[#f4a900]/10 to-white p-6 border-b border-gray-100">
               <h2 className="text-xl font-semibold text-gray-800">Formulario de Solicitud</h2>
               <p className="text-gray-600 text-sm mt-1">Complete todos los campos requeridos</p>
             </div>
@@ -224,7 +224,7 @@ export default function CesantiasPage() {
                     id="categoria"
                     value={categoria}
                     onChange={e => setCategoria(e.target.value)}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg appearance-none focus:ring-2 focus:ring-[#ff9900] focus:border-transparent transition-all pr-10"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg appearance-none focus:ring-2 focus:ring-[#f4a900] focus:border-transparent transition-all pr-10"
                     required
                   >
                     <option value="" disabled>Seleccione una categoría</option>
@@ -249,7 +249,7 @@ export default function CesantiasPage() {
                   value={motivoSolicitud}
                   onChange={e => setMotivoSolicitud(e.target.value)}
                   rows={4}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ff9900] focus:border-transparent transition-all resize-none"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f4a900] focus:border-transparent transition-all resize-none"
                   placeholder="Describa el motivo de su solicitud de cesantías..."
                 />
                 <p className="mt-1 text-xs text-gray-500">
@@ -290,7 +290,7 @@ export default function CesantiasPage() {
                   )}
                 </label>
 
-                <div className={`border-2 border-dashed rounded-lg p-6 transition-all ${fileError ? 'border-red-300 bg-red-50' : selectedFiles.length > 0 ? 'border-green-300 bg-green-50' : 'border-gray-300 hover:border-[#ff9900]'}`}>
+                <div className={`border-2 border-dashed rounded-lg p-6 transition-all ${fileError ? 'border-red-300 bg-red-50' : selectedFiles.length > 0 ? 'border-green-300 bg-green-50' : 'border-gray-300 hover:border-[#f4a900]'}`}>
                   {selectedFiles.length < 5 && (
                     <div className="text-center mb-3">
                       <Upload className="h-8 w-8 text-gray-400 mx-auto mb-2" />
@@ -306,7 +306,7 @@ export default function CesantiasPage() {
                       {selectedFiles.map((f, i) => (
                         <div key={i} className="flex items-center justify-between p-2 bg-white rounded-lg border border-gray-200">
                           <div className="flex items-center min-w-0">
-                            <FileText className="h-5 w-5 text-[#ff9900] mr-2 flex-shrink-0" />
+                            <FileText className="h-5 w-5 text-[#f4a900] mr-2 flex-shrink-0" />
                             <p className="text-sm text-gray-700 truncate">{f.name}</p>
                             <span className="text-xs text-gray-400 ml-2 flex-shrink-0">{(f.size / 1024 / 1024).toFixed(1)}MB</span>
                           </div>
@@ -333,7 +333,7 @@ export default function CesantiasPage() {
                   disabled={isSubmitting}
                   className={`
                     px-6 py-3 rounded-lg font-medium text-white flex items-center
-                    ${isSubmitting ? 'bg-gray-400 cursor-not-allowed' : 'bg-[#ff9900] hover:bg-[#e68a00]'}
+                    ${isSubmitting ? 'bg-gray-400 cursor-not-allowed' : 'bg-[#f4a900] hover:bg-[#e68a00]'}
                     transition-all
                   `}
                 >

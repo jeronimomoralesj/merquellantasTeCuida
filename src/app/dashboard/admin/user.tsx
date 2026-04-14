@@ -404,12 +404,12 @@ const Users: React.FC = () => {
             className="pointer-events-none absolute inset-0 opacity-30"
             style={{
               backgroundImage:
-                "radial-gradient(circle at 90% 30%, #ff9900 0, transparent 50%)",
+                "radial-gradient(circle at 90% 30%, #f4a900 0, transparent 50%)",
             }}
           />
           <div className="relative flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-xl bg-[#ff9900]/20 text-[#ff9900] flex items-center justify-center">
+              <div className="w-11 h-11 rounded-xl bg-[#f4a900]/20 text-[#f4a900] flex items-center justify-center">
                 <User className="h-5 w-5" />
               </div>
               <div>
@@ -421,7 +421,7 @@ const Users: React.FC = () => {
             </div>
             <button
               onClick={() => setShowCreateForm(true)}
-              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#ff9900] text-black text-sm font-bold hover:bg-[#ffae33] active:scale-95 transition-all shadow-lg shadow-[#ff9900]/20"
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#f4a900] text-black text-sm font-bold hover:bg-[#f4a900] active:scale-95 transition-all shadow-lg shadow-[#f4a900]/20"
             >
               <Plus className="h-4 w-4" /> Nuevo Usuario
             </button>
@@ -437,7 +437,7 @@ const Users: React.FC = () => {
               placeholder="Buscar por cédula, nombre o email..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-3 py-2.5 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#ff9900] text-sm placeholder:text-gray-400"
+              className="w-full pl-10 pr-3 py-2.5 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#f4a900] text-sm placeholder:text-gray-400"
             />
           </div>
         </div>
@@ -718,15 +718,15 @@ const Users: React.FC = () => {
                       .join('')
                       .toUpperCase();
                     const rolBadge: Record<string, { bg: string; label: string }> = {
-                      admin: { bg: 'bg-black text-[#ff9900]', label: 'Admin' },
+                      admin: { bg: 'bg-black text-[#f4a900]', label: 'Admin' },
                       fondo: { bg: 'bg-emerald-700 text-white', label: 'Fonalmerque' },
                     };
                     return (
-                      <tr key={user.id} className="hover:bg-[#ff9900]/5 transition-colors">
+                      <tr key={user.id} className="hover:bg-[#f4a900]/5 transition-colors">
                         <td className="px-5 py-4">
                           <div className="flex items-center gap-3">
                             <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xs font-bold flex-shrink-0 ${
-                              isSpecialRole ? (userRol === 'admin' ? 'bg-black text-[#ff9900]' : 'bg-emerald-700 text-white') : 'bg-[#ff9900]/10 text-[#ff9900]'
+                              isSpecialRole ? (userRol === 'admin' ? 'bg-black text-[#f4a900]' : 'bg-emerald-700 text-white') : 'bg-[#f4a900]/10 text-[#f4a900]'
                             }`}>
                               {initials}
                             </div>
@@ -745,7 +745,7 @@ const Users: React.FC = () => {
                         <td className="px-5 py-4">
                           <div className="text-sm text-gray-900 truncate max-w-[180px]">{user.extra?.['Cargo Empleado'] || '—'}</div>
                           <div className="text-xs mt-0.5">
-                            <span className="font-semibold text-[#ff9900]">{user.extra?.posicion || '—'}</span>
+                            <span className="font-semibold text-[#f4a900]">{user.extra?.posicion || '—'}</span>
                             {user.extra?.['Dpto Donde Labora'] && (
                               <span className="text-gray-400"> · {user.extra['Dpto Donde Labora']}</span>
                             )}
@@ -784,7 +784,7 @@ const Users: React.FC = () => {
                           <div className="inline-flex items-center gap-1">
                             <button
                               onClick={() => startEdit(user)}
-                              className="p-2 rounded-lg text-gray-500 hover:text-[#ff9900] hover:bg-[#ff9900]/10 transition"
+                              className="p-2 rounded-lg text-gray-500 hover:text-[#f4a900] hover:bg-[#f4a900]/10 transition"
                               title="Editar"
                             >
                               <Edit className="h-4 w-4" />

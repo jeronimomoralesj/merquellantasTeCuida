@@ -181,7 +181,7 @@ export default function QuickActionsAdmin() {
     <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100 mt-6">
       <div className="flex justify-between items-center mb-5">
         <h2 className="text-lg font-bold text-gray-900 flex items-center">
-          <Zap className="h-5 w-5 mr-2 text-[#ff9900]" />
+          <Zap className="h-5 w-5 mr-2 text-[#f4a900]" />
           Acciones Rápidas
         </h2>
         {!creating && !editingId && (
@@ -197,7 +197,7 @@ export default function QuickActionsAdmin() {
             )}
             <button
               onClick={startCreate}
-              className="inline-flex items-center px-3 py-2 rounded-lg bg-[#ff9900] text-black text-sm font-semibold hover:bg-[#ffae33] transition"
+              className="inline-flex items-center px-3 py-2 rounded-lg bg-[#f4a900] text-black text-sm font-semibold hover:bg-[#f4a900] transition"
             >
               <Plus className="h-4 w-4 mr-1" /> Nueva acción
             </button>
@@ -206,7 +206,7 @@ export default function QuickActionsAdmin() {
       </div>
 
       {(creating || editingId) && (
-        <div className="mb-5 p-4 rounded-xl border border-[#ff9900]/30 bg-[#ff9900]/5">
+        <div className="mb-5 p-4 rounded-xl border border-[#f4a900]/30 bg-[#f4a900]/5">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-gray-700 mb-1">Título</label>
@@ -215,7 +215,7 @@ export default function QuickActionsAdmin() {
                 value={form.title}
                 onChange={(e) => setForm({ ...form, title: e.target.value })}
                 placeholder="Ej. Solicitar vacaciones"
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#ff9900] text-black placeholder:text-gray-400"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#f4a900] text-black placeholder:text-gray-400"
               />
             </div>
             <div>
@@ -230,7 +230,7 @@ export default function QuickActionsAdmin() {
                       setLinkType("internal");
                       setForm({ ...form, href: INTERNAL_ROUTES[0].value });
                     }}
-                    className="accent-[#ff9900]"
+                    className="accent-[#f4a900]"
                   />
                   Página interna
                 </label>
@@ -243,7 +243,7 @@ export default function QuickActionsAdmin() {
                       setLinkType("external");
                       setForm({ ...form, href: "" });
                     }}
-                    className="accent-[#ff9900]"
+                    className="accent-[#f4a900]"
                   />
                   URL externa
                 </label>
@@ -257,7 +257,7 @@ export default function QuickActionsAdmin() {
                 <select
                   value={form.href}
                   onChange={(e) => setForm({ ...form, href: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#ff9900] text-black"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#f4a900] text-black"
                 >
                   {INTERNAL_ROUTES.map((r) => (
                     <option key={r.value} value={r.value}>
@@ -271,7 +271,7 @@ export default function QuickActionsAdmin() {
                   value={form.href}
                   onChange={(e) => setForm({ ...form, href: e.target.value })}
                   placeholder="https://ejemplo.com"
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#ff9900] text-black placeholder:text-gray-400"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#f4a900] text-black placeholder:text-gray-400"
                 />
               )}
             </div>
@@ -280,7 +280,7 @@ export default function QuickActionsAdmin() {
               <select
                 value={form.icon}
                 onChange={(e) => setForm({ ...form, icon: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#ff9900] text-black"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#f4a900] text-black"
               >
                 {ICON_OPTIONS.map((o) => (
                   <option key={o.key} value={o.key}>
@@ -295,7 +295,7 @@ export default function QuickActionsAdmin() {
                 type="number"
                 value={form.order}
                 onChange={(e) => setForm({ ...form, order: Number(e.target.value) })}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#ff9900] text-black"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#f4a900] text-black"
               />
             </div>
             <div className="md:col-span-2 flex items-center gap-3">
@@ -304,7 +304,7 @@ export default function QuickActionsAdmin() {
                   type="checkbox"
                   checked={form.active}
                   onChange={(e) => setForm({ ...form, active: e.target.checked })}
-                  className="h-4 w-4 accent-[#ff9900]"
+                  className="h-4 w-4 accent-[#f4a900]"
                 />
                 Activa (visible en el dashboard)
               </label>
@@ -342,7 +342,7 @@ export default function QuickActionsAdmin() {
                 key={item.id}
                 className="flex items-center gap-3 py-3"
               >
-                <div className="w-10 h-10 rounded-lg bg-[#ff9900]/10 flex items-center justify-center text-[#ff9900]">
+                <div className="w-10 h-10 rounded-lg bg-[#f4a900]/10 flex items-center justify-center text-[#f4a900]">
                   <Icon className="h-5 w-5" />
                 </div>
                 <div className="flex-1 min-w-0">

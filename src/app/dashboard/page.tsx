@@ -183,7 +183,7 @@ const getEventStatus = (event: CalendarEvent) => {
     if (isBirthdayToday) {
       return { status: 'today', label: 'Hoy', color: 'bg-green-500' };
     } else if (eventDateOnly > today) {
-      return { status: 'upcoming', label: 'Próximo', color: 'bg-[#ff9900]' };
+      return { status: 'upcoming', label: 'Próximo', color: 'bg-[#f4a900]' };
     }
   }
 
@@ -197,7 +197,7 @@ const getEventStatus = (event: CalendarEvent) => {
       return { status: 'happening', label: 'En curso', color: 'bg-blue-500' };
     }
   } else if (eventDateOnly > today) {
-    return { status: 'upcoming', label: 'Próximo', color: 'bg-[#ff9900]' };
+    return { status: 'upcoming', label: 'Próximo', color: 'bg-[#f4a900]' };
   }
   return { status: 'past', label: 'Pasado', color: 'bg-gray-500' };
 };
@@ -549,7 +549,7 @@ useEffect(() => {
         <DashboardNavbar />
         <div className="pt-20 px-4 md:px-6 lg:px-8 max-w-7xl mx-auto">
           <button
-            className="mb-4 flex items-center text-sm text-[#ff9900] hover:text-[#e68a00] transition-colors hover:underline group"
+            className="mb-4 flex items-center text-sm text-[#f4a900] hover:text-[#e68a00] transition-colors hover:underline group"
             onClick={() => setShowSolicitudes(false)}
           >
             <span className="mr-1 group-hover:-translate-x-1 transition-transform">&larr;</span> Volver al Dashboard
@@ -592,7 +592,7 @@ useEffect(() => {
               </button>
 
               {/* Merquito header */}
-              <div className="bg-gradient-to-r from-[#ff9900] to-[#ffb347] p-6 flex items-center gap-4">
+              <div className="bg-gradient-to-r from-[#f4a900] to-[#ffb347] p-6 flex items-center gap-4">
                 <div className={`flex-shrink-0 transition-all duration-700 ${popupAnimating ? 'translate-x-0 opacity-100' : '-translate-x-12 opacity-0'}`}>
                   <Image
                     src="/merquito.jpeg"
@@ -648,7 +648,7 @@ useEffect(() => {
                           {isBday ? (
                             <span className="text-2xl">🎉</span>
                           ) : (
-                            <Calendar className="w-5 h-5 text-[#ff9900]" />
+                            <Calendar className="w-5 h-5 text-[#f4a900]" />
                           )}
                           <h3 className={`font-bold text-lg ${isBday ? 'bg-gradient-to-r from-pink-600 to-purple-600 text-transparent bg-clip-text' : 'text-gray-900'}`}>
                             {evt.title}
@@ -667,7 +667,7 @@ useEffect(() => {
               <div className="px-6 pb-6">
                 <button
                   onClick={() => { setPopupAnimating(false); setTimeout(() => setShowTodayPopup(false), 300); }}
-                  className="w-full py-3 rounded-xl bg-[#ff9900] text-white font-bold text-sm hover:bg-[#e68a00] transition-colors shadow-md"
+                  className="w-full py-3 rounded-xl bg-[#f4a900] text-white font-bold text-sm hover:bg-[#e68a00] transition-colors shadow-md"
                 >
                   Entendido
                 </button>
@@ -681,7 +681,7 @@ useEffect(() => {
           <button
             type="button"
             onClick={() => setAdminView(v => !v)}
-            className="fixed bottom-6 left-6 z-40 inline-flex items-center gap-2 px-4 py-3 rounded-full bg-black text-white shadow-2xl ring-2 ring-[#ff9900] hover:bg-[#ff9900] hover:text-black active:scale-95 transition-all"
+            className="fixed bottom-6 left-6 z-40 inline-flex items-center gap-2 px-4 py-3 rounded-full bg-black text-white shadow-2xl ring-2 ring-[#f4a900] hover:bg-[#f4a900] hover:text-black active:scale-95 transition-all"
             title={adminView ? "Cambiar a vista de usuario" : (userRole === "fondo" ? "Cambiar a panel fondo" : "Cambiar a vista de admin")}
           >
             {adminView ? (
@@ -708,7 +708,7 @@ useEffect(() => {
         {/* Fondo manager view — redirect to fondo panel */}
         {userRole === "fondo" && adminView && (
           <main className="pt-20 sm:pt-24 text-center">
-            <a href="/dashboard/fondo" className="inline-flex items-center gap-2 px-6 py-3 bg-[#ff9900] text-black font-bold rounded-xl hover:bg-[#ffae33] transition">
+            <a href="/dashboard/fondo" className="inline-flex items-center gap-2 px-6 py-3 bg-[#f4a900] text-black font-bold rounded-xl hover:bg-[#f4a900] transition">
               <LayoutDashboard className="h-5 w-5" />
               Ir al Panel del Fonalmerque
             </a>
@@ -727,7 +727,7 @@ useEffect(() => {
                 className="pointer-events-none absolute inset-0 opacity-40"
                 style={{
                   backgroundImage:
-                    'radial-gradient(circle at 15% 20%, #ff9900 0, transparent 45%), radial-gradient(circle at 85% 90%, #ff9900 0, transparent 35%)',
+                    'radial-gradient(circle at 15% 20%, #f4a900 0, transparent 45%), radial-gradient(circle at 85% 90%, #f4a900 0, transparent 35%)',
                 }}
               />
               <div
@@ -739,11 +739,11 @@ useEffect(() => {
                   backgroundSize: '36px 36px',
                 }}
               />
-              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-[#ff9900] to-transparent" />
+              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-[#f4a900] to-transparent" />
 
               <div className="relative flex flex-col-reverse sm:flex-row items-center gap-6 p-6 sm:p-8 lg:p-10">
                 <div className="flex-1 text-center sm:text-left">
-                  <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#ff9900]/15 text-[#ff9900] text-xs font-semibold uppercase tracking-wider border border-[#ff9900]/30">
+                  <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#f4a900]/15 text-[#f4a900] text-xs font-semibold uppercase tracking-wider border border-[#f4a900]/30">
                     <CheckCircle className="h-3.5 w-3.5" /> Hoy es un buen día
                   </span>
                   <h1 className="mt-3 text-2xl sm:text-3xl lg:text-4xl font-extrabold leading-tight">
@@ -753,8 +753,8 @@ useEffect(() => {
                 </div>
 
                 <div className="relative flex-shrink-0">
-                  <div className="absolute -inset-4 rounded-full bg-[#ff9900] blur-2xl opacity-40" />
-                  <div className="absolute inset-0 rounded-2xl border-2 border-[#ff9900]/40 rotate-3" />
+                  <div className="absolute -inset-4 rounded-full bg-[#f4a900] blur-2xl opacity-40" />
+                  <div className="absolute inset-0 rounded-2xl border-2 border-[#f4a900]/40 rotate-3" />
                   <Image
                     src="/merquito.jpeg"
                     alt="Merquito - Mascota Merquellantas"
@@ -762,7 +762,7 @@ useEffect(() => {
                     height={160}
                     priority
                     sizes="(max-width: 640px) 120px, 160px"
-                    className="relative rounded-2xl ring-4 ring-[#ff9900] shadow-2xl object-cover w-28 h-28 sm:w-36 sm:h-36 lg:w-40 lg:h-40"
+                    className="relative rounded-2xl ring-4 ring-[#f4a900] shadow-2xl object-cover w-28 h-28 sm:w-36 sm:h-36 lg:w-40 lg:h-40"
                   />
                 </div>
               </div>
@@ -819,11 +819,11 @@ useEffect(() => {
         <div className="relative p-6 md:p-8">
           {/* Birthday decorations with orange theme */}
           <div className="absolute inset-0 overflow-hidden">
-            <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-[#ff9900] via-[#ffb347] to-[#ffd700]"></div>
-            <div className="absolute top-4 left-4 text-[#ff9900] text-2xl animate-pulse">🎈</div>
+            <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-[#f4a900] via-[#ffb347] to-[#ffd700]"></div>
+            <div className="absolute top-4 left-4 text-[#f4a900] text-2xl animate-pulse">🎈</div>
             <div className="absolute top-8 right-8 text-[#ffb347] text-2xl animate-bounce" style={{ animationDelay: '0.2s' }}>🎉</div>
             <div className="absolute bottom-8 left-12 text-[#ffd700] text-xl animate-pulse" style={{ animationDelay: '0.4s' }}>✨</div>
-            <div className="absolute bottom-12 right-16 text-[#ff9900] text-xl animate-bounce" style={{ animationDelay: '0.6s' }}>🎊</div>
+            <div className="absolute bottom-12 right-16 text-[#f4a900] text-xl animate-bounce" style={{ animationDelay: '0.6s' }}>🎊</div>
           </div>
 
           <div className="relative flex flex-col md:flex-row items-center gap-6">
@@ -833,20 +833,20 @@ useEffect(() => {
                 onClick={() => setCurrentEventIndex((prev) => (prev === 0 ? upcomingEvents.length - 1 : prev - 1))}
                 className="absolute left-2 top-1/2 -translate-y-1/2 z-10 p-2 rounded-full bg-white/90 hover:bg-white shadow-lg hover:shadow-xl transition-all"
               >
-                <ChevronLeft className="h-5 w-5 text-[#ff9900]" />
+                <ChevronLeft className="h-5 w-5 text-[#f4a900]" />
               </button>
             )}
 
             {/* Birthday content */}
             <div className="md:flex-1 text-center md:text-left">
-              <div className="inline-flex items-center gap-2 mb-4 px-4 py-2 rounded-full bg-gradient-to-r from-[#ff9900]/20 via-[#ffb347]/20 to-[#ffd700]/20">
+              <div className="inline-flex items-center gap-2 mb-4 px-4 py-2 rounded-full bg-gradient-to-r from-[#f4a900]/20 via-[#ffb347]/20 to-[#ffd700]/20">
                 <span className="text-2xl">🎂</span>
-                <span className="text-sm font-bold bg-gradient-to-r from-[#ff9900] to-[#ffb347] text-transparent bg-clip-text">
+                <span className="text-sm font-bold bg-gradient-to-r from-[#f4a900] to-[#ffb347] text-transparent bg-clip-text">
                   ¡Celebración Especial!
                 </span>
               </div>
 
-              <h2 className="text-2xl md:text-3xl font-bold mb-3 bg-gradient-to-r from-[#ff9900] to-[#ffb347] text-transparent bg-clip-text">
+              <h2 className="text-2xl md:text-3xl font-bold mb-3 bg-gradient-to-r from-[#f4a900] to-[#ffb347] text-transparent bg-clip-text">
                 {currentEvent.title}
               </h2>
 
@@ -865,7 +865,7 @@ useEffect(() => {
                 );
               })()}
 
-              <div className="bg-gradient-to-br from-[#ff9900]/10 via-[#ffb347]/10 to-[#ffd700]/10 rounded-xl p-5 mb-5 border-2 border-[#ff9900]/30">
+              <div className="bg-gradient-to-br from-[#f4a900]/10 via-[#ffb347]/10 to-[#ffd700]/10 rounded-xl p-5 mb-5 border-2 border-[#f4a900]/30">
                 <p className="text-gray-700 leading-relaxed text-sm md:text-base">
                   {randomMessage}
                 </p>
@@ -880,7 +880,7 @@ useEffect(() => {
                       onClick={() => setCurrentEventIndex(idx)}
                       className={`h-2 rounded-full transition-all ${
                         idx === currentEventIndex 
-                          ? 'w-8 bg-[#ff9900]' 
+                          ? 'w-8 bg-[#f4a900]' 
                           : 'w-2 bg-gray-300 hover:bg-gray-400'
                       }`}
                     />
@@ -889,7 +889,7 @@ useEffect(() => {
               )}
 
               <a href='dashboard/calendar'>
-                <button className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-[#ff9900] to-[#ffb347] text-white rounded-full font-bold text-sm hover:from-[#e68a00] hover:to-[#ff9900] transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-1 duration-200">
+                <button className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-[#f4a900] to-[#ffb347] text-white rounded-full font-bold text-sm hover:from-[#e68a00] hover:to-[#f4a900] transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-1 duration-200">
                   Ver más celebraciones
                   <ChevronRight className="ml-2 h-5 w-5" />
                 </button>
@@ -899,7 +899,7 @@ useEffect(() => {
             {/* Right side - Image/Video */}
             <div className="flex-shrink-0 w-full md:w-auto relative">
               {currentEvent.videoUrl && currentEvent.videoUrl.trim() !== '' ? (
-                <div className="h-48 w-full md:w-72 rounded-2xl overflow-hidden shadow-2xl ring-4 ring-[#ff9900]/30 bg-black">
+                <div className="h-48 w-full md:w-72 rounded-2xl overflow-hidden shadow-2xl ring-4 ring-[#f4a900]/30 bg-black">
                   <video
                     src={currentEvent.videoUrl}
                     controls
@@ -917,10 +917,10 @@ useEffect(() => {
                       : currentEvent.image
                   }
                   alt={currentEvent.title}
-                  className="rounded-2xl shadow-2xl h-48 w-full object-cover md:w-72 ring-4 ring-[#ff9900]/30"
+                  className="rounded-2xl shadow-2xl h-48 w-full object-cover md:w-72 ring-4 ring-[#f4a900]/30"
                 />
               ) : (
-                <div className="h-48 w-full md:w-72 flex items-center justify-center text-6xl rounded-2xl bg-gradient-to-br from-[#ff9900]/20 via-[#ffb347]/20 to-[#ffd700]/20 shadow-xl">
+                <div className="h-48 w-full md:w-72 flex items-center justify-center text-6xl rounded-2xl bg-gradient-to-br from-[#f4a900]/20 via-[#ffb347]/20 to-[#ffd700]/20 shadow-xl">
                   🎂
                 </div>
               )}
@@ -932,7 +932,7 @@ useEffect(() => {
                 onClick={() => setCurrentEventIndex((prev) => (prev === upcomingEvents.length - 1 ? 0 : prev + 1))}
                 className="absolute right-2 top-1/2 -translate-y-1/2 z-10 p-2 rounded-full bg-white/90 hover:bg-white shadow-lg hover:shadow-xl transition-all"
               >
-                <ChevronRight className="h-5 w-5 text-[#ff9900]" />
+                <ChevronRight className="h-5 w-5 text-[#f4a900]" />
               </button>
             )}
           </div>
@@ -943,7 +943,7 @@ useEffect(() => {
     // Regular event (birthday or not, but not today)
     return (
       <div className="relative p-6 md:p-8 flex flex-col md:flex-row items-center">
-        <div className={`absolute top-0 ${isBirthday ? 'left' : 'right'}-0 w-full h-1 bg-gradient-to-${isBirthday ? 'r' : 'r'} from-[#ff9900] via-[#ffb347] to-white`}></div>
+        <div className={`absolute top-0 ${isBirthday ? 'left' : 'right'}-0 w-full h-1 bg-gradient-to-${isBirthday ? 'r' : 'r'} from-[#f4a900] via-[#ffb347] to-white`}></div>
 
         {/* Carousel navigation - Left */}
         {upcomingEvents.length > 1 && (
@@ -951,7 +951,7 @@ useEffect(() => {
             onClick={() => setCurrentEventIndex((prev) => (prev === 0 ? upcomingEvents.length - 1 : prev - 1))}
             className="absolute left-2 top-1/2 -translate-y-1/2 z-10 p-2 rounded-full bg-white hover:bg-gray-50 shadow-md hover:shadow-lg transition-all"
           >
-            <ChevronLeft className="h-5 w-5 text-[#ff9900]" />
+            <ChevronLeft className="h-5 w-5 text-[#f4a900]" />
           </button>
         )}
 
@@ -960,8 +960,8 @@ useEffect(() => {
             <div className="flex items-center gap-2 mb-3 flex-wrap">
               <div className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${
                 isBirthday 
-                  ? 'bg-[#ff9900]/20 text-[#ff9900] border-2 border-[#ff9900]/30' 
-                  : 'bg-[#ff9900]/10 text-[#ff9900]'
+                  ? 'bg-[#f4a900]/20 text-[#f4a900] border-2 border-[#f4a900]/30' 
+                  : 'bg-[#f4a900]/10 text-[#f4a900]'
               }`}>
                 {isBirthday ? '🎂 Próximo cumpleaños' : 'Evento destacado'}
               </div>
@@ -977,7 +977,7 @@ useEffect(() => {
 
             <h2 className={`text-xl md:text-2xl font-bold mb-2 ${
               isBirthday 
-                ? 'bg-gradient-to-r from-[#ff9900] to-[#ffb347] text-transparent bg-clip-text' 
+                ? 'bg-gradient-to-r from-[#f4a900] to-[#ffb347] text-transparent bg-clip-text' 
                 : 'text-gray-900'
             }`}>
               {currentEvent.title}
@@ -1034,7 +1034,7 @@ useEffect(() => {
     const randomMessage = birthdayMessages[currentEvent.title.length % birthdayMessages.length];
     
     return (
-      <div className="mb-4 p-4 bg-gradient-to-br from-[#ff9900]/10 to-[#ffb347]/10 rounded-lg border-l-4 border-[#ff9900]">
+      <div className="mb-4 p-4 bg-gradient-to-br from-[#f4a900]/10 to-[#ffb347]/10 rounded-lg border-l-4 border-[#f4a900]">
         <p className="text-gray-700 leading-relaxed text-sm md:text-base">
           {randomMessage}
         </p>
@@ -1046,8 +1046,8 @@ useEffect(() => {
 })()}
 
             {isBirthday && currentEvent.videoUrl && (
-              <div className="mb-4 p-3 bg-[#ff9900]/10 rounded-lg border border-[#ff9900]/30">
-                <p className="text-sm text-[#ff9900] font-medium flex items-center">
+              <div className="mb-4 p-3 bg-[#f4a900]/10 rounded-lg border border-[#f4a900]/30">
+                <p className="text-sm text-[#f4a900] font-medium flex items-center">
                   <span className="mr-2">🎬</span> Este cumpleaños tiene un video especial
                 </p>
               </div>
@@ -1062,7 +1062,7 @@ useEffect(() => {
                     onClick={() => setCurrentEventIndex(idx)}
                     className={`h-2 rounded-full transition-all ${
                       idx === currentEventIndex 
-                        ? 'w-8 bg-[#ff9900]' 
+                        ? 'w-8 bg-[#f4a900]' 
                         : 'w-2 bg-gray-300 hover:bg-gray-400'
                     }`}
                   />
@@ -1071,7 +1071,7 @@ useEffect(() => {
             )}
 
             <a href='dashboard/calendar'>
-              <button className="inline-flex items-center px-5 py-2.5 bg-gradient-to-r from-[#ff9900] to-[#ffb347] text-white rounded-full font-medium text-sm hover:from-[#e68a00] hover:to-[#ff9900] transition-all shadow-sm hover:shadow transform hover:-translate-y-0.5 duration-200">
+              <button className="inline-flex items-center px-5 py-2.5 bg-gradient-to-r from-[#f4a900] to-[#ffb347] text-white rounded-full font-medium text-sm hover:from-[#e68a00] hover:to-[#f4a900] transition-all shadow-sm hover:shadow transform hover:-translate-y-0.5 duration-200">
                 Ver detalles
                 <ChevronRight className="ml-1 h-4 w-4" />
               </button>
@@ -1082,7 +1082,7 @@ useEffect(() => {
         <div className="flex-shrink-0 w-full md:w-auto">
           {currentEvent.videoUrl && currentEvent.videoUrl.trim() !== '' ? (
             <div className={`h-40 w-full md:w-64 rounded-xl overflow-hidden bg-black shadow ${
-              isBirthday ? 'ring-4 ring-[#ff9900]/30' : ''
+              isBirthday ? 'ring-4 ring-[#f4a900]/30' : ''
             }`}>
               <video
                 key={currentEvent.videoUrl}
@@ -1103,13 +1103,13 @@ useEffect(() => {
               }
               alt={currentEvent.title}
               className={`rounded-xl shadow h-40 w-full object-cover md:w-64 ${
-                isBirthday ? 'ring-4 ring-[#ff9900]/30' : ''
+                isBirthday ? 'ring-4 ring-[#f4a900]/30' : ''
               }`}
             />
           ) : (
             <div className={`h-40 w-full md:w-64 flex items-center justify-center rounded-xl border border-gray-200 ${
               isBirthday 
-                ? 'text-6xl bg-gradient-to-br from-[#ff9900]/20 to-[#ffb347]/20' 
+                ? 'text-6xl bg-gradient-to-br from-[#f4a900]/20 to-[#ffb347]/20' 
                 : 'text-gray-400'
             }`}>
               {isBirthday ? '🎂' : 'No hay media'}
@@ -1123,7 +1123,7 @@ useEffect(() => {
             onClick={() => setCurrentEventIndex((prev) => (prev === upcomingEvents.length - 1 ? 0 : prev + 1))}
             className="absolute right-2 top-1/2 -translate-y-1/2 z-10 p-2 rounded-full bg-white hover:bg-gray-50 shadow-md hover:shadow-lg transition-all"
           >
-            <ChevronRight className="h-5 w-5 text-[#ff9900]" />
+            <ChevronRight className="h-5 w-5 text-[#f4a900]" />
           </button>
         )}
       </div>
@@ -1138,12 +1138,12 @@ useEffect(() => {
                     className="pointer-events-none absolute inset-0 opacity-30"
                     style={{
                       backgroundImage:
-                        'radial-gradient(circle at 90% 10%, #ff9900 0, transparent 40%)',
+                        'radial-gradient(circle at 90% 10%, #f4a900 0, transparent 40%)',
                     }}
                   />
                   <div className="relative">
                     <h2 className="text-lg font-bold mb-5 flex items-center">
-                      <Briefcase className="h-5 w-5 mr-2 text-[#ff9900]" />
+                      <Briefcase className="h-5 w-5 mr-2 text-[#f4a900]" />
                       Acciones rápidas
                     </h2>
                     {dynamicActions === null ? (
@@ -1159,11 +1159,11 @@ useEffect(() => {
                             <a
                               key={action.id}
                               href={action.href}
-                              className="group flex flex-col items-center justify-center p-4 rounded-xl bg-white/5 border border-white/10 hover:bg-[#ff9900] hover:border-[#ff9900] active:scale-95 transition-all"
+                              className="group flex flex-col items-center justify-center p-4 rounded-xl bg-white/5 border border-white/10 hover:bg-[#f4a900] hover:border-[#f4a900] active:scale-95 transition-all"
                               target={isExternal ? "_blank" : "_self"}
                               rel={isExternal ? "noopener noreferrer" : ""}
                             >
-                              <div className="w-11 h-11 rounded-full bg-[#ff9900]/20 group-hover:bg-black/20 flex items-center justify-center mb-2 text-[#ff9900] group-hover:text-black transition-colors">
+                              <div className="w-11 h-11 rounded-full bg-[#f4a900]/20 group-hover:bg-black/20 flex items-center justify-center mb-2 text-[#f4a900] group-hover:text-black transition-colors">
                                 <Icon className="h-5 w-5" />
                               </div>
                               <span className="text-xs font-semibold text-white/90 group-hover:text-black text-center leading-tight">
@@ -1182,10 +1182,10 @@ useEffect(() => {
                   <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-purple-500 to-white"></div>
                   <div className="flex justify-between items-center mb-5">
                     <h2 className="text-lg font-bold text-gray-900 flex items-center">
-                      <Calendar className="h-5 w-5 mr-2 text-[#ff9900]" />
+                      <Calendar className="h-5 w-5 mr-2 text-[#f4a900]" />
                       Próximas actividades
                     </h2>
-                    <a href="/dashboard/calendar" className="text-[#ff9900] text-sm font-medium flex items-center hover:underline">
+                    <a href="/dashboard/calendar" className="text-[#f4a900] text-sm font-medium flex items-center hover:underline">
                       Ver calendario
                       <ChevronRight className="ml-1 h-4 w-4" />
                     </a>
@@ -1214,18 +1214,18 @@ useEffect(() => {
           className={`flex items-start p-4 rounded-xl transition-colors border hover:shadow-sm ${
             isBirthday 
               ? 'bg-gradient-to-br from-pink-50 via-purple-50 to-blue-50 border-pink-200 hover:border-pink-300' 
-              : 'hover:bg-gray-50 border-gray-100 hover:border-[#ff9900]/30'
+              : 'hover:bg-gray-50 border-gray-100 hover:border-[#f4a900]/30'
           }`}
         >
           <div className={`flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center mr-4 ${
             isBirthday 
               ? 'bg-gradient-to-br from-pink-400 to-purple-400' 
-              : 'bg-[#ff9900]/10'
+              : 'bg-[#f4a900]/10'
           }`}>
             {isBirthday ? (
               <span className="text-2xl">🎂</span>
             ) : (
-              <Activity className="h-6 w-6 text-[#ff9900]" />
+              <Activity className="h-6 w-6 text-[#f4a900]" />
             )}
           </div>
           <div className="flex-1 min-w-0">
@@ -1273,10 +1273,10 @@ useEffect(() => {
 
                   return (
                     <div className="bg-white rounded-2xl shadow-sm p-6 border border-gray-100 hover:shadow-md transition-shadow duration-300 relative overflow-hidden">
-                      <div className="absolute top-0 right-0 w-full h-1 bg-gradient-to-l from-[#ff9900] via-[#ffb347] to-white" />
+                      <div className="absolute top-0 right-0 w-full h-1 bg-gradient-to-l from-[#f4a900] via-[#ffb347] to-white" />
                       <div className="flex items-center mb-5">
-                        <div className="w-14 h-14 rounded-full bg-gradient-to-br from-[#ff9900]/20 to-[#ff9900]/40 flex items-center justify-center">
-                          <User className="h-8 w-8 text-[#ff9900]" />
+                        <div className="w-14 h-14 rounded-full bg-gradient-to-br from-[#f4a900]/20 to-[#f4a900]/40 flex items-center justify-center">
+                          <User className="h-8 w-8 text-[#f4a900]" />
                         </div>
                         <div className="ml-4 min-w-0">
                           <h2 className="font-bold text-gray-900 truncate">
@@ -1309,10 +1309,10 @@ useEffect(() => {
                   const list = requestsTab === 'activas' ? activas : respondidas;
                   return (
                     <div className="bg-white rounded-2xl shadow-sm p-6 border border-gray-100 hover:shadow-md transition-shadow duration-300 relative overflow-hidden">
-                      <div className="absolute top-0 left-0 w-1 h-full bg-[#ff9900]" />
+                      <div className="absolute top-0 left-0 w-1 h-full bg-[#f4a900]" />
                       <div className="flex justify-between items-center mb-4">
                         <h2 className="text-lg font-bold text-gray-900 flex items-center">
-                          <FileText className="h-5 w-5 mr-2 text-[#ff9900]" />
+                          <FileText className="h-5 w-5 mr-2 text-[#f4a900]" />
                           Mis Solicitudes
                         </h2>
                       </div>
@@ -1366,7 +1366,7 @@ useEffect(() => {
                               ? 'border-l-green-500'
                               : isRejected
                                 ? 'border-l-red-500'
-                                : 'border-l-[#ff9900]';
+                                : 'border-l-[#f4a900]';
 
                             return (
                               <div
