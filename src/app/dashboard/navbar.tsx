@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Menu, X, User2, Home, FileText, ChevronDown, LogOut, HelpCircle, Palmtree, HeartPlus, Landmark } from 'lucide-react';
+import { Menu, X, User2, Home, FileText, ChevronDown, LogOut, HelpCircle, Palmtree, HeartPlus, Landmark, GraduationCap } from 'lucide-react';
 import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 
@@ -46,6 +46,7 @@ const DashboardNavbar = ({ activePage = 'home' }) => {
     { id: 'documentos', href: '/dashboard/documents', icon: <FileText size={18} />, label: 'Documentos' },
     { id: 'pqrsf', href: '/dashboard/pqrsf', icon: <HelpCircle size={18} />, label: 'PQRSF' },
     { id: 'fondo', href: '/dashboard/fondo', icon: <Landmark size={18} />, label: 'Fonalmerque' },
+    { id: 'elearning', href: '/dashboard/elearning', icon: <GraduationCap size={18} />, label: 'E-Learning' },
   ];
 
   return (
