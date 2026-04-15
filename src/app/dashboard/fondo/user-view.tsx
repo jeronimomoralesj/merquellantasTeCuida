@@ -272,7 +272,7 @@ function FondoIncentiveLanding() {
           La afiliacion es rapida y tu ahorro empieza desde la siguiente nomina.
         </p>
         <a
-          href={`https://wa.me/573102262977?text=${encodeURIComponent("Estoy interesado en entrar al fondo")}`}
+          href={`https://wa.me/573228088355?text=${encodeURIComponent("Estoy interesado en entrar al fondo")}`}
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#f4a900] text-white font-semibold text-sm shadow-md shadow-[#f4a900]/25 hover:bg-[#e09c00] transition"
@@ -848,13 +848,13 @@ export default function FondoUserView() {
       <div className="flex items-center justify-center gap-2 text-xs text-gray-500 pt-2">
         <span>Tienes preguntas?</span>
         <a
-          href={`https://wa.me/573102262977?text=${encodeURIComponent("Necesito ayuda con: ")}`}
+          href={`https://wa.me/573228088355?text=${encodeURIComponent("Necesito ayuda con: ")}`}
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex items-center gap-1.5 font-semibold text-[#f4a900] hover:text-[#e09c00] transition"
         >
           <MessageCircle className="w-3.5 h-3.5" />
-          +57 310 2262977
+          +57 322 8088355
         </a>
       </div>
 
