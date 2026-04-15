@@ -95,6 +95,18 @@ function clean(value: unknown): string | null {
   return s ? s : null;
 }
 
+// "ACOSTA CHAVEZ" → "Acosta Chavez", "MARÍA JOSÉ" → "María José"
+function titleCase(value: string | null): string | null {
+  if (!value) return value;
+  return value
+    .toLowerCase()
+    .replace(/(^|[\s\-'])(\p{L})/gu, (_, sep, ch) => sep + ch.toUpperCase());
+}
+
+function cleanTitle(value: unknown): string | null {
+  return titleCase(clean(value));
+}
+
 function buildFullName(
   primerApellido: string | null,
   segundoApellido: string | null,
@@ -173,7 +185,7 @@ export async function POST(req: NextRequest) {
     arl: findCol(headers, 'ARL'),
     claseRiesgo: findCol(headers, 'Clase Riesgo', 'Clase de Riesgo'),
     fondoCesantias: findCol(headers, 'Fondo Cesantías', 'Fondo Cesantias'),
-    canal: findCol(headers, 'CANAL', 'Canal'),
+    area: findCol(headers, 'CANAL', 'Canal', 'AREA', 'Area', 'Área'),
   };
 
   if (idx.cedula === -1) {
@@ -221,9 +233,9 @@ export async function POST(req: NextRequest) {
       continue;
     }
 
-    const primerApellido = idx.primerApellido !== -1 ? clean(row[idx.primerApellido]) : null;
-    const segundoApellido = idx.segundoApellido !== -1 ? clean(row[idx.segundoApellido]) : null;
-    const nombreEmpleado = idx.nombre !== -1 ? clean(row[idx.nombre]) : null;
+    const primerApellido = idx.primerApellido !== -1 ? cleanTitle(row[idx.primerApellido]) : null;
+    const segundoApellido = idx.segundoApellido !== -1 ? cleanTitle(row[idx.segundoApellido]) : null;
+    const nombreEmpleado = idx.nombre !== -1 ? cleanTitle(row[idx.nombre]) : null;
     const nombre = buildFullName(primerApellido, segundoApellido, nombreEmpleado);
     if (!nombre) {
       errors++;
@@ -245,9 +257,9 @@ export async function POST(req: NextRequest) {
       fecha_nacimiento: isoDate(fechaNacimiento),
       fecha_ingreso: isoDate(fechaIngreso),
       contrato: idx.contrato !== -1 ? clean(row[idx.contrato]) : null,
-      departamento: idx.departamento !== -1 ? clean(row[idx.departamento]) : null,
-      cargo_empleado: idx.cargo !== -1 ? clean(row[idx.cargo]) : null,
-      canal: idx.canal !== -1 ? clean(row[idx.canal]) : null,
+      departamento: idx.departamento !== -1 ? cleanTitle(row[idx.departamento]) : null,
+      cargo_empleado: idx.cargo !== -1 ? cleanTitle(row[idx.cargo]) : null,
+      area: idx.area !== -1 ? cleanTitle(row[idx.area]) : null,
       tipo_cuenta: idx.tipoCuenta !== -1 ? clean(row[idx.tipoCuenta]) : null,
       numero_cuenta: idx.numeroCuenta !== -1 ? clean(row[idx.numeroCuenta]) : null,
       banco: idx.banco !== -1 ? clean(row[idx.banco]) : null,
