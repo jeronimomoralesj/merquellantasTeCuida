@@ -14,6 +14,10 @@ import {
   Loader2,
   CheckCircle2,
   AlertCircle,
+  AlertTriangle,
+  Briefcase,
+  Wallet,
+  HeartPulse,
 } from 'lucide-react';
 interface UserExtra {
   'Dpto Donde Labora': string;
@@ -31,6 +35,9 @@ interface UserExtra {
   'posicion': string;
   'fechaNacimiento': string;
   'rol': 'user' | 'admin' | 'fondo';
+  'Area': string;
+  'Contrato': string;
+  'Clase Riesgo': string;
 }
 
 interface User {
@@ -73,6 +80,11 @@ const Users: React.FC = () => {
   } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Wipe-all state
+  const [showWipeConfirm, setShowWipeConfirm] = useState(false);
+  const [wipeTyped, setWipeTyped] = useState('');
+  const [wiping, setWiping] = useState(false);
+
   const initialFormData: {
   cedula: string;
   nombre: string;
@@ -96,6 +108,9 @@ const Users: React.FC = () => {
     'posicion': '',
     'fechaNacimiento': '',
     'rol': 'user',
+    'Area': '',
+    'Contrato': '',
+    'Clase Riesgo': '',
   }
 };
 
@@ -180,6 +195,9 @@ const Users: React.FC = () => {
         posicion: formData.extra['posicion'],
         fecha_nacimiento: formData.extra['fechaNacimiento'],
         rol: formData.extra['rol'],
+        area: formData.extra['Area'],
+        contrato: formData.extra['Contrato'],
+        clase_riesgo: formData.extra['Clase Riesgo'],
       };
 
       const res = await fetch('/api/users', {
@@ -257,6 +275,9 @@ const Users: React.FC = () => {
           'posicion': data.posicion || '',
           'fechaNacimiento': birthday,
           'rol': (data.rol as 'user' | 'admin' | 'fondo') || 'user',
+          'Area': data.area || '',
+          'Contrato': data.contrato || '',
+          'Clase Riesgo': data.clase_riesgo || '',
         };
 
         return {
@@ -299,6 +320,9 @@ const Users: React.FC = () => {
       posicion: formData.extra['posicion'],
       fecha_nacimiento: formData.extra['fechaNacimiento'],
       rol: formData.extra['rol'],
+      area: formData.extra['Area'],
+      contrato: formData.extra['Contrato'],
+      clase_riesgo: formData.extra['Clase Riesgo'],
     };
 
     try {
@@ -439,6 +463,32 @@ const Users: React.FC = () => {
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
+  const handleWipeAll = async () => {
+    if (wipeTyped !== 'WIPE') return;
+    setWiping(true);
+    try {
+      const res = await fetch('/api/users/wipe-all', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirm: 'WIPE' }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || 'Error al borrar usuarios');
+        return;
+      }
+      alert(`Se eliminaron ${data.total_deleted} registros. Ahora puedes volver a cargar el Excel.`);
+      setShowWipeConfirm(false);
+      setWipeTyped('');
+      await fetchUsers();
+    } catch (error) {
+      console.error('Wipe error:', error);
+      alert('Error al borrar usuarios');
+    } finally {
+      setWiping(false);
+    }
+  };
+
   const adminCount = users.filter(u => u.extra?.rol === 'admin').length;
   const totalCount = users.length;
 
@@ -467,7 +517,14 @@ const Users: React.FC = () => {
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                onClick={() => setShowWipeConfirm(true)}
+                className="inline-flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-red-500/10 text-red-300 text-sm font-semibold hover:bg-red-500/20 active:scale-95 transition-all border border-red-400/30"
+                title="Borrar todos los usuarios"
+              >
+                <Trash2 className="h-4 w-4" /> Borrar todo
+              </button>
               <button
                 onClick={() => setShowBulkUpload(true)}
                 className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white/10 text-white text-sm font-semibold hover:bg-white/20 active:scale-95 transition-all border border-white/20"
@@ -497,250 +554,6 @@ const Users: React.FC = () => {
             />
           </div>
         </div>
-
-        {/* Create/Edit Form */}
-        {showCreateForm && (
-          <div className="bg-white rounded-lg shadow p-6 mb-6">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-semibold">
-                {editingUser ? 'Editar Usuario' : 'Crear Usuario'}
-              </h2>
-              <button 
-                onClick={cancelEdit}
-                className="text-gray-500 hover:text-gray-700"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {/* Personal Info */}
-              <div className="space-y-4">
-                <h3 className="text-sm font-semibold text-gray-700 mb-2 pb-2 border-b">Información Personal</h3>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Cédula *</label>
-                  <input
-                    type="text"
-                    placeholder="Ingrese el número de cédula"
-                    value={formData.cedula}
-                    onChange={e => setFormData(prev => ({ ...prev, cedula: e.target.value }))}
-                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Nombre Completo *</label>
-                  <input
-                    type="text"
-                    placeholder="Nombre y apellidos"
-                    value={formData.nombre}
-                    onChange={e =>
-    setFormData(prev => ({ ...prev, nombre: e.target.value }))
-  }
-                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
-                    <Cake className="h-4 w-4 text-pink-500" />
-                    Fecha de Nacimiento
-                  </label>
-                  <input
-                    type="date"
-                    placeholder="Fecha de Nacimiento"
-                    value={formData.extra['fechaNacimiento']}
-                    onChange={e => handleInputChange('fechaNacimiento', e.target.value)}
-                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de Documento</label>
-                  <select
-                    value={formData.extra['Tipo de Documento']}
-                    onChange={e => handleInputChange('Tipo de Documento', e.target.value)}
-                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">Seleccione un tipo</option>
-                    <option value="Cédula Ciudadanía">Cédula Ciudadanía</option>
-                    <option value="Cédula Extranjería">Cédula Extranjería</option>
-                    <option value="Pasaporte">Pasaporte</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Área</label>
-                  <select
-                    value={formData.extra.posicion}
-                    onChange={e => handleInputChange('posicion', e.target.value)}
-                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">Seleccione un área</option>
-                    <option value="COMERCIAL">COMERCIAL</option>
-                    <option value="OPERATIVO">OPERATIVO</option>
-                    <option value="ADMINISTRATIVO">ADMINISTRATIVO</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Work Info */}
-              <div className="space-y-4">
-                <h3 className="text-sm font-semibold text-gray-700 mb-2 pb-2 border-b">Información Laboral</h3>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Departamento donde labora</label>
-                  <input
-                    type="text"
-                    placeholder="Ej: Recursos Humanos"
-                    value={formData.extra['Dpto Donde Labora']}
-                    onChange={e => handleInputChange('Dpto Donde Labora', e.target.value)}
-                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Cargo Empleado</label>
-                  <input
-                    type="text"
-                    placeholder="Ej: TECNICO OPERATIVO"
-                    value={formData.extra['Cargo Empleado']}
-                    onChange={e => handleInputChange('Cargo Empleado', e.target.value)}
-                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Fecha de Ingreso</label>
-                  <input
-                    type="date"
-                    value={formData.extra['Fecha Ingreso']}
-                    onChange={e => handleInputChange('Fecha Ingreso', e.target.value)}
-                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Rol del Sistema</label>
-                  <select
-  value={formData.extra.rol}
-  onChange={e =>
-    handleInputChange('rol', e.target.value as 'user' | 'admin' | 'fondo')
-  }
-  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
->
-                    <option value="user">Usuario</option>
-                    <option value="admin">Administrador</option>
-                    <option value="fondo">Fonalmerque</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Financial Info */}
-              <div className="space-y-4">
-                <h3 className="text-sm font-semibold text-gray-700 mb-2 pb-2 border-b">Información Financiera</h3>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Banco</label>
-                  <input
-                    type="text"
-                    placeholder="Ej: BANCO DE BOGOTÁ"
-                    value={formData.extra.Banco}
-                    onChange={e => handleInputChange('Banco', e.target.value)}
-                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Número de Cuenta</label>
-                  <input
-                    type="text"
-                    placeholder="Ingrese el número de cuenta"
-                    value={formData.extra['Número Cuenta']}
-                    onChange={e => handleInputChange('Número Cuenta', e.target.value)}
-                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de Cuenta</label>
-                  <select
-                    value={formData.extra['Tipo Cuenta']}
-                    onChange={e => handleInputChange('Tipo Cuenta', e.target.value)}
-                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">Seleccione un tipo</option>
-                    <option value="AHORRO">AHORRO</option>
-                    <option value="CORRIENTE">CORRIENTE</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Benefits Info - Full Width */}
-              <div className="md:col-span-2 lg:col-span-3 space-y-4">
-                <h3 className="text-sm font-semibold text-gray-700 mb-2 pb-2 border-b">Información de Beneficios</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">ARL</label>
-                    <input
-                      type="text"
-                      placeholder="Ej: ARP SURA"
-                      value={formData.extra.ARL}
-                      onChange={e => handleInputChange('ARL', e.target.value)}
-                      className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">EPS</label>
-                    <input
-                      type="text"
-                      placeholder="Ej: EPS NUEVA EPS"
-                      value={formData.extra.EPS}
-                      onChange={e => handleInputChange('EPS', e.target.value)}
-                      className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Caja de Compensación</label>
-                    <input
-                      type="text"
-                      placeholder="Ej: CAJA DE COMPENSACIÓN FAMILIAR COMFENALCO VALLE"
-                      value={formData.extra['CAJA DE COMPENSACION']}
-                      onChange={e => handleInputChange('CAJA DE COMPENSACION', e.target.value)}
-                      className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Fondo de Pensiones</label>
-                    <input
-                      type="text"
-                      placeholder="Ej: FONDO DE PENSIONES PORVENIR S.A."
-                      value={formData.extra['FONDO DE PENSIONES']}
-                      onChange={e => handleInputChange('FONDO DE PENSIONES', e.target.value)}
-                      className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Fondo de Cesantías</label>
-                    <input
-                      type="text"
-                      placeholder="Ej: Protección"
-                      value={formData.extra['Fondo Cesantías']}
-                      onChange={e => handleInputChange('Fondo Cesantías', e.target.value)}
-                      className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2 mt-6">
-              <button 
-                onClick={cancelEdit} 
-                className="px-4 py-2 border rounded-lg hover:bg-gray-50 transition-colors"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={editingUser ? updateUser : createUser}
-                className="px-6 py-2 bg-blue-600 text-white rounded-lg flex items-center gap-2 hover:bg-blue-700 transition-colors"
-              >
-                <Save className="h-4 w-4" />
-                {editingUser ? 'Actualizar' : 'Crear'}
-              </button>
-            </div>
-          </div>
-        )}
 
         {/* Users Table */}
         <div className="overflow-hidden">
@@ -799,11 +612,16 @@ const Users: React.FC = () => {
                           </div>
                         </td>
                         <td className="px-5 py-4">
-                          <div className="text-sm text-gray-900 truncate max-w-[180px]">{user.extra?.['Cargo Empleado'] || '—'}</div>
-                          <div className="text-xs mt-0.5">
-                            <span className="font-semibold text-[#f4a900]">{user.extra?.posicion || '—'}</span>
+                          <div className="text-sm text-gray-900 truncate max-w-[200px]">{user.extra?.['Cargo Empleado'] || '—'}</div>
+                          <div className="text-xs mt-0.5 flex items-center gap-1.5 flex-wrap">
+                            {user.extra?.['Area'] && (
+                              <span className="font-semibold text-[#f4a900]">{user.extra['Area']}</span>
+                            )}
                             {user.extra?.['Dpto Donde Labora'] && (
-                              <span className="text-gray-400"> · {user.extra['Dpto Donde Labora']}</span>
+                              <span className="text-gray-400">· {user.extra['Dpto Donde Labora']}</span>
+                            )}
+                            {user.extra?.['Contrato'] && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">{user.extra['Contrato']}</span>
                             )}
                           </div>
                         </td>
@@ -863,6 +681,329 @@ const Users: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Create / Edit user modal */}
+      {showCreateForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[92vh] overflow-hidden flex flex-col">
+            {/* Header */}
+            <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-black to-gray-900 text-white">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-[#f4a900]/20 text-[#f4a900] flex items-center justify-center">
+                  {editingUser ? <Edit className="h-5 w-5" /> : <Plus className="h-5 w-5" />}
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-base">
+                    {editingUser ? 'Editar usuario' : 'Crear usuario'}
+                  </h3>
+                  <p className="text-xs text-white/60">
+                    {editingUser
+                      ? `${editingUser.nombre} · CC ${editingUser.cedula}`
+                      : 'Completa los datos del nuevo colaborador'}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={cancelEdit}
+                className="p-2 rounded-full hover:bg-white/10 text-white/70 hover:text-white transition"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="overflow-y-auto flex-1 bg-gray-50">
+              <div className="p-6 space-y-6">
+                {/* Información personal */}
+                <section>
+                  <h4 className="text-[11px] font-bold uppercase tracking-wider text-gray-600 mb-3 flex items-center gap-2">
+                    <User className="h-3.5 w-3.5 text-[#f4a900]" />
+                    Información personal
+                  </h4>
+                  <div className="bg-white rounded-2xl border border-gray-100 p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <Field label="Cédula *" required>
+                      <input
+                        type="text"
+                        placeholder="1005822654"
+                        value={formData.cedula}
+                        onChange={e => setFormData(prev => ({ ...prev, cedula: e.target.value.replace(/\D/g, '') }))}
+                        className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#f4a900] focus:border-transparent focus:bg-white transition"
+                      />
+                    </Field>
+                    <Field label="Tipo de documento">
+                      <select
+                        value={formData.extra['Tipo de Documento']}
+                        onChange={e => handleInputChange('Tipo de Documento', e.target.value)}
+                        className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#f4a900] focus:border-transparent focus:bg-white transition"
+                      >
+                        <option value="">Seleccione</option>
+                        <option value="Cédula Ciudadanía">Cédula Ciudadanía</option>
+                        <option value="Cédula Extranjería">Cédula Extranjería</option>
+                        <option value="Pasaporte">Pasaporte</option>
+                      </select>
+                    </Field>
+                    <Field label="Nombre completo *" required className="sm:col-span-2">
+                      <input
+                        type="text"
+                        placeholder="Nombre y apellidos"
+                        value={formData.nombre}
+                        onChange={e => setFormData(prev => ({ ...prev, nombre: e.target.value }))}
+                        className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#f4a900] focus:border-transparent focus:bg-white transition"
+                      />
+                    </Field>
+                    <Field label="Fecha de nacimiento" icon={<Cake className="h-3.5 w-3.5 text-pink-500" />}>
+                      <input
+                        type="date"
+                        value={formData.extra['fechaNacimiento']}
+                        onChange={e => handleInputChange('fechaNacimiento', e.target.value)}
+                        className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#f4a900] focus:border-transparent focus:bg-white transition"
+                      />
+                    </Field>
+                    <Field label="Rol del sistema">
+                      <select
+                        value={formData.extra.rol}
+                        onChange={e => handleInputChange('rol', e.target.value as 'user' | 'admin' | 'fondo')}
+                        className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#f4a900] focus:border-transparent focus:bg-white transition"
+                      >
+                        <option value="user">Usuario</option>
+                        <option value="admin">Administrador</option>
+                        <option value="fondo">Fonalmerque</option>
+                      </select>
+                    </Field>
+                  </div>
+                </section>
+
+                {/* Información laboral */}
+                <section>
+                  <h4 className="text-[11px] font-bold uppercase tracking-wider text-gray-600 mb-3 flex items-center gap-2">
+                    <Briefcase className="h-3.5 w-3.5 text-[#f4a900]" />
+                    Información laboral
+                  </h4>
+                  <div className="bg-white rounded-2xl border border-gray-100 p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <Field label="Cargo">
+                      <input
+                        type="text"
+                        placeholder="Ej: Agente Call Center"
+                        value={formData.extra['Cargo Empleado']}
+                        onChange={e => handleInputChange('Cargo Empleado', e.target.value)}
+                        className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#f4a900] focus:border-transparent focus:bg-white transition"
+                      />
+                    </Field>
+                    <Field label="Área / CANAL">
+                      <input
+                        type="text"
+                        placeholder="Ej: Call Center, Lubricentro, Administrativo, ..."
+                        value={formData.extra['Area']}
+                        onChange={e => handleInputChange('Area', e.target.value)}
+                        className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#f4a900] focus:border-transparent focus:bg-white transition"
+                      />
+                    </Field>
+                    <Field label="Departamento donde labora">
+                      <input
+                        type="text"
+                        placeholder="Ej: Bogotá"
+                        value={formData.extra['Dpto Donde Labora']}
+                        onChange={e => handleInputChange('Dpto Donde Labora', e.target.value)}
+                        className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#f4a900] focus:border-transparent focus:bg-white transition"
+                      />
+                    </Field>
+                    <Field label="Tipo de contrato">
+                      <input
+                        type="text"
+                        placeholder="Ej: Indefinido"
+                        value={formData.extra['Contrato']}
+                        onChange={e => handleInputChange('Contrato', e.target.value)}
+                        className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#f4a900] focus:border-transparent focus:bg-white transition"
+                      />
+                    </Field>
+                    <Field label="Fecha de ingreso">
+                      <input
+                        type="date"
+                        value={formData.extra['Fecha Ingreso']}
+                        onChange={e => handleInputChange('Fecha Ingreso', e.target.value)}
+                        className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#f4a900] focus:border-transparent focus:bg-white transition"
+                      />
+                    </Field>
+                    <Field label="Clase de riesgo">
+                      <input
+                        type="text"
+                        placeholder="Ej: Clase 3"
+                        value={formData.extra['Clase Riesgo']}
+                        onChange={e => handleInputChange('Clase Riesgo', e.target.value)}
+                        className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#f4a900] focus:border-transparent focus:bg-white transition"
+                      />
+                    </Field>
+                  </div>
+                </section>
+
+                {/* Información financiera */}
+                <section>
+                  <h4 className="text-[11px] font-bold uppercase tracking-wider text-gray-600 mb-3 flex items-center gap-2">
+                    <Wallet className="h-3.5 w-3.5 text-[#f4a900]" />
+                    Información financiera
+                  </h4>
+                  <div className="bg-white rounded-2xl border border-gray-100 p-5 grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <Field label="Banco" className="sm:col-span-2">
+                      <input
+                        type="text"
+                        placeholder="Ej: Banco de Bogotá"
+                        value={formData.extra.Banco}
+                        onChange={e => handleInputChange('Banco', e.target.value)}
+                        className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#f4a900] focus:border-transparent focus:bg-white transition"
+                      />
+                    </Field>
+                    <Field label="Tipo de cuenta">
+                      <select
+                        value={formData.extra['Tipo Cuenta']}
+                        onChange={e => handleInputChange('Tipo Cuenta', e.target.value)}
+                        className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#f4a900] focus:border-transparent focus:bg-white transition"
+                      >
+                        <option value="">Seleccione</option>
+                        <option value="AHORRO">Ahorro</option>
+                        <option value="CORRIENTE">Corriente</option>
+                      </select>
+                    </Field>
+                    <Field label="Número de cuenta" className="sm:col-span-3">
+                      <input
+                        type="text"
+                        placeholder="Número de cuenta bancaria"
+                        value={formData.extra['Número Cuenta']}
+                        onChange={e => handleInputChange('Número Cuenta', e.target.value)}
+                        className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#f4a900] focus:border-transparent focus:bg-white transition"
+                      />
+                    </Field>
+                  </div>
+                </section>
+
+                {/* Información de beneficios */}
+                <section>
+                  <h4 className="text-[11px] font-bold uppercase tracking-wider text-gray-600 mb-3 flex items-center gap-2">
+                    <HeartPulse className="h-3.5 w-3.5 text-[#f4a900]" />
+                    Beneficios y aportes
+                  </h4>
+                  <div className="bg-white rounded-2xl border border-gray-100 p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <Field label="EPS">
+                      <input
+                        type="text"
+                        placeholder="Ej: EPS Sanitas S.A."
+                        value={formData.extra.EPS}
+                        onChange={e => handleInputChange('EPS', e.target.value)}
+                        className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#f4a900] focus:border-transparent focus:bg-white transition"
+                      />
+                    </Field>
+                    <Field label="ARL">
+                      <input
+                        type="text"
+                        placeholder="Ej: ARL Sura"
+                        value={formData.extra.ARL}
+                        onChange={e => handleInputChange('ARL', e.target.value)}
+                        className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#f4a900] focus:border-transparent focus:bg-white transition"
+                      />
+                    </Field>
+                    <Field label="AFP / Fondo de pensiones">
+                      <input
+                        type="text"
+                        placeholder="Ej: Porvenir"
+                        value={formData.extra['FONDO DE PENSIONES']}
+                        onChange={e => handleInputChange('FONDO DE PENSIONES', e.target.value)}
+                        className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#f4a900] focus:border-transparent focus:bg-white transition"
+                      />
+                    </Field>
+                    <Field label="Caja de compensación">
+                      <input
+                        type="text"
+                        placeholder="Ej: Colsubsidio"
+                        value={formData.extra['CAJA DE COMPENSACION']}
+                        onChange={e => handleInputChange('CAJA DE COMPENSACION', e.target.value)}
+                        className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#f4a900] focus:border-transparent focus:bg-white transition"
+                      />
+                    </Field>
+                    <Field label="Fondo de cesantías" className="sm:col-span-2">
+                      <input
+                        type="text"
+                        placeholder="Ej: Protección"
+                        value={formData.extra['Fondo Cesantías']}
+                        onChange={e => handleInputChange('Fondo Cesantías', e.target.value)}
+                        className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#f4a900] focus:border-transparent focus:bg-white transition"
+                      />
+                    </Field>
+                  </div>
+                </section>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 border-t border-gray-100 flex items-center justify-end gap-2 bg-white">
+              <button
+                onClick={cancelEdit}
+                className="px-4 py-2.5 rounded-xl text-gray-700 text-sm font-semibold hover:bg-gray-100 transition"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={editingUser ? updateUser : createUser}
+                disabled={!formData.cedula || !formData.nombre}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#f4a900] text-black text-sm font-bold hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed shadow"
+              >
+                <Save className="h-4 w-4" />
+                {editingUser ? 'Guardar cambios' : 'Crear usuario'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Wipe confirmation modal */}
+      {showWipeConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+            <div className="p-5 border-b border-gray-100 bg-red-50 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-red-100 text-red-600 flex items-center justify-center">
+                <AlertTriangle className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-gray-900 text-base">Borrar todos los usuarios</h3>
+                <p className="text-xs text-red-700">Esta acción no se puede deshacer.</p>
+              </div>
+            </div>
+            <div className="p-5 space-y-3 text-sm text-gray-700">
+              <p>
+                Se eliminarán <b>todos los usuarios</b> y sus datos relacionados (calendario, solicitudes,
+                cesantías, cursos, PQRSF). Los registros del fondo se preservan y se re-vinculan
+                automáticamente al volver a subir el Excel.
+              </p>
+              <p className="text-gray-600">
+                Escribe <code className="px-1.5 py-0.5 rounded bg-gray-100 text-red-700 font-mono text-xs">WIPE</code> para confirmar.
+              </p>
+              <input
+                type="text"
+                value={wipeTyped}
+                onChange={(e) => setWipeTyped(e.target.value)}
+                placeholder="WIPE"
+                className="w-full px-3 py-2.5 bg-white border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-red-500 font-mono"
+                autoFocus
+              />
+            </div>
+            <div className="p-4 border-t border-gray-100 bg-gray-50 flex items-center justify-end gap-2">
+              <button
+                onClick={() => { setShowWipeConfirm(false); setWipeTyped(''); }}
+                disabled={wiping}
+                className="px-4 py-2 rounded-xl text-gray-700 text-sm font-semibold hover:bg-gray-100 disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleWipeAll}
+                disabled={wipeTyped !== 'WIPE' || wiping}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-red-600 text-white text-sm font-bold hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed shadow"
+              >
+                {wiping ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                {wiping ? 'Borrando...' : 'Borrar todo'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Bulk upload modal */}
       {showBulkUpload && (
@@ -1036,5 +1177,30 @@ const Users: React.FC = () => {
     </div>
   );
 };
+
+function Field({
+  label,
+  children,
+  required = false,
+  icon,
+  className = '',
+}: {
+  label: string;
+  children: React.ReactNode;
+  required?: boolean;
+  icon?: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={className}>
+      <label className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-1.5">
+        {icon}
+        {label}
+        {required && <span className="text-red-500">*</span>}
+      </label>
+      {children}
+    </div>
+  );
+}
 
 export default Users;

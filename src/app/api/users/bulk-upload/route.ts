@@ -42,6 +42,16 @@ function findCol(headers: string[], ...variants: string[]): number {
   return -1;
 }
 
+// Loose match: returns the first header that contains any of the given keywords
+function findColLoose(headers: string[], ...keywords: string[]): number {
+  const needles = keywords.map(norm);
+  for (let i = 0; i < headers.length; i++) {
+    const h = norm(headers[i]);
+    if (needles.some((n) => n && h.includes(n))) return i;
+  }
+  return -1;
+}
+
 // Parse a date from Excel serial / ISO / DD/MM/YYYY / D-M-YY
 function parseDate(value: unknown): Date | null {
   if (value == null || value === '') return null;
@@ -187,6 +197,12 @@ export async function POST(req: NextRequest) {
     fondoCesantias: findCol(headers, 'Fondo Cesantías', 'Fondo Cesantias'),
     area: findCol(headers, 'CANAL', 'Canal', 'AREA', 'Area', 'Área'),
   };
+
+  // Fallback: if CANAL/Area header is not an exact match (e.g. "CANAL VENTAS",
+  // "Area/Canal"), try a loose contains match so the value still lands in `area`.
+  if (idx.area === -1) {
+    idx.area = findColLoose(headers, 'canal', 'area');
+  }
 
   if (idx.cedula === -1) {
     return NextResponse.json(

@@ -8,7 +8,8 @@ const ALLOWED_USER_FIELDS = new Set([
   'nombre', 'posicion', 'departamento', 'eps', 'banco',
   'caja_compensacion', 'fondo_pensiones', 'arl', 'fecha_ingreso',
   'fondo_cesantias', 'cargo_empleado', 'numero_cuenta', 'tipo_cuenta',
-  'tipo_documento', 'fecha_nacimiento',
+  'tipo_documento', 'fecha_nacimiento', 'area', 'contrato', 'clase_riesgo',
+  'first_name', 'primer_apellido', 'segundo_apellido',
 ]);
 const ADMIN_ONLY_FIELDS = new Set(['rol', 'cedula', 'email']);
 const VALID_ROLES = new Set(['user', 'admin', 'fondo']);
@@ -75,6 +76,9 @@ export async function POST(req: NextRequest) {
       tipo_cuenta: body.tipo_cuenta || null,
       tipo_documento: body.tipo_documento || null,
       fecha_nacimiento: body.fecha_nacimiento || null,
+      area: body.area || null,
+      contrato: body.contrato || null,
+      clase_riesgo: body.clase_riesgo || null,
     };
 
     const result = await db.collection('users').updateOne(
