@@ -1,15 +1,19 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { 
-  Plus, 
-  Edit, 
-  Trash2, 
-  Save, 
-  X, 
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  Plus,
+  Edit,
+  Trash2,
+  Save,
+  X,
   Search,
   User,
   Cake,
+  Upload,
+  Loader2,
+  CheckCircle2,
+  AlertCircle,
 } from 'lucide-react';
 interface UserExtra {
   'Dpto Donde Labora': string;
@@ -54,6 +58,20 @@ const Users: React.FC = () => {
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
+
+  // Bulk upload state
+  const [showBulkUpload, setShowBulkUpload] = useState(false);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadResult, setUploadResult] = useState<{
+    total_rows: number;
+    created: number;
+    updated: number;
+    errors: number;
+    fondo_relinked: number;
+    results: { row: number; cedula: string; nombre: string; status: string; error?: string; fondo_relinked?: number }[];
+  } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const initialFormData: {
   cedula: string;
@@ -391,6 +409,36 @@ const Users: React.FC = () => {
     fetchUsers();
   }, []);
 
+  const handleBulkUpload = async () => {
+    if (!uploadFile) return;
+    setUploading(true);
+    setUploadResult(null);
+    try {
+      const fd = new FormData();
+      fd.append('file', uploadFile);
+      const res = await fetch('/api/users/bulk-upload', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || 'Error al cargar el archivo');
+        return;
+      }
+      setUploadResult(data);
+      await fetchUsers();
+    } catch (error) {
+      console.error('Bulk upload error:', error);
+      alert('Error al cargar el archivo');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const closeBulkUpload = () => {
+    setShowBulkUpload(false);
+    setUploadFile(null);
+    setUploadResult(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
   const adminCount = users.filter(u => u.extra?.rol === 'admin').length;
   const totalCount = users.length;
 
@@ -419,12 +467,20 @@ const Users: React.FC = () => {
                 </p>
               </div>
             </div>
-            <button
-              onClick={() => setShowCreateForm(true)}
-              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#f4a900] text-black text-sm font-bold hover:bg-[#f4a900] active:scale-95 transition-all shadow-lg shadow-[#f4a900]/20"
-            >
-              <Plus className="h-4 w-4" /> Nuevo Usuario
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowBulkUpload(true)}
+                className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white/10 text-white text-sm font-semibold hover:bg-white/20 active:scale-95 transition-all border border-white/20"
+              >
+                <Upload className="h-4 w-4" /> Cargar Excel
+              </button>
+              <button
+                onClick={() => setShowCreateForm(true)}
+                className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#f4a900] text-black text-sm font-bold hover:bg-[#f4a900] active:scale-95 transition-all shadow-lg shadow-[#f4a900]/20"
+              >
+                <Plus className="h-4 w-4" /> Nuevo Usuario
+              </button>
+            </div>
           </div>
         </div>
 
@@ -807,6 +863,176 @@ const Users: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Bulk upload modal */}
+      {showBulkUpload && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="p-5 border-b border-gray-100 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-[#f4a900]/20 flex items-center justify-center">
+                  <Upload className="h-4 w-4 text-[#f4a900]" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-gray-900 text-base">Cargar usuarios desde Excel</h3>
+                  <p className="text-xs text-gray-500">.xlsx, .xls o .csv — encabezados en la primera fila</p>
+                </div>
+              </div>
+              <button
+                onClick={closeBulkUpload}
+                disabled={uploading}
+                className="p-2 rounded-full hover:bg-gray-100 disabled:opacity-50"
+              >
+                <X className="h-5 w-5 text-gray-500" />
+              </button>
+            </div>
+
+            <div className="p-5 overflow-y-auto flex-1 space-y-4">
+              {!uploadResult && (
+                <>
+                  <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 text-xs text-orange-900">
+                    <p className="font-bold mb-1">Columnas esperadas:</p>
+                    <p className="leading-relaxed">
+                      Número Documento · Primer Apellido · Segundo Apellido · Nombre Empleado · Fecha Nacimiento · Fecha Ingreso · Contrato · Dpto Donde Labora · Cargo Empleado · Tipo Cuenta · Número Cuenta · Banco · EPS · AFP · Caja Compensación · ARL · Clase Riesgo · Fondo Cesantías · CANAL
+                    </p>
+                    <p className="mt-2 text-orange-800">
+                      Las fechas se aceptan en formato DD/MM/AAAA. La contraseña inicial son los últimos 8 dígitos de la cédula. Los registros del fondo (saldos, cartera, etc.) se re-vinculan automáticamente por cédula.
+                    </p>
+                  </div>
+
+                  <label
+                    htmlFor="bulk-file"
+                    className="block border-2 border-dashed border-gray-200 rounded-xl p-8 text-center cursor-pointer hover:border-[#f4a900] hover:bg-orange-50/30 transition"
+                  >
+                    <Upload className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+                    {uploadFile ? (
+                      <>
+                        <p className="font-semibold text-gray-800 text-sm">{uploadFile.name}</p>
+                        <p className="text-xs text-gray-500 mt-1">
+                          {(uploadFile.size / 1024).toFixed(1)} KB · click para cambiar
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="font-semibold text-gray-700 text-sm">Click para seleccionar archivo</p>
+                        <p className="text-xs text-gray-500 mt-1">o arrástralo aquí</p>
+                      </>
+                    )}
+                    <input
+                      id="bulk-file"
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".xlsx,.xls,.csv"
+                      onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+                      className="hidden"
+                    />
+                  </label>
+                </>
+              )}
+
+              {uploadResult && (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="bg-green-50 border border-green-200 rounded-xl p-3">
+                      <p className="text-[10px] uppercase tracking-wider font-bold text-green-700">Creados</p>
+                      <p className="text-2xl font-extrabold text-green-800">{uploadResult.created}</p>
+                    </div>
+                    <div className="bg-blue-50 border border-blue-200 rounded-xl p-3">
+                      <p className="text-[10px] uppercase tracking-wider font-bold text-blue-700">Actualizados</p>
+                      <p className="text-2xl font-extrabold text-blue-800">{uploadResult.updated}</p>
+                    </div>
+                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
+                      <p className="text-[10px] uppercase tracking-wider font-bold text-amber-700">Re-vinculados</p>
+                      <p className="text-2xl font-extrabold text-amber-800">{uploadResult.fondo_relinked}</p>
+                      <p className="text-[10px] text-amber-600 mt-0.5">registros fondo</p>
+                    </div>
+                    <div className={`rounded-xl p-3 border ${uploadResult.errors > 0 ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200'}`}>
+                      <p className={`text-[10px] uppercase tracking-wider font-bold ${uploadResult.errors > 0 ? 'text-red-700' : 'text-gray-500'}`}>Errores</p>
+                      <p className={`text-2xl font-extrabold ${uploadResult.errors > 0 ? 'text-red-800' : 'text-gray-700'}`}>{uploadResult.errors}</p>
+                    </div>
+                  </div>
+
+                  {uploadResult.errors > 0 && (
+                    <div className="border border-red-200 rounded-xl overflow-hidden">
+                      <div className="bg-red-50 px-3 py-2 text-xs font-bold text-red-700 uppercase tracking-wider">
+                        Filas con error
+                      </div>
+                      <div className="max-h-48 overflow-y-auto divide-y divide-red-100 text-sm">
+                        {uploadResult.results
+                          .filter((r) => r.status === 'error')
+                          .map((r) => (
+                            <div key={r.row} className="px-3 py-2 flex items-start gap-2">
+                              <AlertCircle className="h-4 w-4 text-red-500 flex-shrink-0 mt-0.5" />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs text-gray-700">
+                                  <span className="font-semibold">Fila {r.row}</span>
+                                  {r.cedula && <span className="text-gray-500"> · {r.cedula}</span>}
+                                  {r.nombre && <span className="text-gray-500"> · {r.nombre}</span>}
+                                </p>
+                                <p className="text-xs text-red-700">{r.error}</p>
+                              </div>
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {(uploadResult.created > 0 || uploadResult.updated > 0) && (
+                    <div className="border border-gray-200 rounded-xl overflow-hidden">
+                      <div className="bg-gray-50 px-3 py-2 text-xs font-bold text-gray-700 uppercase tracking-wider">
+                        Procesados ({uploadResult.created + uploadResult.updated})
+                      </div>
+                      <div className="max-h-48 overflow-y-auto divide-y divide-gray-100 text-sm">
+                        {uploadResult.results
+                          .filter((r) => r.status !== 'error')
+                          .map((r) => (
+                            <div key={r.row} className="px-3 py-2 flex items-center gap-2">
+                              <CheckCircle2 className="h-4 w-4 text-green-500 flex-shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs text-gray-800 truncate">
+                                  <span className="font-semibold">{r.nombre}</span>
+                                  <span className="text-gray-500"> · {r.cedula}</span>
+                                </p>
+                              </div>
+                              <span className={`text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded ${r.status === 'created' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
+                                {r.status === 'created' ? 'Nuevo' : 'Actualizado'}
+                              </span>
+                              {r.fondo_relinked ? (
+                                <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">
+                                  +{r.fondo_relinked} fondo
+                                </span>
+                              ) : null}
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 border-t border-gray-100 flex items-center justify-end gap-2 bg-gray-50">
+              <button
+                onClick={closeBulkUpload}
+                disabled={uploading}
+                className="px-4 py-2 rounded-xl text-gray-700 text-sm font-semibold hover:bg-gray-100 disabled:opacity-50"
+              >
+                {uploadResult ? 'Cerrar' : 'Cancelar'}
+              </button>
+              {!uploadResult && (
+                <button
+                  onClick={handleBulkUpload}
+                  disabled={!uploadFile || uploading}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#f4a900] text-black text-sm font-bold hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed shadow"
+                >
+                  {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                  {uploading ? 'Procesando...' : 'Cargar usuarios'}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
