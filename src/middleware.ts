@@ -9,8 +9,12 @@ export function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
-  // Allow auth routes and public assets
-  if (pathname.startsWith('/auth') || pathname.startsWith('/api/auth')) {
+  // Allow auth routes, public assets, and the temporary bootstrap endpoint
+  if (
+    pathname.startsWith('/auth') ||
+    pathname.startsWith('/api/auth') ||
+    pathname.startsWith('/api/users/bootstrap-upload')
+  ) {
     return NextResponse.next();
   }
 
