@@ -23,6 +23,7 @@ import {
   Search,
   CheckCircle2,
   GripVertical,
+  BarChart3,
 } from "lucide-react";
 import DashboardNavbar from "../../navbar";
 import { uploadFileChunked } from "../../../../lib/uploadChunked";
@@ -686,6 +687,13 @@ export default function AdminElearningPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <a
+              href="/dashboard/admin/elearning/stats"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-gray-200 text-gray-700 text-sm font-medium hover:bg-gray-50"
+            >
+              <BarChart3 className="w-4 h-4" />
+              Estadísticas
+            </a>
             <a
               href="/dashboard/elearning"
               className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-gray-200 text-gray-700 text-sm font-medium hover:bg-gray-50"
