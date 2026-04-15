@@ -58,12 +58,26 @@ interface UserProfile {
   nombre: string;
   rol: string;
   antiguedad: number;
+  antiguedadMeses: number;
   posicion: string;
   dpto: string;
   eps: string;
   banco: string;
   pensiones: string;
   arl: string;
+  cedula: string;
+  email: string;
+  tipoDocumento: string;
+  fechaNacimiento: string;
+  fechaIngreso: string;
+  cargo: string;
+  area: string;
+  contrato: string;
+  claseRiesgo: string;
+  tipoCuenta: string;
+  numeroCuenta: string;
+  caja: string;
+  cesantias: string;
 }
 
 interface UserData {
@@ -156,6 +170,43 @@ const calculateYearsOfService = (startDate: Date): number => {
   const diffTime = today.getTime() - startDate.getTime();
   const diffYears = diffTime / (1000 * 60 * 60 * 24 * 365.25); // Account for leap years
   return Math.floor(diffYears);
+};
+
+// Total full months between start and today
+const calculateMonthsOfService = (startDate: Date): number => {
+  const today = new Date();
+  let months = (today.getFullYear() - startDate.getFullYear()) * 12;
+  months += today.getMonth() - startDate.getMonth();
+  if (today.getDate() < startDate.getDate()) months -= 1;
+  return Math.max(0, months);
+};
+
+// Format YYYY-MM-DD / ISO / Excel serial into a Spanish date label
+const formatSpanishDate = (value: unknown): string => {
+  if (value == null || value === '') return '';
+  let d: Date | null = null;
+  if (typeof value === 'number') {
+    d = convertExcelDateToJSDate(value);
+  } else if (typeof value === 'string') {
+    if (/^\d{4}-\d{2}-\d{2}/.test(value)) {
+      const [y, m, day] = value.slice(0, 10).split('-').map(Number);
+      d = new Date(y, (m || 1) - 1, day || 1);
+    } else {
+      const parsed = new Date(value);
+      if (!isNaN(parsed.getTime())) d = parsed;
+    }
+  } else if (value instanceof Date) {
+    d = value;
+  }
+  if (!d || isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' });
+};
+
+const maskAccount = (value: string): string => {
+  if (!value) return '';
+  const digits = value.replace(/\D/g, '');
+  if (digits.length <= 4) return digits;
+  return `${'•'.repeat(Math.max(0, digits.length - 4))}${digits.slice(-4)}`;
 };
 
 // Helper function to determine if an event is happening today (after adding one day)
@@ -426,40 +477,58 @@ useEffect(() => {
         if (!res.ok) return;
         const data = await res.json();
 
-        const dpto = data.extra?.["Nombre Área Funcional"] ?? data.dpto ?? "";
-        const eps = data.extra?.["EPS"] ?? data.eps ?? "";
-        const banco = data.extra?.["Banco"] ?? data.banco ?? "";
-        const pensiones = data.extra?.["FONDO DE PENSIONES"] ?? data.pensiones ?? "";
-        const arl = data.extra?.["ARL"] ?? data.arl ?? "";
+        const dpto = data.departamento ?? data.extra?.["Nombre Área Funcional"] ?? data.dpto ?? "";
+        const eps = data.eps ?? data.extra?.["EPS"] ?? "";
+        const banco = data.banco ?? data.extra?.["Banco"] ?? "";
+        const pensiones = data.fondo_pensiones ?? data.extra?.["FONDO DE PENSIONES"] ?? data.pensiones ?? "";
+        const arl = data.arl ?? data.extra?.["ARL"] ?? "";
 
-        // Handle antiguedad calculation
+        // Handle antiguedad calculation (prefer flat fecha_ingreso)
         let calculatedAntiguedad = 0;
+        let calculatedMeses = 0;
+        const rawFechaIngreso = data.fecha_ingreso ?? data.extra?.["Fecha Ingreso"];
 
-        if (data.extra?.["Fecha Ingreso"]) {
-          const fechaIngreso = data.extra["Fecha Ingreso"];
-          const startDate = convertExcelDateToJSDate(fechaIngreso);
+        if (rawFechaIngreso) {
+          const startDate = convertExcelDateToJSDate(rawFechaIngreso);
           calculatedAntiguedad = calculateYearsOfService(startDate);
+          calculatedMeses = calculateMonthsOfService(startDate);
         } else if (data.antiguedad) {
           if (typeof data.antiguedad === 'number' && data.antiguedad > 1000) {
             const startDate = convertExcelDateToJSDate(data.antiguedad);
             calculatedAntiguedad = calculateYearsOfService(startDate);
+            calculatedMeses = calculateMonthsOfService(startDate);
           } else {
             calculatedAntiguedad = typeof data.antiguedad === 'string'
               ? parseInt(data.antiguedad) || 0
               : data.antiguedad;
+            calculatedMeses = calculatedAntiguedad * 12;
           }
         }
 
         setProfile({
-          nombre: data.nombre,
-          rol: data.rol,
-          posicion: data.extra?.posicion || data.posicion || '',
+          nombre: data.nombre || '',
+          rol: data.rol || 'user',
+          posicion: data.cargo_empleado || data.extra?.posicion || data.posicion || '',
           dpto,
           eps,
           banco,
           pensiones,
           arl,
           antiguedad: calculatedAntiguedad,
+          antiguedadMeses: calculatedMeses,
+          cedula: data.cedula || '',
+          email: data.email || '',
+          tipoDocumento: data.tipo_documento || '',
+          fechaNacimiento: data.fecha_nacimiento || '',
+          fechaIngreso: rawFechaIngreso ? String(rawFechaIngreso) : '',
+          cargo: data.cargo_empleado || '',
+          area: data.area || '',
+          contrato: data.contrato || '',
+          claseRiesgo: data.clase_riesgo || '',
+          tipoCuenta: data.tipo_cuenta || '',
+          numeroCuenta: data.numero_cuenta || '',
+          caja: data.caja_compensacion || '',
+          cesantias: data.fondo_cesantias || '',
         });
         setUserRole(data.rol || "user");
       } catch (err) {
@@ -1255,45 +1324,120 @@ useEffect(() => {
               
               {/* Right column */}
               <div className="space-y-6">
-                {/* Personal summary — only renders fields with values */}
+                {/* Personal summary — expanded profile with all user data */}
                 {(() => {
-                  const fields: { label: string; value: string | null }[] = [
-                    { label: 'Área', value: profile?.posicion?.trim() || null },
+                  const fn = (v?: string) => (v && v.trim() ? v.trim() : null);
+
+                  let antiguedadLabel: string | null = null;
+                  if (profile) {
+                    if (profile.antiguedad >= 1) {
+                      antiguedadLabel = `${profile.antiguedad} ${profile.antiguedad === 1 ? 'año' : 'años'}`;
+                      const extraMonths = profile.antiguedadMeses - profile.antiguedad * 12;
+                      if (extraMonths > 0) {
+                        antiguedadLabel += ` · ${extraMonths} ${extraMonths === 1 ? 'mes' : 'meses'}`;
+                      }
+                    } else if (profile.antiguedadMeses > 0) {
+                      antiguedadLabel = `${profile.antiguedadMeses} ${profile.antiguedadMeses === 1 ? 'mes' : 'meses'}`;
+                    }
+                  }
+
+                  const sections: {
+                    title: string;
+                    fields: { label: string; value: string | null; full?: boolean }[];
+                  }[] = [
                     {
-                      label: 'Antigüedad',
-                      value: profile && profile.antiguedad
-                        ? `${profile.antiguedad} ${profile.antiguedad === 1 ? 'año' : 'años'}`
-                        : null,
+                      title: 'Personal',
+                      fields: [
+                        { label: 'Cédula', value: fn(profile?.cedula) },
+                        { label: 'Tipo de documento', value: fn(profile?.tipoDocumento) },
+                        { label: 'Fecha de nacimiento', value: fn(formatSpanishDate(profile?.fechaNacimiento)) },
+                        { label: 'Correo', value: fn(profile?.email), full: true },
+                      ],
                     },
-                    { label: 'EPS', value: profile?.eps?.trim() || null },
-                    { label: 'Banco', value: profile?.banco?.trim() || null },
-                    { label: 'Pensión', value: profile?.pensiones?.trim() || null },
-                    { label: 'ARL', value: profile?.arl?.trim() || null },
-                  ].filter(f => !!f.value);
+                    {
+                      title: 'Laboral',
+                      fields: [
+                        { label: 'Cargo', value: fn(profile?.cargo) || fn(profile?.posicion) },
+                        { label: 'Área', value: fn(profile?.area) },
+                        { label: 'Departamento', value: fn(profile?.dpto) },
+                        { label: 'Contrato', value: fn(profile?.contrato) },
+                        { label: 'Fecha de ingreso', value: fn(formatSpanishDate(profile?.fechaIngreso)) },
+                        { label: 'Antigüedad', value: antiguedadLabel },
+                        { label: 'Clase de riesgo', value: fn(profile?.claseRiesgo) },
+                      ],
+                    },
+                    {
+                      title: 'Financiero',
+                      fields: [
+                        { label: 'Banco', value: fn(profile?.banco) },
+                        { label: 'Tipo de cuenta', value: fn(profile?.tipoCuenta) },
+                        { label: 'Número de cuenta', value: fn(profile?.numeroCuenta) ? maskAccount(profile!.numeroCuenta) : null },
+                      ],
+                    },
+                    {
+                      title: 'Beneficios',
+                      fields: [
+                        { label: 'EPS', value: fn(profile?.eps) },
+                        { label: 'ARL', value: fn(profile?.arl) },
+                        { label: 'Pensión (AFP)', value: fn(profile?.pensiones) },
+                        { label: 'Caja de compensación', value: fn(profile?.caja) },
+                        { label: 'Fondo de cesantías', value: fn(profile?.cesantias), full: true },
+                      ],
+                    },
+                  ]
+                    .map(s => ({ ...s, fields: s.fields.filter(f => !!f.value) }))
+                    .filter(s => s.fields.length > 0);
+
+                  const rolBadge: Record<string, { bg: string; label: string }> = {
+                    admin: { bg: 'bg-black text-[#f4a900]', label: 'Admin' },
+                    fondo: { bg: 'bg-emerald-700 text-white', label: 'Fonalmerque' },
+                  };
+                  const showBadge = profile && (profile.rol === 'admin' || profile.rol === 'fondo');
 
                   return (
                     <div className="bg-white rounded-2xl shadow-sm p-6 border border-gray-100 hover:shadow-md transition-shadow duration-300 relative overflow-hidden">
                       <div className="absolute top-0 right-0 w-full h-1 bg-gradient-to-l from-[#f4a900] via-[#ffb347] to-white" />
                       <div className="flex items-center mb-5">
-                        <div className="w-14 h-14 rounded-full bg-gradient-to-br from-[#f4a900]/20 to-[#f4a900]/40 flex items-center justify-center">
+                        <div className="w-14 h-14 rounded-full bg-gradient-to-br from-[#f4a900]/20 to-[#f4a900]/40 flex items-center justify-center flex-shrink-0">
                           <User className="h-8 w-8 text-[#f4a900]" />
                         </div>
                         <div className="ml-4 min-w-0">
-                          <h2 className="font-bold text-gray-900 truncate">
-                            {profile?.nombre ?? 'Cargando...'}
-                          </h2>
-                          {profile?.dpto && (
-                            <p className="text-sm text-gray-600 truncate">{profile.dpto}</p>
+                          <div className="flex items-center gap-2">
+                            <h2 className="font-bold text-gray-900 truncate">
+                              {profile?.nombre ?? 'Cargando...'}
+                            </h2>
+                            {showBadge && rolBadge[profile!.rol] && (
+                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${rolBadge[profile!.rol].bg}`}>
+                                {rolBadge[profile!.rol].label}
+                              </span>
+                            )}
+                          </div>
+                          {profile?.cargo?.trim() && (
+                            <p className="text-sm text-gray-600 truncate">{profile.cargo}</p>
+                          )}
+                          {profile?.area?.trim() && (
+                            <p className="text-xs text-[#f4a900] font-semibold truncate">{profile.area}</p>
                           )}
                         </div>
                       </div>
 
-                      {fields.length > 0 && (
-                        <div className="border-t border-gray-100 pt-4 grid grid-cols-2 gap-4">
-                          {fields.map(f => (
-                            <div key={f.label}>
-                              <p className="text-xs text-gray-500">{f.label}</p>
-                              <p className="font-medium text-gray-900 text-sm">{f.value}</p>
+                      {sections.length > 0 && (
+                        <div className="border-t border-gray-100 pt-4 space-y-5">
+                          {sections.map(section => (
+                            <div key={section.title}>
+                              <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-2">
+                                {section.title}
+                              </p>
+                              <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                                {section.fields.map(f => (
+                                  <div key={f.label} className={f.full ? 'col-span-2' : ''}>
+                                    <p className="text-[11px] text-gray-500">{f.label}</p>
+                                    <p className="font-medium text-gray-900 text-sm break-words">
+                                      {f.value}
+                                    </p>
+                                  </div>
+                                ))}
+                              </div>
                             </div>
                           ))}
                         </div>
