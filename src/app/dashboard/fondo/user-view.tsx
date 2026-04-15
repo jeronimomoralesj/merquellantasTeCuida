@@ -28,6 +28,7 @@ import {
   Shield,
   Sparkles,
   Target,
+  MessageCircle,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 
@@ -270,10 +271,15 @@ function FondoIncentiveLanding() {
           Comunicate con el area de bienestar o con el administrador de Fonalmerque.
           La afiliacion es rapida y tu ahorro empieza desde la siguiente nomina.
         </p>
-        <div className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#f4a900] text-white font-semibold text-sm shadow-md shadow-[#f4a900]/25">
-          <Sparkles className="w-4 h-4" />
+        <a
+          href={`https://wa.me/573102262977?text=${encodeURIComponent("Estoy interesado en entrar al fondo")}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#f4a900] text-white font-semibold text-sm shadow-md shadow-[#f4a900]/25 hover:bg-[#e09c00] transition"
+        >
+          <MessageCircle className="w-4 h-4" />
           Habla con Bienestar para afiliarte
-        </div>
+        </a>
       </div>
     </div>
   );
@@ -836,6 +842,20 @@ export default function FondoUserView() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* Help / Contact */}
+      <div className="flex items-center justify-center gap-2 text-xs text-gray-500 pt-2">
+        <span>Tienes preguntas?</span>
+        <a
+          href={`https://wa.me/573102262977?text=${encodeURIComponent("Necesito ayuda con: ")}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 font-semibold text-[#f4a900] hover:text-[#e09c00] transition"
+        >
+          <MessageCircle className="w-3.5 h-3.5" />
+          +57 310 2262977
+        </a>
       </div>
 
       {/* Solicitar Crédito Modal */}
