@@ -15,16 +15,69 @@ interface ReactionDoc {
   nombre: string;
   type: 'note' | 'heart';
   note: string | null;
+  cycle_key?: string;
   created_at: Date;
   updated_at?: Date;
+}
+
+interface EventDoc {
+  _id: { toString(): string };
+  type?: string;
+  user_id?: string | null;
+  date?: Date | string;
+}
+
+/**
+ * Compute the "cycle key" for an event — a YYYY-MM-DD stamp identifying *which*
+ * occurrence of the event the reactions belong to. For birthdays this rolls over
+ * each year, so last year's stickies get purged and the wall starts fresh for the
+ * new celebration. For one-off events it just stays as the event date.
+ *
+ * Rule: return the next (or today's) occurrence date. Once the birthday has passed,
+ * cycle_key flips to next year's date and the previous year's reactions become stale.
+ */
+function currentCycleKey(event: EventDoc): string {
+  const raw = event.date ? new Date(event.date) : new Date();
+  if (isNaN(raw.getTime())) {
+    const today = new Date();
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  }
+
+  if (event.type === 'birthday') {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    let occurrence = new Date(today.getFullYear(), raw.getMonth(), raw.getDate());
+    occurrence.setHours(0, 0, 0, 0);
+    if (occurrence < today) {
+      occurrence = new Date(today.getFullYear() + 1, raw.getMonth(), raw.getDate());
+      occurrence.setHours(0, 0, 0, 0);
+    }
+    return `${occurrence.getFullYear()}-${String(occurrence.getMonth() + 1).padStart(2, '0')}-${String(occurrence.getDate()).padStart(2, '0')}`;
+  }
+
+  return `${raw.getFullYear()}-${String(raw.getMonth() + 1).padStart(2, '0')}-${String(raw.getDate()).padStart(2, '0')}`;
+}
+
+/**
+ * Delete any reactions for this event that belong to a previous cycle. Returns the
+ * current cycle_key so callers can use it for writes/filters without recomputing.
+ */
+async function pruneStaleReactions(
+  db: Awaited<ReturnType<typeof getDb>>,
+  event: EventDoc,
+): Promise<string> {
+  const cycle = currentCycleKey(event);
+  await db
+    .collection('calendar_reactions')
+    .deleteMany({ event_id: event._id.toString(), cycle_key: { $ne: cycle } });
+  return cycle;
 }
 
 /**
  * GET /api/calendar/reactions?event_id=<id>
  *
- * Returns all reactions (notes + hearts) for a calendar event. The client uses this
- * to render the sticky-note wall and the heart count. No admin gate — any signed-in
- * user can see who reacted to what.
+ * Returns the reactions belonging to the current cycle. Old-cycle rows are deleted
+ * in-line so storage stays bounded to "this year's birthday" + "this quarter's event".
  */
 export async function GET(req: NextRequest) {
   const session = await auth();
@@ -36,9 +89,16 @@ export async function GET(req: NextRequest) {
   }
 
   const db = await getDb();
+  const event = (await db
+    .collection('calendar')
+    .findOne({ _id: new ObjectId(eventId) })) as unknown as EventDoc | null;
+  if (!event) return NextResponse.json({ error: 'Evento no encontrado' }, { status: 404 });
+
+  const cycle = await pruneStaleReactions(db, event);
+
   const reactions = (await db
     .collection('calendar_reactions')
-    .find({ event_id: eventId })
+    .find({ event_id: eventId, cycle_key: cycle })
     .sort({ created_at: 1 })
     .toArray()) as unknown as ReactionDoc[];
 
@@ -61,16 +121,16 @@ export async function GET(req: NextRequest) {
       mine: r.user_id === session.user.id,
     }));
 
-  return NextResponse.json({ notes, hearts });
+  return NextResponse.json({ notes, hearts, cycle });
 }
 
 /**
  * POST /api/calendar/reactions
  *   body: { event_id: string, type: 'note' | 'heart', note?: string }
  *
- * Upserts one reaction per (event_id, user_id, type). For notes, the caller writes
- * the text; for hearts, the body is empty and the row acts as a toggle marker. The
- * event's own celebrant can't react on their own event (checked via calendar.user_id).
+ * Upserts one reaction per (event_id, user_id, type) for the *current cycle*. Any
+ * prior-cycle reactions for the same user+event get cleaned up first so there's
+ * only one canonical note per user per celebration.
  */
 export async function POST(req: NextRequest) {
   const session = await auth();
@@ -94,13 +154,12 @@ export async function POST(req: NextRequest) {
   }
 
   const db = await getDb();
-
-  // Self-reaction guard: the birthday celebrant can't leave notes/hearts on their own
-  // event. For non-birthday events there's no "owner" so we skip the check.
-  const event = await db
+  const event = (await db
     .collection('calendar')
-    .findOne({ _id: new ObjectId(eventId) }, { projection: { user_id: 1, type: 1 } });
+    .findOne({ _id: new ObjectId(eventId) })) as unknown as EventDoc | null;
   if (!event) return NextResponse.json({ error: 'Evento no encontrado' }, { status: 404 });
+
+  // Self-reaction guard for birthdays.
   if (
     event.type === 'birthday' &&
     event.user_id &&
@@ -112,9 +171,11 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  const cycle = await pruneStaleReactions(db, event);
   const now = new Date();
+
   await db.collection('calendar_reactions').updateOne(
-    { event_id: eventId, user_id: session.user.id, type },
+    { event_id: eventId, user_id: session.user.id, type, cycle_key: cycle },
     {
       $set: {
         event_id: eventId,
@@ -122,6 +183,7 @@ export async function POST(req: NextRequest) {
         nombre: session.user.nombre ?? '',
         type,
         note,
+        cycle_key: cycle,
         updated_at: now,
       },
       $setOnInsert: { created_at: now },
@@ -129,14 +191,13 @@ export async function POST(req: NextRequest) {
     { upsert: true },
   );
 
-  return NextResponse.json({ success: true });
+  return NextResponse.json({ success: true, cycle });
 }
 
 /**
  * DELETE /api/calendar/reactions?event_id=<id>&type=<heart|note>
  *
- * Removes the caller's own reaction of the given type. Used for heart-toggle off
- * and for removing a note the user no longer wants visible.
+ * Removes the caller's own reaction of the given type for the current cycle.
  */
 export async function DELETE(req: NextRequest) {
   const session = await auth();
@@ -152,8 +213,15 @@ export async function DELETE(req: NextRequest) {
   }
 
   const db = await getDb();
+  const event = (await db
+    .collection('calendar')
+    .findOne({ _id: new ObjectId(eventId) })) as unknown as EventDoc | null;
+  if (!event) return NextResponse.json({ error: 'Evento no encontrado' }, { status: 404 });
+
+  const cycle = await pruneStaleReactions(db, event);
+
   await db
     .collection('calendar_reactions')
-    .deleteOne({ event_id: eventId, user_id: session.user.id, type });
+    .deleteOne({ event_id: eventId, user_id: session.user.id, type, cycle_key: cycle });
   return NextResponse.json({ success: true });
 }
