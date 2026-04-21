@@ -474,39 +474,35 @@ const uploadBirthdayMedia = async (
     });
   };
 
-  // Get upcoming events (limited to 3) for current month only
+  // The 3 closest events from *today forward*, regardless of the month the admin is
+  // currently viewing. Birthdays roll over to next year if this year's already passed.
   const getUpcomingEvents = (): CalendarEvent[] => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    
-    const currentMonth = new Date().getMonth();
-    const currentYear = new Date().getFullYear();
-    
-    if (currentDate.getMonth() !== currentMonth || currentDate.getFullYear() !== currentYear) {
-      return [];
-    }
-    
-    const upcoming = allEvents.filter(event => {
+    const currentYear = today.getFullYear();
+
+    const withNextOccurrence = allEvents.map((event) => {
       const eventDate = new Date(event.date);
-      
+      let next: Date;
       if (event.type === 'birthday') {
-        const birthdayThisYear = new Date(currentYear, eventDate.getMonth(), eventDate.getDate());
-        birthdayThisYear.setHours(0, 0, 0, 0);
-        return birthdayThisYear >= today && eventDate.getMonth() === currentMonth;
+        next = new Date(currentYear, eventDate.getMonth(), eventDate.getDate());
+        next.setHours(0, 0, 0, 0);
+        if (next < today) {
+          next = new Date(currentYear + 1, eventDate.getMonth(), eventDate.getDate());
+          next.setHours(0, 0, 0, 0);
+        }
+      } else {
+        next = new Date(eventDate);
+        next.setHours(0, 0, 0, 0);
       }
-      
-      return eventDate >= today && 
-             eventDate.getMonth() === currentMonth && 
-             eventDate.getFullYear() === currentYear;
+      return { event, next };
     });
-    
-    return upcoming
-      .sort((a, b) => {
-        const dateA = new Date(currentYear, new Date(a.date).getMonth(), new Date(a.date).getDate());
-        const dateB = new Date(currentYear, new Date(b.date).getMonth(), new Date(b.date).getDate());
-        return dateA.getTime() - dateB.getTime();
-      })
-      .slice(0, 3);
+
+    return withNextOccurrence
+      .filter((item) => item.next >= today)
+      .sort((a, b) => a.next.getTime() - b.next.getTime())
+      .slice(0, 3)
+      .map((item) => item.event);
   };
 
   const upcomingEvents = getUpcomingEvents();

@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import Solicitudes from "./components/solicitudes";
 import AdminPage from './admin/page';
+import EventWall from './components/EventWall';
 import { useSession } from 'next-auth/react'
 import { getIcon } from './admin/quickActionIcons';
 
@@ -27,6 +28,7 @@ interface DynamicQuickAction {
   active: boolean;
 }
 interface CalendarEvent {
+  id?: string;
   title: string;
   description: string;
   image: string;
@@ -34,6 +36,7 @@ interface CalendarEvent {
   type?: string;
   videoUrl?: string;
   videoPath?: string;
+  user_id?: string | null;
 }
 
 interface PendingRequest {
@@ -102,7 +105,6 @@ const Dashboard = () => {
   const [requestsTab, setRequestsTab] = useState<'activas' | 'respondidas'>('activas');
   const [loadingEvent, setLoadingEvent] = useState(true);
   const [nextEvent, setNextEvent] = useState<CalendarEvent | null>(null);
-const [currentEventIndex, setCurrentEventIndex] = useState(0);
   // Pending requests state
   const [pendingRequests, setPendingRequests] = useState<PendingRequest[]>([]);
   const [loadingRequests, setLoadingRequests] = useState(true);
@@ -386,6 +388,7 @@ const isBirthdayToday = (originalDate: Date): boolean => {
 // Map raw DB calendar docs to frontend CalendarEvent (video_url → videoUrl, etc.)
 const mapCalendarData = (raw: Record<string, unknown>[]): CalendarEvent[] =>
   raw.map(d => ({
+    id: d._id ? String(d._id) : d.id ? String(d.id) : undefined,
     title: String(d.title || ''),
     description: String(d.description || ''),
     image: String(d.image || ''),
@@ -393,6 +396,7 @@ const mapCalendarData = (raw: Record<string, unknown>[]): CalendarEvent[] =>
     type: String(d.type || ''),
     videoUrl: String(d.video_url || d.videoUrl || ''),
     videoPath: String(d.video_path || d.videoPath || ''),
+    user_id: d.user_id ? String(d.user_id) : d.userId ? String(d.userId) : null,
   }));
 
 useEffect(() => {
@@ -909,13 +913,29 @@ useEffect(() => {
       );
     }
 
-    const currentEvent = upcomingEvents[currentEventIndex];
+    // Only show the single closest event on the main card. The sidebar ("Próximas
+    // actividades") still lists the full three.
+    const currentEvent = upcomingEvents[0];
     const isBirthday = currentEvent && (
       currentEvent.type === 'cumpleaños' ||
       currentEvent.type === 'birthday' ||
       currentEvent.title.toLowerCase().includes('cumpleaños')
     );
     const isCurrentBirthdayToday = isBirthday && isBirthdayToday(new Date(currentEvent.date));
+    // True when the signed-in user is the celebrant — prevents self-reactions.
+    const isOwnEvent = !!(
+      currentEvent?.user_id &&
+      profile &&
+      session?.user?.id &&
+      String(currentEvent.user_id) === String(session.user.id)
+    );
+    // Stable image index so the fallback birthday art doesn't change on every render.
+    const birthdayImageIndex = (() => {
+      const src = currentEvent?.id || currentEvent?.title || '';
+      let h = 0;
+      for (let i = 0; i < src.length; i++) h = (h * 31 + src.charCodeAt(i)) >>> 0;
+      return h % 3;
+    })();
 
     if (isCurrentBirthdayToday) {
       // Birthday messages array
@@ -945,16 +965,6 @@ useEffect(() => {
           </div>
 
           <div className="relative flex flex-col md:flex-row items-center gap-6">
-            {/* Carousel navigation - Left */}
-            {upcomingEvents.length > 1 && (
-              <button
-                onClick={() => setCurrentEventIndex((prev) => (prev === 0 ? upcomingEvents.length - 1 : prev - 1))}
-                className="absolute left-2 top-1/2 -translate-y-1/2 z-10 p-2 rounded-full bg-white/90 hover:bg-white shadow-lg hover:shadow-xl transition-all"
-              >
-                <ChevronLeft className="h-5 w-5 text-[#f4a900]" />
-              </button>
-            )}
-
             {/* Birthday content */}
             <div className="md:flex-1 text-center md:text-left">
               <div className="inline-flex items-center gap-2 mb-4 px-4 py-2 rounded-full bg-gradient-to-r from-[#f4a900]/20 via-[#ffb347]/20 to-[#ffd700]/20">
@@ -989,23 +999,6 @@ useEffect(() => {
                 </p>
               </div>
 
-              {/* Carousel indicator dots */}
-              {upcomingEvents.length > 1 && (
-                <div className="flex justify-center md:justify-start gap-2 mb-4">
-                  {upcomingEvents.map((_, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => setCurrentEventIndex(idx)}
-                      className={`h-2 rounded-full transition-all ${
-                        idx === currentEventIndex 
-                          ? 'w-8 bg-[#f4a900]' 
-                          : 'w-2 bg-gray-300 hover:bg-gray-400'
-                      }`}
-                    />
-                  ))}
-                </div>
-              )}
-
               <a href='dashboard/calendar'>
                 <button className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-[#f4a900] to-[#ffb347] text-white rounded-full font-bold text-sm hover:from-[#e68a00] hover:to-[#f4a900] transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-1 duration-200">
                   Ver más celebraciones
@@ -1031,7 +1024,7 @@ useEffect(() => {
                   src={currentEvent.image && currentEvent.image.startsWith('/api/')
                     ? currentEvent.image
                     : isBirthday
-                      ? ["https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ28hdK2YMK1kT1QcKgtTpMVKX-PzNDQy0GGg&s","https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQx_br_f6lRM6GlR4pC_lTXijSfA2d3ovsdSw&s","https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRJF6XSwytfBht0vJcIbdWDCpif4C9esFJ0_g&s"][currentEventIndex % 3]
+                      ? ["https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ28hdK2YMK1kT1QcKgtTpMVKX-PzNDQy0GGg&s","https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQx_br_f6lRM6GlR4pC_lTXijSfA2d3ovsdSw&s","https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRJF6XSwytfBht0vJcIbdWDCpif4C9esFJ0_g&s"][birthdayImageIndex]
                       : currentEvent.image
                   }
                   alt={currentEvent.title}
@@ -1043,35 +1036,30 @@ useEffect(() => {
                 </div>
               )}
             </div>
-
-            {/* Carousel navigation - Right */}
-            {upcomingEvents.length > 1 && (
-              <button
-                onClick={() => setCurrentEventIndex((prev) => (prev === upcomingEvents.length - 1 ? 0 : prev + 1))}
-                className="absolute right-2 top-1/2 -translate-y-1/2 z-10 p-2 rounded-full bg-white/90 hover:bg-white shadow-lg hover:shadow-xl transition-all"
-              >
-                <ChevronRight className="h-5 w-5 text-[#f4a900]" />
-              </button>
-            )}
           </div>
+
+          {/* Reactions wall (hearts + sticky notes) — always present so coworkers can
+              felicitate the celebrant even on the day of the birthday. */}
+          {currentEvent.id && (
+            <div className="relative px-6 md:px-8 pb-6 md:pb-8 -mt-2">
+              <EventWall
+                eventId={currentEvent.id}
+                eventTitle={currentEvent.title}
+                isOwnEvent={isOwnEvent}
+                compact
+              />
+            </div>
+          )}
         </div>
       );
     }
 
     // Regular event (birthday or not, but not today)
     return (
-      <div className="relative p-6 md:p-8 flex flex-col md:flex-row items-center">
+      <div className="relative p-6 md:p-8">
         <div className={`absolute top-0 ${isBirthday ? 'left' : 'right'}-0 w-full h-1 bg-gradient-to-${isBirthday ? 'r' : 'r'} from-[#f4a900] via-[#ffb347] to-white`}></div>
 
-        {/* Carousel navigation - Left */}
-        {upcomingEvents.length > 1 && (
-          <button
-            onClick={() => setCurrentEventIndex((prev) => (prev === 0 ? upcomingEvents.length - 1 : prev - 1))}
-            className="absolute left-2 top-1/2 -translate-y-1/2 z-10 p-2 rounded-full bg-white hover:bg-gray-50 shadow-md hover:shadow-lg transition-all"
-          >
-            <ChevronLeft className="h-5 w-5 text-[#f4a900]" />
-          </button>
-        )}
+        <div className="flex flex-col md:flex-row items-center">
 
         <div className="md:flex-1 mb-6 md:mb-0 md:pr-6">
           <>
@@ -1171,23 +1159,6 @@ useEffect(() => {
               </div>
             )}
 
-            {/* Carousel indicator dots */}
-            {upcomingEvents.length > 1 && (
-              <div className="flex gap-2 mb-4">
-                {upcomingEvents.map((_, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => setCurrentEventIndex(idx)}
-                    className={`h-2 rounded-full transition-all ${
-                      idx === currentEventIndex 
-                        ? 'w-8 bg-[#f4a900]' 
-                        : 'w-2 bg-gray-300 hover:bg-gray-400'
-                    }`}
-                  />
-                ))}
-              </div>
-            )}
-
             <a href='dashboard/calendar'>
               <button className="inline-flex items-center px-5 py-2.5 bg-gradient-to-r from-[#f4a900] to-[#ffb347] text-white rounded-full font-medium text-sm hover:from-[#e68a00] hover:to-[#f4a900] transition-all shadow-sm hover:shadow transform hover:-translate-y-0.5 duration-200">
                 Ver detalles
@@ -1216,7 +1187,7 @@ useEffect(() => {
               src={currentEvent.image && currentEvent.image.startsWith('/api/')
                 ? currentEvent.image
                 : isBirthday
-                  ? ["https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ28hdK2YMK1kT1QcKgtTpMVKX-PzNDQy0GGg&s","https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQx_br_f6lRM6GlR4pC_lTXijSfA2d3ovsdSw&s","https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRJF6XSwytfBht0vJcIbdWDCpif4C9esFJ0_g&s"][currentEventIndex % 3]
+                  ? ["https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ28hdK2YMK1kT1QcKgtTpMVKX-PzNDQy0GGg&s","https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQx_br_f6lRM6GlR4pC_lTXijSfA2d3ovsdSw&s","https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRJF6XSwytfBht0vJcIbdWDCpif4C9esFJ0_g&s"][birthdayImageIndex]
                   : currentEvent.image
               }
               alt={currentEvent.title}
@@ -1226,23 +1197,27 @@ useEffect(() => {
             />
           ) : (
             <div className={`h-40 w-full md:w-64 flex items-center justify-center rounded-xl border border-gray-200 ${
-              isBirthday 
-                ? 'text-6xl bg-gradient-to-br from-[#f4a900]/20 to-[#ffb347]/20' 
+              isBirthday
+                ? 'text-6xl bg-gradient-to-br from-[#f4a900]/20 to-[#ffb347]/20'
                 : 'text-gray-400'
             }`}>
               {isBirthday ? '🎂' : 'No hay media'}
             </div>
           )}
         </div>
+        </div>
 
-        {/* Carousel navigation - Right */}
-        {upcomingEvents.length > 1 && (
-          <button
-            onClick={() => setCurrentEventIndex((prev) => (prev === upcomingEvents.length - 1 ? 0 : prev + 1))}
-            className="absolute right-2 top-1/2 -translate-y-1/2 z-10 p-2 rounded-full bg-white hover:bg-gray-50 shadow-md hover:shadow-lg transition-all"
-          >
-            <ChevronRight className="h-5 w-5 text-[#f4a900]" />
-          </button>
+        {/* Reactions wall (hearts + sticky notes). Coworkers can leave felicitations;
+            hidden for the celebrant of their own event. */}
+        {currentEvent.id && (
+          <div className="mt-5 pt-5 border-t border-gray-100">
+            <EventWall
+              eventId={currentEvent.id}
+              eventTitle={currentEvent.title}
+              isOwnEvent={isOwnEvent}
+              compact
+            />
+          </div>
         )}
       </div>
     );
