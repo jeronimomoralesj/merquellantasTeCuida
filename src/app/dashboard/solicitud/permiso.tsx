@@ -9,8 +9,10 @@ import {
   Clock,
   FileText,
   X,
+  UserCheck,
 } from 'lucide-react';
 import { useSession } from 'next-auth/react';
+import JefeSelector, { type JefeOption } from './JefeSelector';
 
 interface PermisoFormData {
   fecha: string;
@@ -34,6 +36,7 @@ const PermisoForm = () => {
   const [submitted, setSubmitted] = useState(false);
   const [formError, setFormError] = useState('');
   const [fileError, setFileError] = useState(false);
+  const [jefe, setJefe] = useState<JefeOption | null>(null);
 
   const validateForm = () => {
     if (!formData.description.trim()) {
@@ -50,6 +53,10 @@ const PermisoForm = () => {
     }
     if (!formData.tiempoFin) {
       setFormError('El tiempo fin es requerido');
+      return false;
+    }
+    if (!jefe) {
+      setFormError('Selecciona al jefe inmediato que aprobará esta solicitud');
       return false;
     }
     return true;
@@ -118,12 +125,17 @@ const PermisoForm = () => {
           documentName: documentUrls[0]?.name || null,
           documentUrl: documentUrls[0]?.url || null,
           documentUrls,
+          approverId: jefe?.id,
         }),
       });
 
-      if (!res.ok) throw new Error('Error al crear solicitud');
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody.error || 'Error al crear solicitud');
+      }
 
-      // Send email notification
+      // Also notify HR for their records. The supervisor approval email is sent
+      // server-side directly from the solicitudes POST, so we don't duplicate here.
       await sendEmailNotification(session.user.nombre || 'Usuario');
 
       setSubmitted(true);
@@ -170,6 +182,7 @@ const PermisoForm = () => {
     });
     setSubmitted(false);
     setFormError('');
+    setJefe(null);
   };
 
   if (submitted) {
@@ -283,6 +296,19 @@ const PermisoForm = () => {
             </div>
           </div>
           
+          {/* Jefe inmediato */}
+          <div>
+            <h3 className="text-base sm:text-lg font-medium text-gray-800 flex items-center mb-4">
+              <UserCheck className="w-5 h-5 mr-2 text-[#f4a900]" />
+              Jefe inmediato <span className="ml-2 text-red-500 text-sm">*</span>
+            </h3>
+            <p className="text-sm text-gray-600 mb-3">
+              Selecciona a la persona que debe aprobar esta solicitud. Recibirá un correo
+              con un enlace para aprobarla o rechazarla.
+            </p>
+            <JefeSelector value={jefe} onChange={setJefe} />
+          </div>
+
           {/* File Upload */}
           <div>
             <h3 className="text-base sm:text-lg font-medium text-gray-800 flex items-center mb-4">

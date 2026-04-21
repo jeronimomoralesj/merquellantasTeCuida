@@ -9,11 +9,14 @@ export function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
-  // Allow auth routes, public assets, and the temporary bootstrap endpoint
+  // Allow auth routes, public assets, bootstrap endpoint, and the token-gated
+  // supervisor-approval routes (no session needed — the token is the credential).
   if (
     pathname.startsWith('/auth') ||
     pathname.startsWith('/api/auth') ||
-    pathname.startsWith('/api/users/bootstrap-upload')
+    pathname.startsWith('/api/users/bootstrap-upload') ||
+    pathname.startsWith('/aprobar-solicitud') ||
+    pathname.startsWith('/api/solicitudes/by-token')
   ) {
     return NextResponse.next();
   }
@@ -31,5 +34,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/dashboard/:path*', '/api/((?!auth).*)'],
+  matcher: ['/dashboard/:path*', '/aprobar-solicitud/:path*', '/api/((?!auth).*)'],
 };

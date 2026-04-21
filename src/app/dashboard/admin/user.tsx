@@ -18,6 +18,7 @@ import {
   Briefcase,
   Wallet,
   HeartPulse,
+  Mail,
 } from 'lucide-react';
 interface UserExtra {
   'Dpto Donde Labora': string;
@@ -88,10 +89,12 @@ const Users: React.FC = () => {
   const initialFormData: {
   cedula: string;
   nombre: string;
+  email: string;
   extra: UserExtra;
 } = {
   cedula: '',
   nombre: '',
+  email: '',
   extra: {
     'Dpto Donde Labora': '',
     'ARL': '',
@@ -116,8 +119,10 @@ const Users: React.FC = () => {
 
   const [formData, setFormData] = useState(initialFormData);
 
+  // Default pattern for auto-generated emails. Admins can override with a real
+  // address per-user via the edit modal; this is only the fallback when none is set.
   const generateEmail = (cedula: string) => {
-    return `${cedula}@merquellantas.com`;
+    return `${cedula}@merque.com`;
   };
 
   const dateToExcelSerial = (dateString: string): number => {
@@ -173,7 +178,8 @@ const Users: React.FC = () => {
       return;
     }
 
-    const email = generateEmail(formData.cedula);
+    // Use the admin-provided email if any, otherwise fall back to <cedula>@merque.com.
+    const email = formData.email.trim() || generateEmail(formData.cedula);
 
     try {
       const payload = {
@@ -305,6 +311,7 @@ const Users: React.FC = () => {
       id: editingUser.id,
       cedula: formData.cedula,
       nombre: formData.nombre,
+      email: formData.email.trim() || generateEmail(formData.cedula),
       departamento: formData.extra['Dpto Donde Labora'],
       arl: formData.extra['ARL'],
       banco: formData.extra['Banco'],
@@ -341,6 +348,7 @@ const Users: React.FC = () => {
                 ...user,
                 cedula: formData.cedula,
                 nombre: formData.nombre,
+                email: updatedPayload.email,
                 extra: { ...formData.extra },
               }
             : user
@@ -398,6 +406,7 @@ const Users: React.FC = () => {
   setFormData({
     cedula: user.cedula,
     nombre: user.nombre,
+    email: user.email || '',
     extra: { ...user.extra },
   });
   setShowCreateForm(true);
@@ -769,6 +778,23 @@ const Users: React.FC = () => {
                         <option value="admin">Administrador</option>
                         <option value="fondo">Fonalmerque</option>
                       </select>
+                    </Field>
+                    <Field
+                      label="Correo electrónico"
+                      icon={<Mail className="h-3.5 w-3.5 text-[#f4a900]" />}
+                      className="sm:col-span-2"
+                    >
+                      <input
+                        type="email"
+                        placeholder={formData.cedula ? `${formData.cedula}@merque.com (por defecto)` : 'Correo real del empleado (opcional)'}
+                        value={formData.email}
+                        onChange={e => setFormData(prev => ({ ...prev, email: e.target.value }))}
+                        className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#f4a900] focus:border-transparent focus:bg-white transition"
+                      />
+                      <p className="mt-1 text-[11px] text-gray-500">
+                        Si lo dejas en blanco, usaremos <code className="font-mono text-[10px]">{formData.cedula || 'cedula'}@merque.com</code>.
+                        Este correo también se usa para notificaciones de aprobación de vacaciones/permisos.
+                      </p>
                     </Field>
                   </div>
                 </section>

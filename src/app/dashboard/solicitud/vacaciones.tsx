@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { 
+import {
   Upload,
   Calendar,
   CheckCircle,
@@ -10,8 +10,10 @@ import {
   Clock,
   FileText,
   X,
+  UserCheck,
 } from 'lucide-react';
 import { useSession } from 'next-auth/react';
+import JefeSelector, { type JefeOption } from './JefeSelector';
 
 interface VacacionesFormData {
   fechaInicio: string;
@@ -34,6 +36,7 @@ const VacacionesForm = () => {
   const [formError, setFormError] = useState('');
   const [fileError, setFileError] = useState(false);
   const [diasVacaciones, setDiasVacaciones] = useState(0);
+  const [jefe, setJefe] = useState<JefeOption | null>(null);
 
   // Calculate vacation days whenever dates change
   useEffect(() => {
@@ -74,6 +77,10 @@ const VacacionesForm = () => {
     }
     if (formData.documents.length === 0) {
       setFormError('Debe adjuntar al menos un documento');
+      return false;
+    }
+    if (!jefe) {
+      setFormError('Selecciona al jefe inmediato que aprobará esta solicitud');
       return false;
     }
     return true;
@@ -136,12 +143,16 @@ const VacacionesForm = () => {
           documentName: documentUrls[0]?.name || null,
           documentUrl: documentUrls[0]?.url || null,
           documentUrls,
+          approverId: jefe?.id,
         }),
       });
 
-      if (!res.ok) throw new Error('Error al crear solicitud');
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody.error || 'Error al crear solicitud');
+      }
 
-      // Send email notification
+      // Notify HR for their records. Supervisor approval email is sent server-side.
       await sendEmailNotification(session.user.nombre || 'Usuario');
 
       setSubmitted(true);
@@ -188,6 +199,7 @@ const VacacionesForm = () => {
     setSubmitted(false);
     setFormError('');
     setDiasVacaciones(0);
+    setJefe(null);
   };
 
   if (submitted) {
@@ -299,7 +311,20 @@ const VacacionesForm = () => {
               </div>
             )}
           </div>
-          
+
+          {/* Jefe inmediato */}
+          <div>
+            <h3 className="text-base sm:text-lg font-medium text-gray-800 flex items-center mb-4">
+              <UserCheck className="w-5 h-5 mr-2 text-[#f4a900]" />
+              Jefe inmediato <span className="ml-2 text-red-500 text-sm">*</span>
+            </h3>
+            <p className="text-sm text-gray-600 mb-3">
+              Selecciona a la persona que debe aprobar tus vacaciones. Recibirá un correo
+              con un enlace único para aprobarlas o rechazarlas.
+            </p>
+            <JefeSelector value={jefe} onChange={setJefe} />
+          </div>
+
           {/* File Upload */}
           <div>
             <h3 className="text-base sm:text-lg font-medium text-gray-800 flex items-center mb-4">
