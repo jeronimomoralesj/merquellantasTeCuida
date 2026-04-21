@@ -105,6 +105,9 @@ const Dashboard = () => {
   const [requestsTab, setRequestsTab] = useState<'activas' | 'respondidas'>('activas');
   const [loadingEvent, setLoadingEvent] = useState(true);
   const [nextEvent, setNextEvent] = useState<CalendarEvent | null>(null);
+  // Carousel position: regular users browse up to 3 upcoming events, but the
+  // reactions wall (hearts + stickies) only shows on the closest one.
+  const [currentEventIndex, setCurrentEventIndex] = useState(0);
   // Pending requests state
   const [pendingRequests, setPendingRequests] = useState<PendingRequest[]>([]);
   const [loadingRequests, setLoadingRequests] = useState(true);
@@ -913,9 +916,7 @@ useEffect(() => {
       );
     }
 
-    // Only show the single closest event on the main card. The sidebar ("Próximas
-    // actividades") still lists the full three.
-    const currentEvent = upcomingEvents[0];
+    const currentEvent = upcomingEvents[currentEventIndex] ?? upcomingEvents[0];
     const isBirthday = currentEvent && (
       currentEvent.type === 'cumpleaños' ||
       currentEvent.type === 'birthday' ||
@@ -929,6 +930,9 @@ useEffect(() => {
       session?.user?.id &&
       String(currentEvent.user_id) === String(session.user.id)
     );
+    // Reactions wall only renders on the closest event (index 0). The rest of the
+    // carousel are read-only previews of what's coming up.
+    const showReactions = currentEventIndex === 0;
     // Stable image index so the fallback birthday art doesn't change on every render.
     const birthdayImageIndex = (() => {
       const src = currentEvent?.id || currentEvent?.title || '';
@@ -965,6 +969,16 @@ useEffect(() => {
           </div>
 
           <div className="relative flex flex-col md:flex-row items-center gap-6">
+            {/* Carousel navigation - Left */}
+            {upcomingEvents.length > 1 && (
+              <button
+                onClick={() => setCurrentEventIndex((prev) => (prev === 0 ? upcomingEvents.length - 1 : prev - 1))}
+                className="absolute left-2 top-1/2 -translate-y-1/2 z-10 p-2 rounded-full bg-white/90 hover:bg-white shadow-lg hover:shadow-xl transition-all"
+              >
+                <ChevronLeft className="h-5 w-5 text-[#f4a900]" />
+              </button>
+            )}
+
             {/* Birthday content */}
             <div className="md:flex-1 text-center md:text-left">
               <div className="inline-flex items-center gap-2 mb-4 px-4 py-2 rounded-full bg-gradient-to-r from-[#f4a900]/20 via-[#ffb347]/20 to-[#ffd700]/20">
@@ -998,6 +1012,23 @@ useEffect(() => {
                   {randomMessage}
                 </p>
               </div>
+
+              {/* Carousel indicator dots */}
+              {upcomingEvents.length > 1 && (
+                <div className="flex justify-center md:justify-start gap-2 mb-4">
+                  {upcomingEvents.map((_, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => setCurrentEventIndex(idx)}
+                      className={`h-2 rounded-full transition-all ${
+                        idx === currentEventIndex
+                          ? 'w-8 bg-[#f4a900]'
+                          : 'w-2 bg-gray-300 hover:bg-gray-400'
+                      }`}
+                    />
+                  ))}
+                </div>
+              )}
 
               <a href='dashboard/calendar'>
                 <button className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-[#f4a900] to-[#ffb347] text-white rounded-full font-bold text-sm hover:from-[#e68a00] hover:to-[#f4a900] transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-1 duration-200">
@@ -1036,11 +1067,21 @@ useEffect(() => {
                 </div>
               )}
             </div>
+
+            {/* Carousel navigation - Right */}
+            {upcomingEvents.length > 1 && (
+              <button
+                onClick={() => setCurrentEventIndex((prev) => (prev === upcomingEvents.length - 1 ? 0 : prev + 1))}
+                className="absolute right-2 top-1/2 -translate-y-1/2 z-10 p-2 rounded-full bg-white/90 hover:bg-white shadow-lg hover:shadow-xl transition-all"
+              >
+                <ChevronRight className="h-5 w-5 text-[#f4a900]" />
+              </button>
+            )}
           </div>
 
-          {/* Reactions wall (hearts + sticky notes) — always present so coworkers can
-              felicitate the celebrant even on the day of the birthday. */}
-          {currentEvent.id && (
+          {/* Reactions wall — only on the closest event (index 0). Carousel previews
+              of the following events stay read-only. */}
+          {showReactions && currentEvent.id && (
             <div className="relative px-6 md:px-8 pb-6 md:pb-8 -mt-2">
               <EventWall
                 eventId={currentEvent.id}
@@ -1059,7 +1100,16 @@ useEffect(() => {
       <div className="relative p-6 md:p-8">
         <div className={`absolute top-0 ${isBirthday ? 'left' : 'right'}-0 w-full h-1 bg-gradient-to-${isBirthday ? 'r' : 'r'} from-[#f4a900] via-[#ffb347] to-white`}></div>
 
-        <div className="flex flex-col md:flex-row items-center">
+        <div className="relative flex flex-col md:flex-row items-center">
+        {/* Carousel navigation - Left */}
+        {upcomingEvents.length > 1 && (
+          <button
+            onClick={() => setCurrentEventIndex((prev) => (prev === 0 ? upcomingEvents.length - 1 : prev - 1))}
+            className="absolute left-2 top-1/2 -translate-y-1/2 z-10 p-2 rounded-full bg-white hover:bg-gray-50 shadow-md hover:shadow-lg transition-all"
+          >
+            <ChevronLeft className="h-5 w-5 text-[#f4a900]" />
+          </button>
+        )}
 
         <div className="md:flex-1 mb-6 md:mb-0 md:pr-6">
           <>
@@ -1159,6 +1209,23 @@ useEffect(() => {
               </div>
             )}
 
+            {/* Carousel indicator dots */}
+            {upcomingEvents.length > 1 && (
+              <div className="flex gap-2 mb-4">
+                {upcomingEvents.map((_, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => setCurrentEventIndex(idx)}
+                    className={`h-2 rounded-full transition-all ${
+                      idx === currentEventIndex
+                        ? 'w-8 bg-[#f4a900]'
+                        : 'w-2 bg-gray-300 hover:bg-gray-400'
+                    }`}
+                  />
+                ))}
+              </div>
+            )}
+
             <a href='dashboard/calendar'>
               <button className="inline-flex items-center px-5 py-2.5 bg-gradient-to-r from-[#f4a900] to-[#ffb347] text-white rounded-full font-medium text-sm hover:from-[#e68a00] hover:to-[#f4a900] transition-all shadow-sm hover:shadow transform hover:-translate-y-0.5 duration-200">
                 Ver detalles
@@ -1205,11 +1272,20 @@ useEffect(() => {
             </div>
           )}
         </div>
+
+        {/* Carousel navigation - Right */}
+        {upcomingEvents.length > 1 && (
+          <button
+            onClick={() => setCurrentEventIndex((prev) => (prev === upcomingEvents.length - 1 ? 0 : prev + 1))}
+            className="absolute right-2 top-1/2 -translate-y-1/2 z-10 p-2 rounded-full bg-white hover:bg-gray-50 shadow-md hover:shadow-lg transition-all"
+          >
+            <ChevronRight className="h-5 w-5 text-[#f4a900]" />
+          </button>
+        )}
         </div>
 
-        {/* Reactions wall (hearts + sticky notes). Coworkers can leave felicitations;
-            hidden for the celebrant of their own event. */}
-        {currentEvent.id && (
+        {/* Reactions wall — only on the closest event; carousel previews stay read-only. */}
+        {showReactions && currentEvent.id && (
           <div className="mt-5 pt-5 border-t border-gray-100">
             <EventWall
               eventId={currentEvent.id}
