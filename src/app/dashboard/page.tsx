@@ -1565,7 +1565,7 @@ useEffect(() => {
                                     const url = URL.createObjectURL(blob);
                                     const a = document.createElement('a');
                                     a.href = url;
-                                    a.download = `certificado_ingresos_${y.year}.xlsm`;
+                                    a.download = `certificado_ingresos_${y.year}.pdf`;
                                     document.body.appendChild(a);
                                     a.click();
                                     a.remove();

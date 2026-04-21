@@ -45,7 +45,7 @@ const CertificadoPage: React.FC = () => {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `certificado_ingresos_${year}.xlsm`;
+      a.download = `certificado_ingresos_${year}.pdf`;
       document.body.appendChild(a);
       a.click();
       a.remove();

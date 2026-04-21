@@ -107,7 +107,7 @@ const HELP_TOPICS: HelpTopic[] = [
       "Estás en el módulo del Certificado de Ingresos y Retenciones.",
       "Verás una lista con el año o años gravables para los que hay certificado disponible.",
       "Haz clic en \"Descargar\" al lado del año que necesitas.",
-      "El archivo se descarga en formato Excel (.xlsm), listo para tu declaración de renta.",
+      "El archivo se descarga en formato PDF (DIAN Formato 220), listo para tu declaración de renta.",
       "Si el certificado aún no aparece, talento humano lo publicará antes del 30 de marzo.",
     ],
   },
