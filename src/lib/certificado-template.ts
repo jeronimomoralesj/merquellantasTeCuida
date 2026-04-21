@@ -174,8 +174,70 @@ function templatePath(): string {
 }
 
 /**
+ * Write a value into a worksheet cell while preserving the original formatting
+ * (style `s`, number format `z`). Drops any pre-existing formula so the cached
+ * value stands even if Excel doesn't recalculate on open.
+ *
+ * Using this everywhere is what makes the downloaded file look visually identical
+ * to the DIAN F-220 template — thousand separators on currency cells, borders on
+ * the grid, correctly formatted dates, etc.
+ */
+function writeCell(
+  ws: XLSX.WorkSheet,
+  addr: string,
+  patch: Partial<XLSX.CellObject> & Pick<XLSX.CellObject, 't' | 'v'>,
+) {
+  const existing = (ws[addr] as XLSX.CellObject | undefined) ?? {};
+  const next: XLSX.CellObject = {
+    ...existing,
+    ...patch,
+  };
+  // Drop the cached display string and formula so Excel rebuilds them from v.
+  delete (next as { w?: string }).w;
+  delete next.f;
+  delete (next as { h?: string }).h;
+  delete (next as { r?: string }).r;
+  ws[addr] = next;
+}
+
+/** Write a currency/integer number using the cell's existing number format. */
+function writeNumber(ws: XLSX.WorkSheet, addr: string, v: number) {
+  writeCell(ws, addr, { t: 'n', v });
+}
+/** Write a plain string using the cell's existing style. */
+function writeText(ws: XLSX.WorkSheet, addr: string, v: string) {
+  writeCell(ws, addr, { t: 's', v });
+}
+/** Write a date; preserves existing format if present, otherwise forces d/m/yyyy. */
+function writeDate(ws: XLSX.WorkSheet, addr: string, d: Date) {
+  const existing = ws[addr] as XLSX.CellObject | undefined;
+  writeCell(ws, addr, {
+    t: 'n',
+    v: dateToExcelSerial(d)!,
+    z: existing?.z ?? 'd/m/yyyy',
+  });
+}
+/** Clear a cell entirely — used for blank text fields so Excel doesn't show "0". */
+function clearCell(ws: XLSX.WorkSheet, addr: string) {
+  const existing = (ws[addr] as XLSX.CellObject | undefined) ?? {};
+  // Keep style but replace the value with an empty string.
+  const next: XLSX.CellObject = { ...existing, t: 's', v: '' };
+  delete next.f;
+  delete (next as { w?: string }).w;
+  delete (next as { h?: string }).h;
+  delete (next as { r?: string }).r;
+  ws[addr] = next;
+}
+
+/**
  * Build a xlsm buffer by loading the template and populating it for a single user.
  * `values` is keyed by TEMPLATE_FIELDS keys.
+ *
+ * The resulting file matches the DIAN F-220 template visually: employer header,
+ * employee identity row, "Periodo de la Certificación", all 36-60 line items with
+ * their own numbering column, the 52-row total, the "Datos a cargo del trabajador"
+ * block, dependents and signature block. All cell styles, merges, column widths
+ * and row heights are preserved from the template.
  */
 export function buildCertificadoXlsm(values: Record<string, unknown>, opts: {
   year: number;
@@ -189,110 +251,192 @@ export function buildCertificadoXlsm(values: Record<string, unknown>, opts: {
   nombreAgenteRetenedor?: string | null;
 }): Buffer {
   const tpl = fs.readFileSync(templatePath());
-  const wb = XLSX.read(tpl, { type: 'buffer', bookVBA: true, cellFormula: true, cellStyles: true, cellNF: true });
+  const wb = XLSX.read(tpl, {
+    type: 'buffer',
+    bookVBA: true,
+    cellFormula: true,
+    cellStyles: true,
+    cellNF: true,
+  });
 
   const cert = wb.Sheets['Cert ing y ret'];
   const menu = wb.Sheets['MENU'];
   const datos = wb.Sheets['Datos empleados'];
 
-  // Write employer info to MENU sheet (used by formulas on Cert ing y ret).
-  function setCell(ws: XLSX.WorkSheet, addr: string, cell: XLSX.CellObject) {
-    delete (ws[addr] as XLSX.CellObject | undefined)?.f; // drop formula so cached value stands
-    ws[addr] = cell;
+  // --- Employer (MENU sheet) ----------------------------------------------
+  if (opts.employerNit != null) writeNumber(menu, 'C17', Number(opts.employerNit));
+  if (opts.employerDv != null) writeNumber(menu, 'E17', Number(opts.employerDv));
+  if (opts.employerRazonSocial) writeText(menu, 'C19', opts.employerRazonSocial);
+  if (opts.ciudad) writeText(menu, 'N19', opts.ciudad);
+  if (opts.codDepto != null) writeNumber(menu, 'N20', Number(opts.codDepto));
+  if (opts.codMunicipio != null) writeText(menu, 'N21', String(opts.codMunicipio));
+  const emissionDate = opts.fechaEmision ?? new Date();
+  writeDate(menu, 'N22', emissionDate);
+  const retenedorName = opts.nombreAgenteRetenedor ?? opts.employerRazonSocial ?? '';
+  if (retenedorName) writeText(menu, 'C24', retenedorName);
+
+  // --- Employer (Cert sheet header) ---------------------------------------
+  if (opts.employerNit != null) writeNumber(cert, 'D10', Number(opts.employerNit));
+  if (opts.employerDv != null) writeNumber(cert, 'P10', Number(opts.employerDv));
+  if (opts.employerRazonSocial) writeText(cert, 'B12', opts.employerRazonSocial);
+  // Primer apellido / Segundo apellido / Primer nombre / Otros nombres del retenedor
+  // (only relevant if the employer is a natural person; for a SAS we leave blank).
+  clearCell(cert, 'Q10');
+  clearCell(cert, 'W10');
+  clearCell(cert, 'AC10');
+  clearCell(cert, 'AH10');
+
+  // --- Employee identity --------------------------------------------------
+  const cedulaRaw = values['cedula'];
+  const cedulaNum =
+    typeof cedulaRaw === 'number'
+      ? cedulaRaw
+      : Number(String(cedulaRaw ?? '').replace(/\D/g, ''));
+  if (cedulaNum) {
+    writeNumber(cert, 'AC5', cedulaNum);
+    writeNumber(cert, 'G15', cedulaNum);
   }
 
-  if (opts.employerNit != null) setCell(menu, 'C17', { t: 'n', v: Number(opts.employerNit) });
-  if (opts.employerDv != null) setCell(menu, 'E17', { t: 'n', v: Number(opts.employerDv) });
-  if (opts.employerRazonSocial) setCell(menu, 'C19', { t: 's', v: opts.employerRazonSocial });
-  if (opts.ciudad) setCell(menu, 'N19', { t: 's', v: opts.ciudad });
-  if (opts.codDepto != null) setCell(menu, 'N20', { t: 'n', v: Number(opts.codDepto) });
-  if (opts.codMunicipio != null) setCell(menu, 'N21', { t: 's', v: String(opts.codMunicipio) });
-  const emissionDate = opts.fechaEmision ?? new Date();
-  setCell(menu, 'N22', { t: 'n', v: dateToExcelSerial(emissionDate)!, z: 'm/d/yyyy' });
-  if (opts.nombreAgenteRetenedor) setCell(menu, 'C24', { t: 's', v: opts.nombreAgenteRetenedor });
+  // --- Period + emission + location ---------------------------------------
+  writeDate(cert, 'R18', emissionDate);
+  if (opts.ciudad) writeText(cert, 'X18', opts.ciudad);
+  if (opts.codDepto != null) writeNumber(cert, 'AI18', Number(opts.codDepto));
+  if (opts.codMunicipio != null) writeText(cert, 'AJ18', String(opts.codMunicipio));
+  writeText(cert, 'A49', retenedorName || '');
 
-  // Always set the lookup cedula on the cert sheet, plus the display cedula cell
-  // (which the template would otherwise show with the previous employee's cached number).
-  const cedulaRaw = values['cedula'];
-  const cedulaNum = typeof cedulaRaw === 'number' ? cedulaRaw : Number(String(cedulaRaw ?? '').replace(/\D/g, ''));
-  setCell(cert, 'AC5', { t: 'n', v: cedulaNum || 0 });
-  setCell(cert, 'G15', { t: 'n', v: cedulaNum || 0 });
+  // Defaults for period (jan 1 → dec 31 of the gravable year) if the admin didn't fill it.
+  if (!values['fechaInicial']) values['fechaInicial'] = new Date(Date.UTC(opts.year, 0, 1));
+  if (!values['fechaFinal']) values['fechaFinal'] = new Date(Date.UTC(opts.year, 11, 31));
 
-  // Overwrite employer/location formulas on the cert with the literal values so the file
-  // is correct even if the user's Excel is set to not recalculate on open.
-  if (opts.employerNit != null) setCell(cert, 'D10', { t: 'n', v: Number(opts.employerNit) });
-  if (opts.employerDv != null) setCell(cert, 'P10', { t: 'n', v: Number(opts.employerDv) });
-  if (opts.employerRazonSocial) setCell(cert, 'B12', { t: 's', v: opts.employerRazonSocial });
-  if (opts.ciudad) setCell(cert, 'X18', { t: 's', v: opts.ciudad });
-  if (opts.codDepto != null) setCell(cert, 'AI18', { t: 'n', v: Number(opts.codDepto) });
-  if (opts.codMunicipio != null) setCell(cert, 'AJ18', { t: 's', v: String(opts.codMunicipio) });
-  setCell(cert, 'R18', { t: 'n', v: dateToExcelSerial(emissionDate)!, z: 'm/d/yyyy' });
-  if (opts.nombreAgenteRetenedor) setCell(cert, 'A49', { t: 's', v: opts.nombreAgenteRetenedor });
-
-  // Also populate Datos empleados row 5 so VLOOKUPs in cert work if Excel recalculates.
-  // Clear any pre-existing EJEMPLO / sample rows to keep the file clean.
-  const DATOS_HEADER_ROW = 4; // 0-indexed row 4 = Excel row 5 (first data row)
-  // Wipe old rows 5..10 (sample data from template)
-  for (let r = DATOS_HEADER_ROW; r <= DATOS_HEADER_ROW + 5; r++) {
-    for (let c = 0; c < 40; c++) {
+  // --- Datos empleados: wipe sample rows + fill row 5 for VLOOKUP fallback ---
+  const DATOS_ROW = 5; // Excel row
+  for (let r = DATOS_ROW - 1; r <= DATOS_ROW + 4; r++) {
+    for (let c = 0; c < 60; c++) {
       const addr = XLSX.utils.encode_cell({ r, c });
       if (datos[addr]) delete datos[addr];
     }
   }
 
-  // Defaults for period
-  if (!values['fechaInicial']) {
-    values['fechaInicial'] = new Date(Date.UTC(opts.year, 0, 1));
-  }
-  if (!values['fechaFinal']) {
-    values['fechaFinal'] = new Date(Date.UTC(opts.year, 11, 31));
-  }
-
+  // --- Fill every template field, preserving styles ------------------------
+  const populatedNumbers: Record<string, number> = {};
   for (const f of TEMPLATE_FIELDS) {
     const raw = values[f.key];
+    const hasValue = raw != null && raw !== '';
 
-    // Convert according to kind.
-    let cell: XLSX.CellObject | null = null;
-    if (raw == null || raw === '') {
-      if (f.kind === 'number') cell = { t: 'n', v: 0 };
-      else cell = null; // leave blank for text/date
-    } else if (f.kind === 'number') {
-      cell = { t: 'n', v: coerceNumber(raw) };
+    if (f.kind === 'number') {
+      const n = hasValue ? coerceNumber(raw) : 0;
+      populatedNumbers[f.key] = n;
+      if (f.certCell) writeNumber(cert, f.certCell, n);
+      if (f.datosCol) datos[`${f.datosCol}${DATOS_ROW}`] = { t: 'n', v: n };
     } else if (f.kind === 'date') {
-      const ser = dateToExcelSerial(raw as Date | string | number);
-      if (ser != null) cell = { t: 'n', v: ser, z: 'm/d/yyyy' };
+      if (hasValue) {
+        const d = raw instanceof Date ? raw : new Date(String(raw));
+        if (!isNaN(d.getTime())) {
+          if (f.certCell) writeDate(cert, f.certCell, d);
+          if (f.datosCol) {
+            datos[`${f.datosCol}${DATOS_ROW}`] = {
+              t: 'n',
+              v: dateToExcelSerial(d)!,
+              z: 'd/m/yyyy',
+            };
+          }
+        }
+      }
     } else if (f.kind === 'code') {
-      const n = Number(String(raw).replace(/\D/g, ''));
-      cell = Number.isFinite(n) && n > 0
-        ? { t: 'n', v: n }
-        : { t: 's', v: String(raw) };
+      // A literal 0 or "0" in EXOGENA means the field isn't filled — treat as empty.
+      const n = hasValue ? Number(String(raw).replace(/\D/g, '')) : NaN;
+      if (Number.isFinite(n) && n > 0) {
+        if (f.certCell) writeNumber(cert, f.certCell, n);
+        if (f.datosCol) datos[`${f.datosCol}${DATOS_ROW}`] = { t: 'n', v: n };
+      } else if (hasValue && String(raw).trim() !== '0') {
+        if (f.certCell) writeText(cert, f.certCell, String(raw));
+        if (f.datosCol) datos[`${f.datosCol}${DATOS_ROW}`] = { t: 's', v: String(raw) };
+      } else if (f.certCell) {
+        clearCell(cert, f.certCell);
+      }
     } else {
-      cell = { t: 's', v: String(raw) };
-    }
-
-    if (cell && f.datosCol) {
-      const addr = `${f.datosCol}${DATOS_HEADER_ROW + 1}`;
-      datos[addr] = cell;
-    }
-    if (cell && f.certCell) {
-      // Overwrite formula + cached value so the cert is immediately valid without recalc.
-      setCell(cert, f.certCell, cell);
+      // text — treat literal zeros as "no data" so "0" doesn't show up on dependents.
+      const isEffectivelyEmpty =
+        !hasValue ||
+        raw === 0 ||
+        String(raw).trim() === '' ||
+        String(raw).trim() === '0';
+      if (!isEffectivelyEmpty) {
+        const v = String(raw);
+        if (f.certCell) writeText(cert, f.certCell, v);
+        if (f.datosCol) datos[`${f.datosCol}${DATOS_ROW}`] = { t: 's', v };
+      } else if (f.certCell) {
+        // Explicitly clear so the stale cached value (like "0" from a VLOOKUP against
+        // an empty row) doesn't show up on the printed form.
+        clearCell(cert, f.certCell);
+      }
     }
   }
 
-  // Totals / dependents helper columns on Datos empleados row 5
-  const dependentIndicator = values['numDocDependiente'] ? 1 : 0;
-  datos[`AH${DATOS_HEADER_ROW + 1}`] = { t: 'n', v: dependentIndicator };
+  // --- Computed totals (so the file reads correctly even without recalc) ---
 
-  // Ensure Excel recalculates when the workbook is opened. `CalcPr` is not in the
-  // library's type surface but is a valid workbook property that XLSX.write honours.
+  // Line 52 — Total ingresos brutos = sum of lines 36..51 (AC21..AC36).
+  const totalIngresos =
+    (populatedNumbers['pagosSalarios'] ?? 0) +
+    (populatedNumbers['pagosBonosEtc'] ?? 0) +
+    (populatedNumbers['valorExcesoAlimentacion'] ?? 0) +
+    (populatedNumbers['pagosHonorarios'] ?? 0) +
+    (populatedNumbers['pagosServicios'] ?? 0) +
+    (populatedNumbers['pagosComisiones'] ?? 0) +
+    (populatedNumbers['pagosPrestacionesSociales'] ?? 0) +
+    (populatedNumbers['pagosViaticos'] ?? 0) +
+    (populatedNumbers['pagosGastosRepresentacion'] ?? 0) +
+    (populatedNumbers['pagosCompensacionCoop'] ?? 0) +
+    (populatedNumbers['otrosPagos'] ?? 0) +
+    (populatedNumbers['auxilioCesantiasEIntereses'] ?? 0) +
+    (populatedNumbers['auxilioCesantiaRegimenTradicional'] ?? 0) +
+    (populatedNumbers['auxilioCesantiaConsignadas'] ?? 0) +
+    (populatedNumbers['pensiones'] ?? 0) +
+    (populatedNumbers['apoyosEducativos'] ?? 0);
+  writeNumber(cert, 'AC37', totalIngresos);
+
+  // Line 67 / 74 — "Otros ingresos" totales. We don't capture these (employee fills
+  // them in by hand if applicable), but we explicitly write 0 so the cached
+  // totals from the sample template don't bleed through.
+  writeNumber(cert, 'Z59', 0);
+  writeNumber(cert, 'AG59', 0);
+
+  // Line 75 — total retenciones (line 60 + line 74).
+  const totalRetenciones = (populatedNumbers['valorRetencionFuente'] ?? 0) + 0;
+  writeNumber(cert, 'AG60', totalRetenciones);
+
+  // --- Dependent flag on the hidden helper column --------------------------
+  const dependentIndicator = values['numDocDependiente'] ? 1 : 0;
+  datos[`AH${DATOS_ROW}`] = { t: 'n', v: dependentIndicator };
+
+  // Keep the Datos empleados range small (the template's original is 57324 rows of
+  // empty cells — shrinking it makes the generated file ~4× smaller).
+  datos['!ref'] = 'A1:BE10';
+
+  // --- Workbook-level: force Excel to recompute any remaining formulas AND
+  // --- open on the certificate sheet (not the MENU sheet the template defaults to).
   wb.Workbook = wb.Workbook || {};
   (wb.Workbook as unknown as { CalcPr?: { fullCalcOnLoad?: boolean } }).CalcPr = {
     fullCalcOnLoad: true,
   };
+  const certIdx = wb.SheetNames.indexOf('Cert ing y ret');
+  if (certIdx >= 0) {
+    wb.Workbook.Views = wb.Workbook.Views ?? [];
+    wb.Workbook.Views[0] = { ...(wb.Workbook.Views[0] ?? {}) };
+    (wb.Workbook.Views[0] as unknown as { activeTab: number }).activeTab = certIdx;
+  }
+  // Hide helper sheets (MENU, Datos empleados, Hoja libre, Hoja1-3) so the downloaded
+  // file looks clean — the employee sees only the formatted certificate.
+  const keepVisible = new Set(['Cert ing y ret']);
+  wb.Workbook.Sheets = wb.SheetNames.map((name, i) => {
+    const prev = wb.Workbook!.Sheets?.[i] ?? {};
+    return { ...prev, name, Hidden: keepVisible.has(name) ? 0 : 1 };
+  });
 
-  // Expand the used range to include our populated row.
-  datos['!ref'] = 'A1:BE10';
-
-  return XLSX.write(wb, { type: 'buffer', bookType: 'xlsm', bookVBA: true, cellStyles: true }) as Buffer;
+  return XLSX.write(wb, {
+    type: 'buffer',
+    bookType: 'xlsm',
+    bookVBA: true,
+    cellStyles: true,
+  }) as Buffer;
 }
