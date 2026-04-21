@@ -16,7 +16,6 @@ import {
 import Solicitudes from "./components/solicitudes";
 import AdminPage from './admin/page';
 import { useSession } from 'next-auth/react'
-import GeminiChat from './components/chat';
 import { getIcon } from './admin/quickActionIcons';
 
 interface DynamicQuickAction {
@@ -693,7 +692,6 @@ useEffect(() => {
     return (
       <div className="min-h-screen bg-gray-50">
         <DashboardNavbar />
-        <GeminiChat />
 
         {/* Today's event popup */}
         {showTodayPopup && todayPopupEvents.length > 0 && (

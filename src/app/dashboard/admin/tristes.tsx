@@ -7,10 +7,23 @@ import {
   Clock,
   CheckCircle,
   Loader2,
+  MessageSquare,
 } from "lucide-react";
-interface MoodEntry {
-  mood: string;
-  date: string;
+
+interface UserSummary {
+  user_id: string | null;
+  cedula: string | null;
+  nombre: string;
+  email: string;
+  cargo: string;
+  area: string;
+  departamento: string;
+  latest_mood: "feliz" | "neutral" | "triste";
+  latest_note: string | null;
+  latest_help_topic: string | null;
+  latest_at: string;
+  checkin_count: number;
+  consecutive_triste: number;
 }
 
 interface SadWorker {
@@ -23,146 +36,83 @@ interface SadWorker {
   avatarColor: string;
   email: string;
   lastMoodDate: Date;
+  latestNote: string | null;
+}
+
+function avatarInitials(name: string) {
+  return name
+    .split(" ")
+    .map((w) => w.charAt(0))
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+}
+
+function avatarColor(i: number) {
+  const palette = [
+    "bg-blue-100 text-blue-600",
+    "bg-green-100 text-green-600",
+    "bg-purple-100 text-purple-600",
+    "bg-pink-100 text-pink-600",
+    "bg-yellow-100 text-yellow-600",
+    "bg-indigo-100 text-indigo-600",
+    "bg-red-100 text-red-600",
+    "bg-orange-100 text-orange-600",
+  ];
+  return palette[i % palette.length];
 }
 
 export default function TristesCard() {
-const [trabajadoresTriste, setTrabajadoresTriste] = useState<SadWorker[]>([]);
+  const [sadWorkers, setSadWorkers] = useState<SadWorker[]>([]);
   const [loading, setLoading] = useState(true);
-const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  // Function to check if a user has 3 consecutive "triste" moods
-const hasConsecutiveSadMoods = (moodHistory: MoodEntry[], consecutiveCount = 3) => {
-    if (!moodHistory || moodHistory.length < consecutiveCount) {
-      return { hasConsecutive: false, count: 0 };
-    }
-
-    // Sort by date descending (most recent first)
-    const sortedMoods = moodHistory.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    
-    let consecutiveSadCount = 0;
-    
-    for (let i = 0; i < sortedMoods.length; i++) {
-      if (sortedMoods[i].mood === 'triste') {
-        consecutiveSadCount++;
-        if (consecutiveSadCount >= consecutiveCount) {
-          return { hasConsecutive: true, count: consecutiveSadCount };
-        }
-      } else {
-        // If we hit a non-sad mood, reset the counter
-        break;
-      }
-    }
-    
-    return { hasConsecutive: false, count: consecutiveSadCount };
-  };
-
-  // Function to get avatar initials from name
-const getAvatarInitials = (name: string) => {
-    return name
-      .split(' ')
-      .map(word => word.charAt(0))
-      .join('')
-      .toUpperCase()
-      .slice(0, 2);
-  };
-
-  // Function to get random avatar color
-const getAvatarColor = (index: number) => {
-    const colors = [
-      "bg-blue-100 text-blue-600",
-      "bg-green-100 text-green-600", 
-      "bg-purple-100 text-purple-600",
-      "bg-pink-100 text-pink-600",
-      "bg-yellow-100 text-yellow-600",
-      "bg-indigo-100 text-indigo-600",
-      "bg-red-100 text-red-600",
-      "bg-orange-100 text-orange-600"
-    ];
-    return colors[index % colors.length];
-  };
-
-  // Fetch users with consecutive sad moods
   const fetchSadWorkers = async () => {
     try {
       setLoading(true);
       setError(null);
+      const res = await fetch("/api/users/mood/stats?days=30");
+      if (!res.ok) throw new Error("Error fetching mood stats");
+      const data = await res.json();
+      const summaries = (data.userSummaries as UserSummary[]) || [];
 
-      const res = await fetch('/api/users');
-      if (!res.ok) throw new Error('Error fetching users');
-      const allUsers = await res.json();
+      const workers: SadWorker[] = summaries
+        .filter((u) => u.consecutive_triste >= 3)
+        .sort((a, b) => b.consecutive_triste - a.consecutive_triste)
+        .map((u, i) => ({
+          id: u.user_id || u.cedula || u.nombre,
+          name: u.nombre || "Usuario sin nombre",
+          position: u.cargo || "Sin cargo",
+          department: u.departamento || u.area || "Sin departamento",
+          consecutiveSadDays: u.consecutive_triste,
+          avatar: avatarInitials(u.nombre || "NN"),
+          avatarColor: avatarColor(i),
+          email: u.email || "",
+          lastMoodDate: new Date(u.latest_at),
+          latestNote: u.latest_note,
+        }));
 
-      const sadWorkers: SadWorker[] = [];
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      allUsers.forEach((userData: any) => {
-        const userId = userData.id;
-
-        // Check if user has mood history
-        if (userData.moodHistory && Array.isArray(userData.moodHistory)) {
-          const { hasConsecutive, count } = hasConsecutiveSadMoods(userData.moodHistory);
-
-          if (hasConsecutive) {
-            sadWorkers.push({
-              id: userId,
-              name: userData.nombre || 'Usuario Sin Nombre',
-              position: userData.cargo_empleado || userData.posicion || 'Sin Cargo',
-              department: userData.departamento || 'Sin Departamento',
-              consecutiveSadDays: count,
-              avatar: getAvatarInitials(userData.nombre || userData.name || 'NN'),
-              avatarColor: getAvatarColor(sadWorkers.length),
-              email: userData.email || '',
-              lastMoodDate: userData.moodHistory[0]?.date ? new Date(userData.moodHistory[0].date) : new Date()
-            });
-          }
-        }
-        // Fallback: check single mood entry (for backward compatibility)
-        else if (userData.mood && userData.mood.mood === 'triste') {
-          sadWorkers.push({
-            id: userId,
-            name: userData.nombre || 'Usuario Sin Nombre',
-            position: userData.cargo_empleado || userData.posicion || 'Sin Cargo',
-            department: userData.departamento || 'Sin Departamento',
-            consecutiveSadDays: 1,
-            avatar: getAvatarInitials(userData.nombre || userData.name || 'NN'),
-            avatarColor: getAvatarColor(sadWorkers.length),
-            email: userData.email || '',
-            lastMoodDate: userData.mood.date ? new Date(userData.mood.date) : new Date()
-          });
-        }
-      });
-
-      // Sort by consecutive sad days (highest first)
-      sadWorkers.sort((a, b) => b.consecutiveSadDays - a.consecutiveSadDays);
-
-      setTrabajadoresTriste(sadWorkers);
+      setSadWorkers(workers);
     } catch (err) {
-      console.error('Error fetching sad workers:', err);
-      setError('Error al cargar los datos de trabajadores');
+      console.error(err);
+      setError("Error al cargar los datos de trabajadores");
     } finally {
       setLoading(false);
     }
   };
 
-  // Fetch data on component mount
   useEffect(() => {
     fetchSadWorkers();
   }, []);
 
-  // Refresh data function
-  const handleRefresh = () => {
-    fetchSadWorkers();
-  };
-
   if (loading) {
     return (
-      <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100 hover:shadow-md transition-shadow duration-300 relative overflow-hidden">
+      <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100 relative overflow-hidden">
         <div className="absolute top-0 left-0 w-1 h-full bg-red-500"></div>
-        <div className="flex justify-between items-center mb-5">
-          <h2 className="text-lg font-bold text-gray-900 flex items-center">
-            <Frown className="h-5 w-5 mr-2 text-red-500" />
-            Trabajadores Tristes
-          </h2>
-        </div>
+        <h2 className="text-lg font-bold text-gray-900 flex items-center mb-5">
+          <Frown className="h-5 w-5 mr-2 text-red-500" />
+          Trabajadores Tristes
+        </h2>
         <div className="flex items-center justify-center py-8">
           <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
           <span className="ml-2 text-gray-500">Cargando trabajadores...</span>
@@ -173,19 +123,15 @@ const getAvatarColor = (index: number) => {
 
   if (error) {
     return (
-      <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100 hover:shadow-md transition-shadow duration-300 relative overflow-hidden">
+      <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100 relative overflow-hidden">
         <div className="absolute top-0 left-0 w-1 h-full bg-red-500"></div>
         <div className="flex justify-between items-center mb-5">
           <h2 className="text-lg font-bold text-gray-900 flex items-center">
             <Frown className="h-5 w-5 mr-2 text-red-500" />
             Trabajadores Tristes
           </h2>
-          <button 
-            onClick={handleRefresh}
-            className="text-sm text-gray-500 hover:text-gray-700 flex items-center"
-          >
-            <Clock className="h-4 w-4 mr-1" />
-            Actualizar
+          <button onClick={fetchSadWorkers} className="text-sm text-gray-500 hover:text-gray-700 flex items-center">
+            <Clock className="h-4 w-4 mr-1" /> Actualizar
           </button>
         </div>
         <div className="flex items-center justify-center py-8">
@@ -197,56 +143,58 @@ const getAvatarColor = (index: number) => {
   }
 
   return (
-    <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100 hover:shadow-md transition-shadow duration-300 relative overflow-hidden">
+    <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100 relative overflow-hidden">
       <div className="absolute top-0 left-0 w-1 h-full bg-red-500"></div>
       <div className="flex justify-between items-center mb-5">
         <h2 className="text-lg font-bold text-gray-900 flex items-center">
           <Frown className="h-5 w-5 mr-2 text-red-500" />
-          Trabajadores Tristes ({trabajadoresTriste.length})
+          Trabajadores Tristes ({sadWorkers.length})
         </h2>
-        <button 
-          onClick={handleRefresh}
-          className="text-sm text-gray-500 hover:text-gray-700 flex items-center"
-        >
-          <Clock className="h-4 w-4 mr-1" />
-          Actualizar
+        <button onClick={fetchSadWorkers} className="text-sm text-gray-500 hover:text-gray-700 flex items-center">
+          <Clock className="h-4 w-4 mr-1" /> Actualizar
         </button>
       </div>
 
       <div className="space-y-4">
-        {trabajadoresTriste.length === 0 ? (
+        {sadWorkers.length === 0 ? (
           <div className="text-center py-8">
             <CheckCircle className="h-12 w-12 text-green-400 mx-auto mb-3" />
-            <p className="text-gray-500">No hay trabajadores con estados de ánimo consecutivamente tristes.</p>
+            <p className="text-gray-500">
+              No hay trabajadores con 3+ días tristes consecutivos.
+            </p>
           </div>
         ) : (
-          trabajadoresTriste.map((trabajador) => (
+          sadWorkers.map((w) => (
             <div
-              key={trabajador.id}
-              className="flex items-center p-3 rounded-xl hover:bg-gray-50 transition-colors border border-gray-100 hover:border-red-200 hover:shadow-sm"
+              key={w.id}
+              className="p-3 rounded-xl hover:bg-gray-50 transition-colors border border-gray-100 hover:border-red-200 hover:shadow-sm"
             >
-              <div className={`w-10 h-10 rounded-full overflow-hidden ${trabajador.avatarColor} flex items-center justify-center font-medium`}>
-                {trabajador.avatar}
-              </div>
-              <div className="flex-1 ml-3">
-                <h3 className="font-medium text-gray-900">
-                  {trabajador.name}
-                </h3>
-                <p className="text-xs text-gray-500">
-                  {trabajador.position} · {trabajador.department}
-                </p>
-                {trabajador.email && (
-                  <p className="text-xs text-gray-400">
-                    {trabajador.email}
-                  </p>
-                )}
-              </div>
               <div className="flex items-center">
-                <div className="px-3 py-1 flex items-center rounded-full bg-red-100 text-sm font-medium text-red-800">
-                  <Frown className="h-3.5 w-3.5 mr-1.5" />
-                  {trabajador.consecutiveSadDays} día{trabajador.consecutiveSadDays !== 1 ? 's' : ''}
+                <div className={`w-10 h-10 rounded-full ${w.avatarColor} flex items-center justify-center font-medium`}>
+                  {w.avatar}
+                </div>
+                <div className="flex-1 ml-3 min-w-0">
+                  <h3 className="font-medium text-gray-900 truncate">{w.name}</h3>
+                  <p className="text-xs text-gray-500 truncate">
+                    {w.position} · {w.department}
+                  </p>
+                  {w.email && <p className="text-xs text-gray-400 truncate">{w.email}</p>}
+                </div>
+                <div className="flex-shrink-0">
+                  <div className="px-3 py-1 flex items-center rounded-full bg-red-100 text-sm font-medium text-red-800">
+                    <Frown className="h-3.5 w-3.5 mr-1.5" />
+                    {w.consecutiveSadDays} día{w.consecutiveSadDays !== 1 ? "s" : ""}
+                  </div>
                 </div>
               </div>
+              {w.latestNote && (
+                <div className="mt-2 flex items-start gap-2 bg-red-50/50 border-l-2 border-red-300 pl-2 py-1 pr-2 rounded-r">
+                  <MessageSquare className="h-3 w-3 mt-0.5 text-red-500 flex-shrink-0" />
+                  <p className="text-xs text-gray-700 italic line-clamp-2">
+                    &ldquo;{w.latestNote}&rdquo;
+                  </p>
+                </div>
+              )}
             </div>
           ))
         )}
