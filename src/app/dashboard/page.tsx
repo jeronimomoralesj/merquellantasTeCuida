@@ -11,6 +11,7 @@ import {
   LayoutDashboard,
   UserCircle2,
   X,
+  Download,
 } from 'lucide-react';
 import Solicitudes from "./components/solicitudes";
 import AdminPage from './admin/page';
@@ -114,6 +115,19 @@ const [currentEventIndex, setCurrentEventIndex] = useState(0);
 
   // Profile state
   const [profile, setProfile] = useState<UserProfile | null>(null);
+
+  // Income certificates available for the current user (latest year first)
+  const [certYears, setCertYears] = useState<{ year: number; updated_at: string | null }[]>([]);
+  const [certDownloading, setCertDownloading] = useState<number | null>(null);
+
+  // Vacations balance
+  const [vacation, setVacation] = useState<{
+    days: number | null;
+    as_of_date: string | null;
+    scraped_at: string | null;
+    stale: boolean;
+  } | null>(null);
+  const [loadingVacation, setLoadingVacation] = useState(true);
 
   // Upcoming events state
   const [upcomingEvents, setUpcomingEvents] = useState<CalendarEvent[]>([]);
@@ -537,6 +551,43 @@ useEffect(() => {
     }
 
     fetchProfile();
+
+    async function fetchCertYears() {
+      try {
+        const res = await fetch('/api/certificados/me');
+        if (!res.ok) { setCertYears([]); return; }
+        const data = await res.json();
+        setCertYears(Array.isArray(data.years) ? data.years : []);
+      } catch {
+        setCertYears([]);
+      }
+    }
+    fetchCertYears();
+
+    async function fetchVacation() {
+      try {
+        setLoadingVacation(true);
+        const res = await fetch('/api/vacations/me');
+        if (!res.ok) {
+          setVacation(null);
+          return;
+        }
+        const data = await res.json();
+        setVacation({
+          days: typeof data.days === 'number' ? data.days : null,
+          as_of_date: data.as_of_date || null,
+          scraped_at: data.scraped_at || null,
+          stale: !!data.stale,
+        });
+      } catch (err) {
+        console.error('Error loading vacation balance', err);
+        setVacation(null);
+      } finally {
+        setLoadingVacation(false);
+      }
+    }
+
+    fetchVacation();
   }, [sessionStatus]);
 
 useEffect(() => {
@@ -1441,6 +1492,142 @@ useEffect(() => {
                             </div>
                           ))}
                         </div>
+                      )}
+
+                      {certYears.length > 0 && (
+                        <div className="border-t border-gray-100 pt-4 mt-5">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-2">
+                            Certificado de ingresos y retenciones
+                          </p>
+                          <div className="space-y-2">
+                            {certYears.map((y) => (
+                              <button
+                                key={y.year}
+                                onClick={async () => {
+                                  setCertDownloading(y.year);
+                                  try {
+                                    const res = await fetch(`/api/certificados/download?year=${y.year}`);
+                                    if (!res.ok) {
+                                      const err = await res.json().catch(() => ({}));
+                                      alert(err.error || 'No se pudo descargar el certificado.');
+                                      return;
+                                    }
+                                    const blob = await res.blob();
+                                    const url = URL.createObjectURL(blob);
+                                    const a = document.createElement('a');
+                                    a.href = url;
+                                    a.download = `certificado_ingresos_${y.year}.xlsm`;
+                                    document.body.appendChild(a);
+                                    a.click();
+                                    a.remove();
+                                    URL.revokeObjectURL(url);
+                                  } finally {
+                                    setCertDownloading(null);
+                                  }
+                                }}
+                                disabled={certDownloading === y.year}
+                                className="w-full inline-flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl bg-[#f4a900]/10 hover:bg-[#f4a900]/20 border border-[#f4a900]/30 text-sm font-semibold text-[#9a6b00] transition disabled:opacity-60"
+                              >
+                                <span className="flex items-center gap-2">
+                                  <FileText className="h-4 w-4" />
+                                  Descargar certificado {y.year}
+                                </span>
+                                {certDownloading === y.year ? (
+                                  <span className="animate-pulse text-xs">Generando...</span>
+                                ) : (
+                                  <Download className="h-4 w-4" />
+                                )}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {/* Vacation balance — above Mis Solicitudes */}
+                {(() => {
+                  const days = vacation?.days;
+                  const hasData = typeof days === 'number';
+                  const canRequest = hasData && days! >= 1;
+                  const scrapedAt = vacation?.scraped_at
+                    ? new Date(vacation.scraped_at).toLocaleString('es-CO', {
+                        day: 'numeric',
+                        month: 'short',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })
+                    : null;
+                  const asOf = vacation?.as_of_date
+                    ? new Date(vacation.as_of_date + 'T00:00:00').toLocaleDateString('es-CO', {
+                        day: 'numeric',
+                        month: 'long',
+                        year: 'numeric',
+                      })
+                    : null;
+
+                  return (
+                    <div className="bg-white rounded-2xl shadow-sm p-6 border border-gray-100 hover:shadow-md transition-shadow duration-300 relative overflow-hidden">
+                      <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-400" />
+                      <div className="flex items-center justify-between mb-4">
+                        <h2 className="text-lg font-bold text-gray-900 flex items-center">
+                          <Calendar className="h-5 w-5 mr-2 text-emerald-500" />
+                          Vacaciones
+                        </h2>
+                        {vacation?.stale && hasData && (
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700 bg-amber-100 px-2 py-1 rounded-full">
+                            pendiente actualizar
+                          </span>
+                        )}
+                      </div>
+
+                      {loadingVacation ? (
+                        <div className="h-20 rounded-xl bg-gray-100 animate-pulse" />
+                      ) : !hasData ? (
+                        <div className="text-sm text-gray-500 py-2">
+                          Aún no tenemos tus días registrados. El equipo los sincroniza cada primero de mes.
+                        </div>
+                      ) : (
+                        <>
+                          <div className="flex items-end gap-2 mb-3">
+                            <span className="text-5xl font-extrabold text-emerald-600 leading-none">
+                              {Number(days).toFixed(days! % 1 === 0 ? 0 : 2)}
+                            </span>
+                            <span className="text-sm text-gray-500 pb-1">
+                              {days === 1 ? 'día disponible' : 'días disponibles'}
+                            </span>
+                          </div>
+                          {asOf && (
+                            <p className="text-xs text-gray-500">
+                              Corte: <span className="font-semibold text-gray-700">{asOf}</span>
+                            </p>
+                          )}
+                          {scrapedAt && (
+                            <p className="text-[11px] text-gray-400 mt-0.5">
+                              Actualizado: {scrapedAt}
+                            </p>
+                          )}
+                        </>
+                      )}
+
+                      <button
+                        onClick={() => router.push('/dashboard/solicitud?tipo=vacaciones')}
+                        disabled={!canRequest}
+                        className={`w-full mt-4 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all ${
+                          canRequest
+                            ? 'bg-emerald-600 text-white hover:bg-emerald-700 active:scale-95 shadow shadow-emerald-600/20'
+                            : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                        }`}
+                      >
+                        <Calendar className="h-4 w-4" />
+                        Pedir vacaciones
+                      </button>
+                      {hasData && !canRequest && (
+                        <p className="text-[11px] text-gray-500 mt-2 text-center">
+                          Necesitas al menos 1 día disponible para solicitar vacaciones.
+                        </p>
                       )}
                     </div>
                   );

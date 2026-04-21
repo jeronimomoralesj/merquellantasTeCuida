@@ -17,6 +17,7 @@ import PQRSFCard from "./pqrsf";
 import Users from "./user";
 import QuickActionsAdmin from "./quickActionsAdmin";
 import FondoAdmin from "./fondo";
+import CertificadoAdmin from "./certificado";
 
 interface AdminPageProps {
   /** When true, the parent already renders the navbar so we shouldn't add another one. */
@@ -114,6 +115,8 @@ export default function AdminPage({ embedded = false }: AdminPageProps) {
               <CalendarCard />
 
               <Users />
+
+              <CertificadoAdmin />
 
               <QuickActionsAdmin />
 
