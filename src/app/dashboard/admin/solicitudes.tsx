@@ -18,6 +18,8 @@ import {
   Search,
   List,
   User,
+  UserCheck,
+  CornerUpRight,
   FileText,
   Filter,
   RefreshCw,
@@ -39,6 +41,19 @@ interface BaseDocumentData {
   document_name?: string;
   document_urls?: DocFile[];
   motivo_respuesta?: string;
+  // Jefe inmediato the employee designated to approve this request (permiso / vacaciones only).
+  approver_id?: string | null;
+  approver_nombre?: string | null;
+  approver_email?: string | null;
+  approver_cedula?: string | null;
+  // If the approval link was remitted to someone else, this is the audit trail.
+  approval_forwards?: Array<{
+    at: string | Date;
+    from_approver_nombre?: string | null;
+    to_approver_nombre?: string | null;
+    note?: string | null;
+  }>;
+  approval_decided_by?: string | null;
 }
 
 interface RequestData {
@@ -416,6 +431,14 @@ export default function SolicitudesCard() {
                 <Calendar className="h-3.5 w-3.5 mr-1" />
                 {formatDate(s.date)}
               </p>
+              {/* Surface the picked supervisor on the list row so admins can see
+                  at a glance who's supposed to review this permiso/vacaciones. */}
+              {s.rawData && 'approver_nombre' in s.rawData && s.rawData.approver_nombre && (
+                <p className="text-xs text-emerald-700 flex items-center mt-1 font-medium">
+                  <UserCheck className="h-3.5 w-3.5 mr-1" />
+                  Jefe: <span className="ml-1 truncate">{s.rawData.approver_nombre}</span>
+                </p>
+              )}
             </div>
           </div>
           <StatusTag status={s.status} />
@@ -928,6 +951,7 @@ export default function SolicitudesCard() {
                     </div>
                   </div>
                 </div>
+                <ApproverPanel data={selected.rawData} />
                 {selected.rawData.description && (
                   <div>
                     <h4 className="font-semibold mb-2 text-gray-700 flex items-center">
@@ -961,6 +985,7 @@ export default function SolicitudesCard() {
                     </div>
                   </div>
                 </div>
+                <ApproverPanel data={selected.rawData} />
                 {selected.rawData.description && (
                   <div>
                     <h4 className="font-semibold mb-2 text-gray-700 flex items-center"><FileText className="h-5 w-5 mr-2" /> Descripción</h4>
@@ -1146,6 +1171,92 @@ export default function SolicitudesCard() {
               </div>
             </div>
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Renders the "Jefe inmediato" that the employee selected when submitting a permiso
+ * or vacaciones request. Admins use this to verify the right supervisor was asked
+ * to approve, and to audit any remisiones (forwardings) between jefes.
+ */
+function ApproverPanel({
+  data,
+}: {
+  data: BaseDocumentData & { approver_nombre?: string | null };
+}) {
+  if (!data.approver_nombre && !data.approver_email) {
+    return (
+      <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-xs text-gray-500 flex items-center gap-2">
+        <UserCheck className="h-4 w-4 text-gray-400" />
+        Esta solicitud no tiene un jefe inmediato designado.
+      </div>
+    );
+  }
+
+  const forwards = data.approval_forwards || [];
+
+  return (
+    <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
+      <h4 className="font-semibold mb-3 text-gray-800 flex items-center">
+        <UserCheck className="h-5 w-5 mr-2 text-emerald-600" />
+        Jefe inmediato para revisar
+      </h4>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <p className="text-xs text-gray-500 uppercase tracking-wider">Nombre</p>
+          <p className="font-semibold text-gray-900">{data.approver_nombre || '—'}</p>
+        </div>
+        <div>
+          <p className="text-xs text-gray-500 uppercase tracking-wider">Cédula</p>
+          <p className="font-medium text-gray-800 font-mono text-sm">
+            {data.approver_cedula || '—'}
+          </p>
+        </div>
+        {data.approver_email && (
+          <div className="sm:col-span-2">
+            <p className="text-xs text-gray-500 uppercase tracking-wider">Correo</p>
+            <a
+              href={`mailto:${data.approver_email}`}
+              className="text-sm text-emerald-700 hover:text-emerald-900 underline break-all"
+            >
+              {data.approver_email}
+            </a>
+          </div>
+        )}
+      </div>
+
+      {data.approval_decided_by && (
+        <p className="mt-3 pt-3 border-t border-emerald-200 text-xs text-gray-600">
+          <span className="font-semibold">Decisión registrada por:</span>{' '}
+          {data.approval_decided_by}
+        </p>
+      )}
+
+      {forwards.length > 0 && (
+        <div className="mt-3 pt-3 border-t border-emerald-200">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-gray-600 mb-2 flex items-center gap-1">
+            <CornerUpRight className="h-3 w-3" />
+            Remitida {forwards.length} {forwards.length === 1 ? 'vez' : 'veces'}
+          </p>
+          <ul className="space-y-2">
+            {forwards.map((f, i) => (
+              <li
+                key={i}
+                className="bg-white border border-emerald-100 rounded-lg px-3 py-2 text-xs text-gray-700"
+              >
+                <p>
+                  <span className="font-semibold">{f.from_approver_nombre || '—'}</span>{' '}
+                  → <span className="font-semibold">{f.to_approver_nombre || '—'}</span>
+                </p>
+                {f.note && (
+                  <p className="mt-1 text-gray-600 italic">&ldquo;{f.note}&rdquo;</p>
+                )}
+              </li>
+            ))}
+          </ul>
         </div>
       )}
     </div>
