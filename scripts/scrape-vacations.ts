@@ -160,11 +160,39 @@ async function scrapeOne(
       throw new Error(`Heinsohn no devolvió resultados para ${cedula}`);
     });
 
-  // Playwright's `:has-text()` selector re-queries the DOM on every retry, so if
-  // RichFaces swaps the row between retries the new row (same cedula text) gets
-  // picked up automatically. Belt + braces: 20 s total retry budget.
-  const checkboxSelector = `tr:has-text("${cedula}") input[type="checkbox"]`;
-  await page.click(checkboxSelector, { timeout: 20_000 });
+  // Click the checkbox inside the ACTUAL data row. Important constraints:
+  //   - restrict to tr.rich-table-firstrow / rich-table-row (data rows only);
+  //     otherwise `tr:has-text()` also matches the <tr> containing the header
+  //     "Seleccionar Todos" checkbox, which is invisible → Playwright spins.
+  //   - the row sometimes hosts its own checkbox plus a grouper checkbox, so
+  //     explicitly exclude anything with title containing "Todos".
+  //   - do the dispatch in-page so RichFaces sees the synchronous click and
+  //     doesn't swap the handle out from under us mid-attempt.
+  const clicked = await page.evaluate((wantedCedula) => {
+    const table = document.querySelector(
+      'table[id*="tablaEmpleadosselEmp"]',
+    ) as HTMLTableElement | null;
+    if (!table) return false;
+    const rows = Array.from(
+      table.querySelectorAll('tr.rich-table-firstrow, tr.rich-table-row'),
+    );
+    for (const r of rows) {
+      const text = ((r as HTMLElement).innerText || r.textContent || '')
+        .replace(/\s+/g, ' ');
+      if (!text.includes(wantedCedula)) continue;
+      const cb = Array.from(
+        r.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'),
+      ).find((el) => !(el.title || '').toLowerCase().includes('todos'));
+      if (cb) {
+        cb.click();
+        return true;
+      }
+    }
+    return false;
+  }, cedula);
+  if (!clicked) {
+    throw new Error(`No se pudo marcar el checkbox para ${cedula}`);
+  }
 
   // Click "Actualizar" to bring the selection back to the main form
   await page.click(sel('formSeleccionarEmpleadoselEmp:btnActualizarselEmp'));
