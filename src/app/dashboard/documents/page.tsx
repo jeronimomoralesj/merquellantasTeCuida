@@ -82,6 +82,10 @@ export default function DocumentsPage() {
   const [uploadKind, setUploadKind] = useState<DocKind>('regular');
   const [uploading, setUploading] = useState(false);
 
+  // Active tab decides which section renders. Defaults to the regular documents list
+  // since it's what most users will reach for on page load.
+  const [activeTab, setActiveTab] = useState<DocKind>('regular');
+
   const userRole = (session?.user as { rol?: string } | undefined)?.rol || 'user';
   const canManage = userRole === 'admin' || userRole === 'fondo';
 
@@ -278,62 +282,55 @@ export default function DocumentsPage() {
             </div>
           </div>
 
-          {/* Stats row — Total Documentos + Políticas de la empresa */}
+          {/* Tab switcher — the two stats cards double as tabs so users pick which
+              set of files they're browsing without scrolling past the other. */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
-            <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
-              <div className="flex items-center">
-                <div className="p-3 bg-[#f4a900]/10 rounded-lg">
-                  <FileText className="text-[#f4a900]" size={24} />
-                </div>
-                <div className="ml-4">
-                  <p className="text-2xl font-bold text-gray-900">{totalRegular}</p>
-                  <p className="text-gray-600">Total Documentos</p>
-                </div>
-              </div>
-            </div>
-            <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
-              <div className="flex items-center">
-                <div className="p-3 bg-blue-100 rounded-lg">
-                  <ShieldCheck className="text-blue-600" size={24} />
-                </div>
-                <div className="ml-4">
-                  <p className="text-2xl font-bold text-gray-900">{totalPolicy}</p>
-                  <p className="text-gray-600">Políticas de la empresa</p>
-                </div>
-              </div>
-            </div>
+            <TabCard
+              active={activeTab === 'regular'}
+              onClick={() => setActiveTab('regular')}
+              icon={<FileText size={24} />}
+              label="Total Documentos"
+              count={totalRegular}
+              accent="#f4a900"
+            />
+            <TabCard
+              active={activeTab === 'policy'}
+              onClick={() => setActiveTab('policy')}
+              icon={<ShieldCheck size={24} />}
+              label="Políticas de la empresa"
+              count={totalPolicy}
+              accent="#1d4ed8"
+            />
           </div>
 
           {loading ? (
             <div className="flex justify-center items-center py-12">
               <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#f4a900]"></div>
             </div>
+          ) : activeTab === 'regular' ? (
+            <DocumentSection
+              title="Documentos"
+              icon={<Folder className="text-[#f4a900]" size={20} />}
+              docs={regularDocs}
+              accent="#f4a900"
+              canManage={canManage}
+              onOpen={(d) => handleDocumentAction(d)}
+              onDownload={(d) => handleDocumentAction(d, true)}
+              onDelete={handleDelete}
+              emptyText="No hay documentos que coincidan con tu búsqueda."
+            />
           ) : (
-            <div className="space-y-10">
-              <DocumentSection
-                title="Documentos"
-                icon={<Folder className="text-[#f4a900]" size={20} />}
-                docs={regularDocs}
-                accent="#f4a900"
-                canManage={canManage}
-                onOpen={(d) => handleDocumentAction(d)}
-                onDownload={(d) => handleDocumentAction(d, true)}
-                onDelete={handleDelete}
-                emptyText="No hay documentos que coincidan con tu búsqueda."
-              />
-
-              <DocumentSection
-                title="Políticas de la empresa"
-                icon={<ShieldCheck className="text-blue-600" size={20} />}
-                docs={policyDocs}
-                accent="#1d4ed8"
-                canManage={canManage}
-                onOpen={(d) => handleDocumentAction(d)}
-                onDownload={(d) => handleDocumentAction(d, true)}
-                onDelete={handleDelete}
-                emptyText="Aún no hay políticas publicadas."
-              />
-            </div>
+            <DocumentSection
+              title="Políticas de la empresa"
+              icon={<ShieldCheck className="text-blue-600" size={20} />}
+              docs={policyDocs}
+              accent="#1d4ed8"
+              canManage={canManage}
+              onOpen={(d) => handleDocumentAction(d)}
+              onDownload={(d) => handleDocumentAction(d, true)}
+              onDelete={handleDelete}
+              emptyText="Aún no hay políticas publicadas."
+            />
           )}
         </div>
       </div>
@@ -474,7 +471,61 @@ export default function DocumentsPage() {
   );
 }
 
-// --- Subcomponent -------------------------------------------------------------
+// --- Subcomponents ------------------------------------------------------------
+
+function TabCard({
+  active,
+  onClick,
+  icon,
+  label,
+  count,
+  accent,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  label: string;
+  count: number;
+  accent: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`text-left bg-white rounded-xl shadow-lg p-6 border transition-all active:scale-[0.99] ${
+        active
+          ? 'border-transparent ring-2 shadow-xl'
+          : 'border-gray-100 hover:shadow-xl hover:border-gray-200'
+      }`}
+      style={active ? { boxShadow: `0 0 0 2px ${accent}` } : undefined}
+      aria-pressed={active}
+    >
+      <div className="flex items-center">
+        <div
+          className="p-3 rounded-lg flex items-center justify-center"
+          style={{
+            backgroundColor: active ? accent : `${accent}1a`,
+            color: active ? '#fff' : accent,
+          }}
+        >
+          {icon}
+        </div>
+        <div className="ml-4 flex-1">
+          <p className="text-2xl font-bold text-gray-900">{count}</p>
+          <p className="text-gray-600">{label}</p>
+        </div>
+        {active && (
+          <span
+            className="hidden sm:inline-flex text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full"
+            style={{ backgroundColor: `${accent}1a`, color: accent }}
+          >
+            Viendo
+          </span>
+        )}
+      </div>
+    </button>
+  );
+}
 
 function DocumentSection({
   title,
