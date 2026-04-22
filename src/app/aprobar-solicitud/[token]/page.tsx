@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { use } from 'react';
 import {
   Loader2,
@@ -12,7 +12,21 @@ import {
   User as UserIcon,
   AlertTriangle,
   Info,
+  CornerUpRight,
+  Search,
+  Send,
+  UserCheck,
+  X,
 } from 'lucide-react';
+
+interface JefeOption {
+  id: string;
+  nombre: string;
+  cedula: string;
+  cargo: string;
+  area: string;
+  departamento: string;
+}
 
 interface Solicitud {
   id: string;
@@ -36,7 +50,7 @@ interface Solicitud {
   updated_at: string | null;
 }
 
-type Status = 'loading' | 'ready' | 'decided' | 'expired' | 'not_found' | 'error';
+type Status = 'loading' | 'ready' | 'decided' | 'expired' | 'not_found' | 'error' | 'forwarded';
 
 export default function AprobarSolicitudPage({
   params,
@@ -50,6 +64,13 @@ export default function AprobarSolicitudPage({
   const [motivo, setMotivo] = useState('');
   const [deciding, setDeciding] = useState<null | 'aprobado' | 'rechazado'>(null);
   const [decisionResult, setDecisionResult] = useState<'aprobado' | 'rechazado' | null>(null);
+
+  // Forward-to-correct-jefe flow
+  const [showForward, setShowForward] = useState(false);
+  const [forwardTo, setForwardTo] = useState<JefeOption | null>(null);
+  const [forwardNote, setForwardNote] = useState('');
+  const [forwarding, setForwarding] = useState(false);
+  const [forwardedToName, setForwardedToName] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -71,6 +92,29 @@ export default function AprobarSolicitudPage({
       }
     })();
   }, [token]);
+
+  const forwardRequest = async () => {
+    if (!forwardTo || forwarding) return;
+    setForwarding(true);
+    try {
+      const res = await fetch(`/api/solicitudes/by-token/${token}/forward`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ toApproverId: forwardTo.id, note: forwardNote.trim() || null }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        alert(err.error || 'No se pudo remitir la solicitud.');
+        return;
+      }
+      const data = await res.json();
+      setForwardedToName(data.new_approver_nombre || forwardTo.nombre);
+      setStatus('forwarded');
+      setShowForward(false);
+    } finally {
+      setForwarding(false);
+    }
+  };
 
   const decide = async (estado: 'aprobado' | 'rechazado') => {
     if (deciding) return;
@@ -222,13 +266,277 @@ export default function AprobarSolicitudPage({
               <p className="mt-4 text-[11px] text-gray-500 text-center">
                 Este enlace es de un solo uso. Una vez decidas, no podrá usarse de nuevo.
               </p>
+
+              {/* Mis-designated? Remit to the correct supervisor. */}
+              <div className="mt-6 pt-5 border-t border-dashed border-gray-200">
+                <p className="text-xs text-gray-600 text-center">
+                  Si tú no eres el jefe inmediato y crees que esto fue un error,{' '}
+                  <button
+                    type="button"
+                    onClick={() => setShowForward(true)}
+                    className="inline-flex items-center gap-1 font-semibold text-[#b47e00] hover:text-[#f4a900] underline underline-offset-2"
+                  >
+                    <CornerUpRight className="h-3.5 w-3.5" />
+                    remitir al jefe correcto
+                  </button>
+                  .
+                </p>
+              </div>
             </div>
           </div>
+        )}
+
+        {status === 'forwarded' && (
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="p-5 bg-emerald-600 text-white">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-xl bg-white/20 flex items-center justify-center">
+                  <CornerUpRight className="h-5 w-5" />
+                </div>
+                <div>
+                  <h1 className="font-extrabold text-lg">Solicitud remitida</h1>
+                  <p className="text-xs opacity-90">
+                    Se reenvió a {forwardedToName ?? 'la persona seleccionada'}.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="p-6 text-sm text-gray-700 leading-relaxed">
+              Listo — esta solicitud ya no aparecerá en tu bandeja. La persona que
+              indicaste recibirá un correo con un nuevo enlace para revisarla. Tu
+              enlace anterior quedó inactivo automáticamente.
+              <p className="mt-4 text-xs text-gray-500 text-center">
+                Puedes cerrar esta pestaña.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {showForward && solicitud && (
+          <ForwardModal
+            token={token}
+            currentApproverName={solicitud.approver_nombre}
+            value={forwardTo}
+            onChange={setForwardTo}
+            note={forwardNote}
+            onNoteChange={setForwardNote}
+            onClose={() => {
+              if (forwarding) return;
+              setShowForward(false);
+              setForwardTo(null);
+              setForwardNote('');
+            }}
+            onSubmit={forwardRequest}
+            loading={forwarding}
+          />
         )}
 
         <p className="mt-8 text-center text-[11px] text-gray-400">
           Sistema de Bienestar · Merquellantas
         </p>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Searchable picker + form that lives inside the approval page so the jefe can
+ * forward the request to the correct supervisor without ever signing in.
+ */
+function ForwardModal({
+  token,
+  currentApproverName,
+  value,
+  onChange,
+  note,
+  onNoteChange,
+  onClose,
+  onSubmit,
+  loading,
+}: {
+  token: string;
+  currentApproverName: string | null;
+  value: JefeOption | null;
+  onChange: (j: JefeOption | null) => void;
+  note: string;
+  onNoteChange: (n: string) => void;
+  onClose: () => void;
+  onSubmit: () => void;
+  loading: boolean;
+}) {
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<JefeOption[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [listOpen, setListOpen] = useState(true);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (value) return; // once picked, stop hitting the API
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const res = await fetch(
+          `/api/solicitudes/by-token/${token}/users?q=${encodeURIComponent(query)}&limit=20`,
+        );
+        if (res.ok) {
+          const data = await res.json();
+          setResults((data.results as JefeOption[]) ?? []);
+        }
+      } finally {
+        setSearching(false);
+      }
+    }, 200);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [query, value, token]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md text-gray-900 overflow-hidden">
+        <div className="p-5 border-b border-gray-100 flex items-start justify-between gap-3 bg-gradient-to-r from-black to-gray-900 text-white">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-[#f4a900]/20 text-[#f4a900] flex items-center justify-center">
+              <CornerUpRight className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="font-extrabold text-base">Remitir al jefe correcto</h2>
+              <p className="text-xs text-white/70">
+                {currentApproverName
+                  ? `Originalmente asignada a ${currentApproverName}.`
+                  : 'Elige a la persona correcta.'}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            disabled={loading}
+            className="p-1.5 rounded-full text-white/60 hover:text-white hover:bg-white/10 disabled:opacity-50"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="p-5 space-y-4">
+          {value ? (
+            <div className="flex items-center justify-between px-4 py-3 bg-emerald-50 border border-emerald-200 rounded-xl">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-9 h-9 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center flex-shrink-0">
+                  <UserCheck className="h-4 w-4" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold truncate">{value.nombre}</p>
+                  <p className="text-[11px] text-gray-500 truncate">
+                    {value.cargo || '—'} · CC {value.cedula}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  onChange(null);
+                  setListOpen(true);
+                }}
+                className="p-1.5 rounded-full text-gray-500 hover:text-gray-800 hover:bg-white"
+                title="Cambiar"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          ) : (
+            <div>
+              <label className="block text-[11px] uppercase tracking-wider font-bold text-gray-500 mb-1.5">
+                Buscar jefe
+              </label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+                <input
+                  type="text"
+                  value={query}
+                  onFocus={() => setListOpen(true)}
+                  onChange={(e) => {
+                    setQuery(e.target.value);
+                    setListOpen(true);
+                  }}
+                  placeholder="Nombre, apellido o cédula..."
+                  className="w-full pl-10 pr-3 py-2.5 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#f4a900]"
+                />
+              </div>
+              {listOpen && (
+                <div className="mt-2 max-h-60 overflow-y-auto rounded-lg border border-gray-200">
+                  {searching ? (
+                    <div className="px-4 py-6 text-center text-xs text-gray-500 flex items-center justify-center gap-2">
+                      <Loader2 className="h-3 w-3 animate-spin" /> Buscando...
+                    </div>
+                  ) : results.length === 0 ? (
+                    <div className="px-4 py-6 text-center text-xs text-gray-500">
+                      Sin coincidencias.
+                    </div>
+                  ) : (
+                    <ul className="divide-y divide-gray-100">
+                      {results.map((r) => (
+                        <li key={r.id}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onChange(r);
+                              setListOpen(false);
+                            }}
+                            className="w-full text-left px-3 py-2.5 hover:bg-[#f4a900]/5 focus:bg-[#f4a900]/5 focus:outline-none"
+                          >
+                            <p className="text-sm font-semibold text-gray-900 truncate">
+                              {r.nombre}
+                            </p>
+                            <p className="text-[11px] text-gray-500 truncate">
+                              {r.cargo || '—'}
+                              {r.cedula && ` · CC ${r.cedula}`}
+                              {r.area && ` · ${r.area}`}
+                            </p>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          <div>
+            <label className="block text-[11px] uppercase tracking-wider font-bold text-gray-500 mb-1.5">
+              Nota (opcional)
+            </label>
+            <textarea
+              value={note}
+              onChange={(e) => onNoteChange(e.target.value.slice(0, 500))}
+              rows={2}
+              placeholder="Cuéntale al nuevo jefe por qué le remites la solicitud..."
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#f4a900] focus:border-transparent text-sm text-gray-900 placeholder:text-gray-400 resize-none"
+            />
+            <div className="text-right text-[10px] text-gray-400 mt-0.5">
+              {note.length}/500
+            </div>
+          </div>
+        </div>
+
+        <div className="p-4 border-t border-gray-100 flex items-center justify-end gap-2 bg-gray-50">
+          <button
+            onClick={onClose}
+            disabled={loading}
+            className="px-4 py-2 rounded-lg text-sm font-semibold text-gray-700 hover:bg-gray-100 disabled:opacity-50"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={onSubmit}
+            disabled={!value || loading}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#f4a900] text-black text-sm font-bold hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed shadow"
+          >
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            Remitir y notificar
+          </button>
+        </div>
       </div>
     </div>
   );
