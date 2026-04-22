@@ -17,7 +17,7 @@ export async function GET() {
   const courses = await db.collection('courses').find({}).toArray();
   const allUsers = await db
     .collection('users')
-    .find({}, { projection: { nombre: 1, cedula: 1, cargo_empleado: 1, rol: 1 } })
+    .find({}, { projection: { nombre: 1, cedula: 1, cargo_empleado: 1, area: 1, rol: 1 } })
     .toArray();
   const nonAdminUsers = allUsers.filter((u) => u.rol !== 'admin');
 
@@ -40,7 +40,8 @@ export async function GET() {
           audience,
           u._id.toString(),
           u.rol || 'user',
-          u.cargo_empleado || null
+          u.cargo_empleado || null,
+          u.area || null,
         );
         if (canAccess) accessible.push(u._id.toString());
       }

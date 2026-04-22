@@ -29,10 +29,12 @@ import DashboardNavbar from "../../navbar";
 import { uploadFileChunked } from "../../../../lib/uploadChunked";
 import { categoryFromMime, type LessonFile } from "../../../../lib/lesson-files";
 
-type AudienceType = "all" | "cargos" | "users";
+type AudienceType = "all" | "areas" | "cargos" | "users";
 
 interface Audience {
   type: AudienceType;
+  areas?: string[];
+  /** Legacy: courses saved before the switch to áreas still read from `cargos`. */
   cargos?: string[];
   user_ids?: string[];
 }
@@ -124,10 +126,13 @@ export default function AdminElearningPage() {
   const [savingCourse, setSavingCourse] = useState(false);
   const [courseError, setCourseError] = useState<string | null>(null);
 
-  // Audience picker
+  // Audience picker — "areas" is the current targeting mode; "cargos" stays only
+  // so that legacy courses opened for edit render correctly until re-saved.
   const [audienceType, setAudienceType] = useState<AudienceType>("all");
+  const [audienceAreas, setAudienceAreas] = useState<string[]>([]);
   const [audienceCargos, setAudienceCargos] = useState<string[]>([]);
   const [audienceUsers, setAudienceUsers] = useState<UserSearchResult[]>([]);
+  const [availableAreas, setAvailableAreas] = useState<string[]>([]);
   const [availableCargos, setAvailableCargos] = useState<string[]>([]);
   const [userQuery, setUserQuery] = useState("");
   const [userSearchResults, setUserSearchResults] = useState<UserSearchResult[]>([]);
@@ -240,6 +245,7 @@ export default function AdminElearningPage() {
       const res = await fetch("/api/elearning/audience-options");
       if (res.ok) {
         const data = await res.json();
+        setAvailableAreas(data.areas || []);
         setAvailableCargos(data.cargos || []);
       }
     })();
@@ -269,6 +275,7 @@ export default function AdminElearningPage() {
     setCoverFile(null);
     setCoverUrl(null);
     setAudienceType("all");
+    setAudienceAreas([]);
     setAudienceCargos([]);
     setAudienceUsers([]);
     setUserQuery("");
@@ -285,6 +292,7 @@ export default function AdminElearningPage() {
     setCoverUrl(c.thumbnail);
     const aud = c.audience || { type: "all" };
     setAudienceType(aud.type);
+    setAudienceAreas(aud.areas || []);
     setAudienceCargos(aud.cargos || []);
     setUserQuery("");
     setUserSearchResults([]);
@@ -305,6 +313,7 @@ export default function AdminElearningPage() {
   };
 
   const buildAudiencePayload = (): Audience => {
+    if (audienceType === "areas") return { type: "areas", areas: audienceAreas };
     if (audienceType === "cargos") return { type: "cargos", cargos: audienceCargos };
     if (audienceType === "users") return { type: "users", user_ids: audienceUsers.map((u) => u.id) };
     return { type: "all" };
@@ -1006,10 +1015,14 @@ export default function AdminElearningPage() {
                     label="Todos"
                   />
                   <AudienceRadio
-                    active={audienceType === "cargos"}
-                    onClick={() => setAudienceType("cargos")}
+                    active={audienceType === "areas" || audienceType === "cargos"}
+                    onClick={() => {
+                      // Migrate legacy cargo selections to áreas on click — admin can still
+                      // pick áreas from scratch if they previously had cargos saved.
+                      setAudienceType("areas");
+                    }}
                     icon={<Shield className="w-4 h-4" />}
-                    label="Por cargo"
+                    label="Por área"
                   />
                   <AudienceRadio
                     active={audienceType === "users"}
@@ -1019,10 +1032,56 @@ export default function AdminElearningPage() {
                   />
                 </div>
 
-                {audienceType === "cargos" && (
+                {audienceType === "areas" && (
                   <div className="border border-gray-200 rounded-xl p-3 max-h-48 overflow-y-auto">
+                    {availableAreas.length === 0 ? (
+                      <p className="text-xs text-gray-500 text-center py-4">
+                        No hay áreas registradas
+                      </p>
+                    ) : (
+                      <div className="flex flex-wrap gap-2">
+                        {availableAreas.map((a) => {
+                          const active = audienceAreas.includes(a);
+                          return (
+                            <button
+                              key={a}
+                              type="button"
+                              onClick={() =>
+                                setAudienceAreas((prev) =>
+                                  active ? prev.filter((x) => x !== a) : [...prev, a]
+                                )
+                              }
+                              className={`px-3 py-1.5 rounded-full text-xs font-medium border transition ${
+                                active
+                                  ? "bg-[#f4a900] text-white border-[#f4a900]"
+                                  : "bg-white text-gray-700 border-gray-200 hover:border-[#f4a900]"
+                              }`}
+                            >
+                              {active && <CheckCircle2 className="w-3 h-3 inline mr-1" />}
+                              {a}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {audienceAreas.length === 0 && (
+                      <p className="text-xs text-red-600 mt-2">Selecciona al menos un área</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Legacy cargo picker — only appears if the course was saved under the
+                    old model, and stays visible until the admin re-saves as áreas. */}
+                {audienceType === "cargos" && (
+                  <div className="border border-amber-200 bg-amber-50 rounded-xl p-3 max-h-48 overflow-y-auto">
+                    <p className="text-[11px] text-amber-800 mb-2">
+                      Este curso fue configurado con el modo anterior (por cargo). Al guardar
+                      podrás migrarlo a &quot;Por área&quot;.
+                    </p>
                     {availableCargos.length === 0 ? (
-                      <p className="text-xs text-gray-500 text-center py-4">No hay cargos registrados</p>
+                      <p className="text-xs text-gray-500 text-center py-4">
+                        No hay cargos registrados
+                      </p>
                     ) : (
                       <div className="flex flex-wrap gap-2">
                         {availableCargos.map((c) => {
@@ -1048,9 +1107,6 @@ export default function AdminElearningPage() {
                           );
                         })}
                       </div>
-                    )}
-                    {audienceCargos.length === 0 && (
-                      <p className="text-xs text-red-600 mt-2">Selecciona al menos un cargo</p>
                     )}
                   </div>
                 )}
@@ -1404,9 +1460,17 @@ export default function AdminElearningPage() {
 
 function AudienceBadge({ audience }: { audience?: Audience }) {
   if (!audience || audience.type === "all") return null;
-  const label = audience.type === "cargos"
-    ? `${audience.cargos?.length || 0} cargo${(audience.cargos?.length || 0) === 1 ? "" : "s"}`
-    : `${audience.user_ids?.length || 0} usuario${(audience.user_ids?.length || 0) === 1 ? "" : "s"}`;
+  let label = "";
+  if (audience.type === "areas") {
+    const n = audience.areas?.length || 0;
+    label = `${n} área${n === 1 ? "" : "s"}`;
+  } else if (audience.type === "cargos") {
+    const n = audience.cargos?.length || 0;
+    label = `${n} cargo${n === 1 ? "" : "s"}`;
+  } else {
+    const n = audience.user_ids?.length || 0;
+    label = `${n} usuario${n === 1 ? "" : "s"}`;
+  }
   return (
     <span className="absolute top-3 right-3 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-black/70 text-white text-[10px] font-semibold">
       <Shield className="w-3 h-3" /> {label}
@@ -1418,16 +1482,26 @@ function AudienceInline({ audience }: { audience?: Audience }) {
   if (!audience || audience.type === "all") {
     return <span className="inline-flex items-center gap-1 text-xs text-gray-500"><Users className="w-3.5 h-3.5" /> Visible para todos</span>;
   }
-  if (audience.type === "cargos") {
+  if (audience.type === "areas") {
+    const n = audience.areas?.length || 0;
     return (
       <span className="inline-flex items-center gap-1 text-xs text-[#f4a900] font-semibold">
-        <Shield className="w-3.5 h-3.5" /> Solo {audience.cargos?.length || 0} cargo{(audience.cargos?.length || 0) === 1 ? "" : "s"}
+        <Shield className="w-3.5 h-3.5" /> Solo {n} área{n === 1 ? "" : "s"}
       </span>
     );
   }
+  if (audience.type === "cargos") {
+    const n = audience.cargos?.length || 0;
+    return (
+      <span className="inline-flex items-center gap-1 text-xs text-[#f4a900] font-semibold">
+        <Shield className="w-3.5 h-3.5" /> Solo {n} cargo{n === 1 ? "" : "s"}
+      </span>
+    );
+  }
+  const n = audience.user_ids?.length || 0;
   return (
     <span className="inline-flex items-center gap-1 text-xs text-[#f4a900] font-semibold">
-      <UserIcon className="w-3.5 h-3.5" /> {audience.user_ids?.length || 0} usuario{(audience.user_ids?.length || 0) === 1 ? "" : "s"} específico{(audience.user_ids?.length || 0) === 1 ? "" : "s"}
+      <UserIcon className="w-3.5 h-3.5" /> {n} usuario{n === 1 ? "" : "s"} específico{n === 1 ? "" : "s"}
     </span>
   );
 }

@@ -23,10 +23,13 @@ export async function GET(
 
   const user = await db.collection('users').findOne(
     { _id: new ObjectId(session.user.id) },
-    { projection: { cargo_empleado: 1 } }
+    { projection: { cargo_empleado: 1, area: 1 } }
   );
   const userCargo = (user?.cargo_empleado as string | undefined) || null;
-  const allowed = await canUserAccessCourse(db, course.audience, session.user.id, session.user.rol, userCargo);
+  const userArea = (user?.area as string | undefined) || null;
+  const allowed = await canUserAccessCourse(
+    db, course.audience, session.user.id, session.user.rol, userCargo, userArea,
+  );
   if (!allowed) return NextResponse.json({ error: 'No tienes acceso a este curso' }, { status: 403 });
 
   const videos = await db.collection('course_videos').find({ course_id: id }).toArray();

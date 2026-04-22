@@ -14,14 +14,17 @@ export async function GET() {
 
   const user = await db.collection('users').findOne(
     { _id: new ObjectId(session.user.id) },
-    { projection: { cargo_empleado: 1 } }
+    { projection: { cargo_empleado: 1, area: 1 } }
   );
   const userCargo = (user?.cargo_empleado as string | undefined) || null;
+  const userArea = (user?.area as string | undefined) || null;
   const rol = session.user.rol;
 
   const visible = [];
   for (const c of courses) {
-    const allowed = await canUserAccessCourse(db, c.audience, session.user.id, rol, userCargo);
+    const allowed = await canUserAccessCourse(
+      db, c.audience, session.user.id, rol, userCargo, userArea,
+    );
     if (!allowed) continue;
 
     const videoCount = await db.collection('course_videos').countDocuments({ course_id: c._id.toString() });

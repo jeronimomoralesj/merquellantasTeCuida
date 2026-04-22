@@ -26,7 +26,7 @@ export async function GET(
     .collection('users')
     .findOne(
       { _id: new ObjectId(userId) },
-      { projection: { nombre: 1, cedula: 1, cargo_empleado: 1, email: 1, rol: 1 } }
+      { projection: { nombre: 1, cedula: 1, cargo_empleado: 1, area: 1, email: 1, rol: 1 } }
     );
   if (!user) {
     return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 });
@@ -34,6 +34,7 @@ export async function GET(
 
   const userIdStr = user._id.toString();
   const userCargo = user.cargo_empleado || null;
+  const userArea = user.area || null;
 
   const courses = await db.collection('courses').find({}).toArray();
 
@@ -75,7 +76,8 @@ export async function GET(
       audience,
       userIdStr,
       user.rol || 'user',
-      userCargo
+      userCargo,
+      userArea,
     );
 
     const quizzes = await db

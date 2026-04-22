@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
   const users = await db
     .collection('users')
     .find(filter, {
-      projection: { nombre: 1, cedula: 1, cargo_empleado: 1, email: 1, rol: 1 },
+      projection: { nombre: 1, cedula: 1, cargo_empleado: 1, area: 1, email: 1, rol: 1 },
     })
     .sort({ nombre: 1 })
     .limit(500)
@@ -82,6 +82,7 @@ export async function GET(req: NextRequest) {
     users.map(async (u) => {
       const userId = u._id.toString();
       const userCargo = u.cargo_empleado || null;
+      const userArea = u.area || null;
 
       let accessible = 0;
       for (const c of courses) {
@@ -91,7 +92,8 @@ export async function GET(req: NextRequest) {
           audience,
           userId,
           u.rol || 'user',
-          userCargo
+          userCargo,
+          userArea,
         );
         if (canAccess) accessible++;
       }
