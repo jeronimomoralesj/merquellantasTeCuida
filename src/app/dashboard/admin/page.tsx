@@ -18,6 +18,7 @@ import Users from "./user";
 import QuickActionsAdmin from "./quickActionsAdmin";
 import FondoAdmin from "./fondo";
 import CertificadoAdmin from "./certificado";
+import VacacionesAdmin from "./vacaciones";
 
 interface AdminPageProps {
   /** When true, the parent already renders the navbar so we shouldn't add another one. */
@@ -115,6 +116,8 @@ export default function AdminPage({ embedded = false }: AdminPageProps) {
               <CalendarCard />
 
               <Users />
+
+              <VacacionesAdmin />
 
               <CertificadoAdmin />
 
