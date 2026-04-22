@@ -11,9 +11,17 @@ import {
   FileText,
   X,
   UserCheck,
+  Umbrella,
 } from 'lucide-react';
 import { useSession } from 'next-auth/react';
 import JefeSelector, { type JefeOption } from './JefeSelector';
+
+interface VacationBalance {
+  days: number | null;
+  as_of_date: string | null;
+  scraped_at: string | null;
+  stale: boolean;
+}
 
 interface VacacionesFormData {
   fechaInicio: string;
@@ -37,6 +45,38 @@ const VacacionesForm = () => {
   const [fileError, setFileError] = useState(false);
   const [diasVacaciones, setDiasVacaciones] = useState(0);
   const [jefe, setJefe] = useState<JefeOption | null>(null);
+  const [balance, setBalance] = useState<VacationBalance | null>(null);
+  const [loadingBalance, setLoadingBalance] = useState(true);
+
+  // Fetch the user's current vacation balance on mount so they can see how many
+  // días they actually have before trying to pick dates.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/vacations/me');
+        if (!res.ok || cancelled) { setBalance(null); return; }
+        const data = await res.json();
+        if (!cancelled) {
+          setBalance({
+            days: typeof data.days === 'number' ? data.days : null,
+            as_of_date: data.as_of_date ?? null,
+            scraped_at: data.scraped_at ?? null,
+            stale: !!data.stale,
+          });
+        }
+      } catch {
+        if (!cancelled) setBalance(null);
+      } finally {
+        if (!cancelled) setLoadingBalance(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const availableDays = balance?.days ?? null;
+  const exceedsAvailable =
+    availableDays != null && diasVacaciones > 0 && diasVacaciones > availableDays;
 
   // Calculate vacation days whenever dates change
   useEffect(() => {
@@ -230,13 +270,22 @@ const VacacionesForm = () => {
       </div>
       
       <form onSubmit={handleSubmit} className="p-4 sm:p-6">
+        {/* Current balance — fetched from /api/vacations/me so the employee can see
+            how many días they have before picking dates. */}
+        <VacationBalanceCard
+          balance={balance}
+          loading={loadingBalance}
+          pendingDays={diasVacaciones}
+          exceedsAvailable={exceedsAvailable}
+        />
+
         {formError && (
           <div className="mb-6 bg-red-50 border border-red-200 text-red-600 rounded-lg p-4 flex items-start">
             <AlertCircle className="h-5 w-5 mr-3 mt-0.5 flex-shrink-0" />
             <p className="text-sm sm:text-base">{formError}</p>
           </div>
         )}
-        
+
         <div className="space-y-6">
           {/* Description */}
           <div>
@@ -394,5 +443,110 @@ const VacacionesForm = () => {
     </div>
   );
 };
+
+function VacationBalanceCard({
+  balance,
+  loading,
+  pendingDays,
+  exceedsAvailable,
+}: {
+  balance: VacationBalance | null;
+  loading: boolean;
+  pendingDays: number;
+  exceedsAvailable: boolean;
+}) {
+  if (loading) {
+    return (
+      <div className="mb-6 h-24 bg-gray-100 rounded-2xl animate-pulse" />
+    );
+  }
+
+  const days = balance?.days ?? null;
+  const hasBalance = typeof days === 'number';
+  const corte =
+    balance?.as_of_date
+      ? new Date(balance.as_of_date + 'T00:00:00').toLocaleDateString('es-CO', {
+          day: 'numeric',
+          month: 'long',
+          year: 'numeric',
+        })
+      : null;
+  const actualizado =
+    balance?.scraped_at
+      ? new Date(balance.scraped_at).toLocaleDateString('es-CO', {
+          day: 'numeric',
+          month: 'short',
+          year: 'numeric',
+        })
+      : null;
+
+  return (
+    <div
+      className={`mb-6 relative overflow-hidden rounded-2xl border p-5 ${
+        hasBalance
+          ? 'bg-gradient-to-br from-emerald-50 via-white to-emerald-50 border-emerald-200'
+          : 'bg-amber-50 border-amber-200'
+      }`}
+    >
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex items-center gap-3">
+          <div
+            className={`w-12 h-12 rounded-xl flex items-center justify-center ${
+              hasBalance ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-700'
+            }`}
+          >
+            <Umbrella className="h-6 w-6" />
+          </div>
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wider text-gray-500">
+              Tu saldo de vacaciones
+            </p>
+            {hasBalance ? (
+              <p className="flex items-baseline gap-2 mt-0.5">
+                <span className="text-3xl font-extrabold text-emerald-600 leading-none">
+                  {Number(days).toFixed(days! % 1 === 0 ? 0 : 2)}
+                </span>
+                <span className="text-sm text-gray-600">
+                  {days === 1 ? 'día disponible' : 'días disponibles'}
+                </span>
+              </p>
+            ) : (
+              <p className="text-sm text-amber-800 mt-1">
+                Aún no tenemos tus días sincronizados desde Heinsohn. Habla con Talento Humano
+                si necesitas confirmar tu saldo antes de continuar.
+              </p>
+            )}
+            {hasBalance && corte && (
+              <p className="text-[11px] text-gray-500 mt-1">
+                Corte: <span className="font-semibold text-gray-700">{corte}</span>
+                {actualizado && <span className="text-gray-400"> · Actualizado {actualizado}</span>}
+              </p>
+            )}
+          </div>
+        </div>
+
+        {hasBalance && balance?.stale && (
+          <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-amber-700 bg-amber-100 px-2 py-1 rounded-full">
+            <Clock className="h-3 w-3" /> Pendiente actualizar
+          </span>
+        )}
+      </div>
+
+      {/* Soft warning when the picked range exceeds what's available. We don't
+          block the submit — sometimes HR approves negative balances — but the
+          employee should see it. */}
+      {hasBalance && exceedsAvailable && (
+        <div className="mt-4 bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-700 flex items-start gap-2">
+          <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+          <span>
+            Estás solicitando <b>{pendingDays} días</b> pero solo tienes{' '}
+            <b>{Number(days).toFixed(days! % 1 === 0 ? 0 : 2)} días disponibles</b>. Ajusta las
+            fechas o habla con tu jefe para confirmar si te pueden aprobar el excedente.
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default VacacionesForm;
