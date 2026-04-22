@@ -129,7 +129,10 @@ export async function POST(
 
   await db.collection('quiz_attempts').insertOne(attempt);
 
-  // If passed, record item progress so course unlocks next item
+  // If passed, record item progress so course unlocks next item — and if that was
+  // the final item in the course, upsert course_completions so admin stats count
+  // this user as completed. (Previously only the /progress route wrote to
+  // course_completions, so courses whose last item was a quiz never got a row.)
   if (passed) {
     await db.collection('course_progress').updateOne(
       { user_id: session.user.id, item_id: id, item_type: 'quiz' },
@@ -145,6 +148,29 @@ export async function POST(
       },
       { upsert: true }
     );
+
+    const [totalVideos, totalQuizzes, completedItems] = await Promise.all([
+      db.collection('course_videos').countDocuments({ course_id: quiz.course_id }),
+      db.collection('course_quizzes').countDocuments({ course_id: quiz.course_id }),
+      db.collection('course_progress').countDocuments({
+        user_id: session.user.id,
+        course_id: quiz.course_id,
+      }),
+    ]);
+    const totalItems = totalVideos + totalQuizzes;
+    if (totalItems > 0 && completedItems >= totalItems) {
+      await db.collection('course_completions').updateOne(
+        { user_id: session.user.id, course_id: quiz.course_id },
+        {
+          $setOnInsert: {
+            user_id: session.user.id,
+            course_id: quiz.course_id,
+            completed_at: new Date(),
+          },
+        },
+        { upsert: true }
+      );
+    }
   }
 
   // On final failed attempt, email the bienestar team

@@ -122,6 +122,20 @@ export async function GET(
         )
       : null;
 
+    // Fall back to the most recent progress row's timestamp if the explicit
+    // completion row is missing (legacy quiz-last courses). Keeps the UI's
+    // completion badge consistent with the summary counter.
+    const recordedCompletion = completionDate.get(courseId) || null;
+    const isComplete = totalItems > 0 && done >= totalItems;
+    const inferredCompletedAt =
+      !recordedCompletion && isComplete
+        ? progress
+            .filter((p) => (p.course_id as string) === courseId)
+            .map((p) => p.completed_at as Date)
+            .filter((d) => d instanceof Date)
+            .sort((a, b) => b.getTime() - a.getTime())[0] || null
+        : null;
+
     const entry = {
       id: courseId,
       title: c.title,
@@ -129,7 +143,7 @@ export async function GET(
       total_items: totalItems,
       items_completed: done,
       progress_percent: totalItems ? Math.round((done / totalItems) * 100) : 0,
-      completed_at: completionDate.get(courseId) || null,
+      completed_at: recordedCompletion ?? inferredCompletedAt,
       avg_grade: courseAvgGrade,
       quizzes: courseQuizzes,
     };
@@ -154,6 +168,16 @@ export async function GET(
       )
     : null;
 
+  // A course is "completed" when the user has progress rows for every item in it
+  // — that's the source of truth, since it's what drives progress_percent in the
+  // same view. `course_completions` is just a denormalized stamp and is allowed
+  // to be missing for historical rows; we don't rely on it here.
+  const isCourseComplete = (c: Record<string, unknown>) => {
+    const total = Number(c.total_items ?? 0);
+    const done = Number(c.items_completed ?? 0);
+    return total > 0 && done >= total;
+  };
+
   return NextResponse.json({
     user: {
       id: userIdStr,
@@ -164,7 +188,7 @@ export async function GET(
     },
     summary: {
       accessible_courses: accessibleCourses.length,
-      completed_courses: accessibleCourses.filter((c) => c.completed_at).length,
+      completed_courses: accessibleCourses.filter(isCourseComplete).length,
       avg_grade: avgGrade,
       total_attempts: allAttempts.length,
       blocked_quizzes: accessibleCourses

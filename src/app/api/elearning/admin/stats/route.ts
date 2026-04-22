@@ -45,12 +45,24 @@ export async function GET() {
         if (canAccess) accessible.push(u._id.toString());
       }
 
-      const completedCount = accessible.length
-        ? await db.collection('course_completions').countDocuments({
-            course_id: courseId,
-            user_id: { $in: accessible },
-          })
-        : 0;
+      // Count completions from the source of truth (course_progress) instead of
+      // relying on course_completions — the latter was historically only written
+      // by the /progress route, so any course whose final item is a quiz missed
+      // its row. Aggregating progress rows gives us accurate numbers even for
+      // historical data without needing a backfill migration.
+      let completedCount = 0;
+      if (accessible.length > 0 && totalItems > 0) {
+        const progressAgg = await db
+          .collection('course_progress')
+          .aggregate([
+            { $match: { course_id: courseId, user_id: { $in: accessible } } },
+            { $group: { _id: '$user_id', done: { $sum: 1 } } },
+            { $match: { done: { $gte: totalItems } } },
+            { $count: 'completed' },
+          ])
+          .toArray();
+        completedCount = progressAgg[0]?.completed ?? 0;
+      }
 
       let avgQuizScore: number | null = null;
       let blockedUserCount = 0;
@@ -103,11 +115,12 @@ export async function GET() {
     })
   );
 
-  // Global totals
+  // Global totals — completions aggregated from course_progress so they stay
+  // consistent with the per-course numbers above.
   const totalAttempts = await db
     .collection('quiz_attempts')
     .countDocuments({ submitted_at: { $ne: null } });
-  const totalCompletions = await db.collection('course_completions').countDocuments({});
+  const totalCompletions = perCourse.reduce((s, c) => s + c.completed, 0);
   const totalBlocked = perCourse.reduce((s, c) => s + c.blocked_users, 0);
 
   const allAttemptsAgg = await db
