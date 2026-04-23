@@ -2,6 +2,7 @@
 
 import DashboardNavbar from '../navbar';
 import React, { useState, useEffect } from 'react';
+import { uploadFileChunked } from '../../../lib/uploadChunked';
 import { 
   Upload, 
   CheckCircle, 
@@ -119,15 +120,10 @@ export default function CesantiasPage() {
     setIsSubmitting(true);
 
     try {
-      // 1) upload all files
+      // 1) upload all files — chunked helper stays under Vercel's ~4.5 MB cap.
       const fileUrls: { url: string; name: string }[] = [];
       for (const file of selectedFiles) {
-        const fd = new FormData();
-        fd.append('file', file);
-        fd.append('folder', 'cesantias');
-        const uploadRes = await fetch('/api/upload', { method: 'POST', body: fd });
-        if (!uploadRes.ok) throw new Error('Error al subir el documento');
-        const uploaded = await uploadRes.json();
+        const uploaded = await uploadFileChunked(file, { folder: 'cesantias' });
         fileUrls.push({ url: uploaded.url || uploaded.webUrl, name: file.name });
       }
 

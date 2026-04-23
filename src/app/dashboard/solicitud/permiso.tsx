@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useSession } from 'next-auth/react';
 import JefeSelector, { type JefeOption } from './JefeSelector';
+import { uploadFileChunked } from '../../../lib/uploadChunked';
 
 interface PermisoFormData {
   fecha: string;
@@ -101,15 +102,11 @@ const PermisoForm = () => {
         return;
       }
 
-      // Upload documents
+      // Upload documents via the chunked helper — Vercel's ~4.5 MB serverless
+      // body cap 413s the single-shot endpoint for anything larger.
       const documentUrls: { url: string; name: string }[] = [];
       for (const file of formData.documents) {
-        const fd = new FormData();
-        fd.append('file', file);
-        fd.append('folder', 'permisos');
-        const uploadRes = await fetch('/api/upload', { method: 'POST', body: fd });
-        if (!uploadRes.ok) throw new Error('Error al subir el documento');
-        const uploaded = await uploadRes.json();
+        const uploaded = await uploadFileChunked(file, { folder: 'permisos' });
         documentUrls.push({ url: uploaded.url || uploaded.webUrl, name: file.name });
       }
 

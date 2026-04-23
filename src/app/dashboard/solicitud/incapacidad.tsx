@@ -13,6 +13,7 @@ import {
   Briefcase,
   X,
 } from 'lucide-react';
+import { uploadFileChunked } from '../../../lib/uploadChunked';
 
 // Interface definition - removed name and cedula
 interface FormData {
@@ -173,14 +174,10 @@ const IncapacidadForm = () => {
         return;
       }
 
+      // Chunked uploader stays under Vercel's ~4.5 MB serverless request cap.
       const documentUrls: { url: string; name: string }[] = [];
       for (const file of formData.documents) {
-        const uploadForm = new window.FormData();
-        uploadForm.append('file', file);
-        uploadForm.append('folder', 'incapacidad');
-        const uploadRes = await fetch('/api/upload', { method: 'POST', body: uploadForm });
-        if (!uploadRes.ok) throw new Error('Error al subir archivo');
-        const uploaded = await uploadRes.json();
+        const uploaded = await uploadFileChunked(file, { folder: 'incapacidad' });
         documentUrls.push({ url: uploaded.url || uploaded.webUrl, name: file.name });
       }
 

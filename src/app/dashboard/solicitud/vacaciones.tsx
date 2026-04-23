@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { useSession } from 'next-auth/react';
 import JefeSelector, { type JefeOption } from './JefeSelector';
+import { uploadFileChunked } from '../../../lib/uploadChunked';
 
 interface VacationBalance {
   days: number | null;
@@ -159,15 +160,11 @@ const VacacionesForm = () => {
         return;
       }
 
-      // Upload all documents
+      // Upload all documents via the chunked helper — the single-shot /api/upload
+      // endpoint hits Vercel's ~4.5 MB serverless body cap and returns 413.
       const documentUrls: { url: string; name: string }[] = [];
       for (const file of formData.documents) {
-        const fd = new FormData();
-        fd.append('file', file);
-        fd.append('folder', 'vacaciones');
-        const uploadRes = await fetch('/api/upload', { method: 'POST', body: fd });
-        if (!uploadRes.ok) throw new Error('Error al subir el documento');
-        const uploaded = await uploadRes.json();
+        const uploaded = await uploadFileChunked(file, { folder: 'vacaciones' });
         documentUrls.push({ url: uploaded.url || uploaded.webUrl, name: file.name });
       }
 

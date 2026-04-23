@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSession } from 'next-auth/react';
 import DashboardNavbar from '../navbar';
+import { uploadFileChunked } from '../../../lib/uploadChunked';
 import {
   FileText,
   Download,
@@ -167,13 +168,10 @@ export default function DocumentsPage() {
 
     setUploading(true);
     try {
-      const formData = new FormData();
-      formData.append('file', uploadFile);
-      formData.append('folder', uploadKind === 'policy' ? 'politicas' : 'documentos');
-
-      const uploadRes = await fetch('/api/upload', { method: 'POST', body: formData });
-      if (!uploadRes.ok) throw new Error('Upload failed');
-      const uploadData = await uploadRes.json();
+      // Chunked upload so files past Vercel's ~4.5 MB serverless body cap still land.
+      const uploadData = await uploadFileChunked(uploadFile, {
+        folder: uploadKind === 'policy' ? 'politicas' : 'documentos',
+      });
       const downloadURL = uploadData.url || uploadData.webUrl;
 
       const docRes = await fetch('/api/documentos', {
