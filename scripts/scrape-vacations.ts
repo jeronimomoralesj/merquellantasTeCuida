@@ -197,7 +197,10 @@ async function scrapeOne(
   // Click "Actualizar" to bring the selection back to the main form
   await page.click(sel('formSeleccionarEmpleadoselEmp:btnActualizarselEmp'));
 
-  // Wait until the main form's employee input has a value
+  // Wait until the main form's employee input has a value. Pass `null` as the
+  // second (arg) slot explicitly — otherwise Playwright treats the options
+  // object as the pageFunction arg and silently falls back to its default 30s
+  // timeout, which hides DOM-race errors as generic timeouts.
   await page.waitForFunction(
     () => {
       const el = document.querySelector(
@@ -205,7 +208,8 @@ async function scrapeOne(
       ) as HTMLInputElement | null;
       return !!el && !!el.value && el.value.trim().length > 0;
     },
-    { timeout: 15_000 }
+    null,
+    { timeout: 30_000 }
   );
 
   // Set fecha corte (DD/MM/YYYY) — the RichFaces input also wants blur/change
