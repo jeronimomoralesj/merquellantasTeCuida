@@ -598,6 +598,14 @@ function CicloActualTab() {
     [visibleRows, filter]
   );
 
+  const cycleTotal = useMemo(
+    () => visibleRows.reduce((sum, row) => {
+      const creditTotal = row.creditos.reduce((s, c) => s + (c.monto || 0), 0);
+      return sum + (row.aporte || 0) + (row.actividad || 0) + creditTotal;
+    }, 0),
+    [visibleRows],
+  );
+
   const handleSubmit = async () => {
     setSubmitting(true);
     setError("");
@@ -722,6 +730,15 @@ function CicloActualTab() {
           <p className="text-xs">Solo se muestran los usuarios cuyo presupuesto cambió. Redistribuye el dinero entre las categorías sin sobrepasar el presupuesto. Al aprobar, los movimientos se aplicarán inmediatamente sin pasar por el administrador.</p>
         </div>
       )}
+
+      {/* Running total — mirrored at the bottom of the card so the fondo user
+          can see the ciclo size both before scrolling into the rows and after. */}
+      <div className="mx-5 mt-4 p-4 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-between">
+        <span className="text-sm font-semibold text-emerald-800">
+          Total del ciclo ({visibleRows.length} {visibleRows.length === 1 ? "usuario" : "usuarios"})
+        </span>
+        <span className="text-xl font-extrabold text-emerald-900">{fmt(cycleTotal)}</span>
+      </div>
 
       {/* PDF Upload Section */}
       <div className="mx-5 mt-4 p-4 rounded-xl bg-gray-50 border border-gray-200">
@@ -969,6 +986,13 @@ function CicloActualTab() {
             </div>
           );
         })}
+
+        {filtered.length > 0 && (
+          <div className="mt-3 p-4 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-between">
+            <span className="text-sm font-semibold text-emerald-800">Total del ciclo</span>
+            <span className="text-xl font-extrabold text-emerald-900">{fmt(cycleTotal)}</span>
+          </div>
+        )}
 
         {/* Add user button (visible after PDF upload) */}
         {pdfUploaded && (
@@ -1288,13 +1312,15 @@ function BuscarAfiliadoTab() {
   }, []);
 
   // Client-side filter — lets the user scan by name or cédula without
-  // round-tripping to the server on every keystroke.
+  // round-tripping to the server on every keystroke. String()-coerce both
+  // sides defensively: a stray numeric cedula in the API response would
+  // otherwise blow up .toLowerCase() and take the whole tab down.
   const filteredMembers = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    const q = String(query || "").trim().toLowerCase();
     if (!q) return allMembers;
     return allMembers.filter((m) =>
-      (m.nombre || "").toLowerCase().includes(q) ||
-      (m.cedula || "").toLowerCase().includes(q),
+      String(m.nombre || "").toLowerCase().includes(q) ||
+      String(m.cedula || "").toLowerCase().includes(q),
     );
   }, [allMembers, query]);
 
@@ -1617,9 +1643,15 @@ function BuscarAfiliadoTab() {
                       <tbody className="divide-y divide-gray-100">
                         {aportes.map((a, i) => {
                           const id = a._id as string | undefined;
-                          const fechaStr = a.fecha_ejecucion
-                            ? new Date(a.fecha_ejecucion).toISOString().slice(0, 10)
-                            : "";
+                          // Guard against invalid/missing dates so a bad row
+                          // doesn't throw `RangeError: Invalid time value`
+                          // from toISOString() and blank the tab.
+                          const fechaStr = (() => {
+                            if (!a.fecha_ejecucion) return "";
+                            const d = new Date(a.fecha_ejecucion);
+                            if (isNaN(d.getTime())) return "";
+                            return d.toISOString().slice(0, 10);
+                          })();
                           const onBlurPatch = (field: string, parse: (v: string) => unknown, current: unknown) =>
                             (e: React.FocusEvent<HTMLInputElement>) => {
                               const next = parse(e.target.value);
@@ -1840,7 +1872,11 @@ function BuscarAfiliadoTab() {
                             { label: "Cuotas Pagadas", field: "cuotas_pagadas", value: cr.cuotas_pagadas, type: "number" },
                             { label: "Cuotas Restantes", field: "", value: cr.cuotas_restantes, type: "readonly" },
                             { label: "Frecuencia", field: "frecuencia_pago", value: cr.frecuencia_pago || "mensual", type: "select" },
-                            { label: "Fecha Desembolso", field: "fecha_desembolso", value: cr.fecha_desembolso ? new Date(cr.fecha_desembolso).toISOString().slice(0, 10) : "", type: "date" },
+                            { label: "Fecha Desembolso", field: "fecha_desembolso", value: (() => {
+                              if (!cr.fecha_desembolso) return "";
+                              const d = new Date(cr.fecha_desembolso);
+                              return isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 10);
+                            })(), type: "date" },
                           ] as const).map((f) => (
                             <div key={f.label}>
                               <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">{f.label}</p>
