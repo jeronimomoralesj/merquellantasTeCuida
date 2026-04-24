@@ -11,7 +11,6 @@ import {
   LayoutDashboard,
   UserCircle2,
   X,
-  Download,
 } from 'lucide-react';
 import Solicitudes from "./components/solicitudes";
 import AdminPage from './admin/page';
@@ -119,10 +118,6 @@ const Dashboard = () => {
 
   // Profile state
   const [profile, setProfile] = useState<UserProfile | null>(null);
-
-  // Income certificates available for the current user (latest year first)
-  const [certYears, setCertYears] = useState<{ year: number; updated_at: string | null }[]>([]);
-  const [certDownloading, setCertDownloading] = useState<number | null>(null);
 
   // Vacations balance
   const [vacation, setVacation] = useState<{
@@ -557,18 +552,6 @@ useEffect(() => {
     }
 
     fetchProfile();
-
-    async function fetchCertYears() {
-      try {
-        const res = await fetch('/api/certificados/me');
-        if (!res.ok) { setCertYears([]); return; }
-        const data = await res.json();
-        setCertYears(Array.isArray(data.years) ? data.years : []);
-      } catch {
-        setCertYears([]);
-      }
-    }
-    fetchCertYears();
 
     async function fetchVacation() {
       try {
@@ -1543,54 +1526,8 @@ useEffect(() => {
                         </div>
                       )}
 
-                      {certYears.length > 0 && (
-                        <div className="border-t border-gray-100 pt-4 mt-5">
-                          <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-2">
-                            Certificado de ingresos y retenciones
-                          </p>
-                          <div className="space-y-2">
-                            {certYears.map((y) => (
-                              <button
-                                key={y.year}
-                                onClick={async () => {
-                                  setCertDownloading(y.year);
-                                  try {
-                                    const res = await fetch(`/api/certificados/download?year=${y.year}`);
-                                    if (!res.ok) {
-                                      const err = await res.json().catch(() => ({}));
-                                      alert(err.error || 'No se pudo descargar el certificado.');
-                                      return;
-                                    }
-                                    const blob = await res.blob();
-                                    const url = URL.createObjectURL(blob);
-                                    const a = document.createElement('a');
-                                    a.href = url;
-                                    a.download = `certificado_ingresos_${y.year}.pdf`;
-                                    document.body.appendChild(a);
-                                    a.click();
-                                    a.remove();
-                                    URL.revokeObjectURL(url);
-                                  } finally {
-                                    setCertDownloading(null);
-                                  }
-                                }}
-                                disabled={certDownloading === y.year}
-                                className="w-full inline-flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl bg-[#f4a900]/10 hover:bg-[#f4a900]/20 border border-[#f4a900]/30 text-sm font-semibold text-[#9a6b00] transition disabled:opacity-60"
-                              >
-                                <span className="flex items-center gap-2">
-                                  <FileText className="h-4 w-4" />
-                                  Descargar certificado {y.year}
-                                </span>
-                                {certDownloading === y.year ? (
-                                  <span className="animate-pulse text-xs">Generando...</span>
-                                ) : (
-                                  <Download className="h-4 w-4" />
-                                )}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      )}
+                      {/* Certificado de ingresos y retenciones download is temporarily
+                          disabled. Re-enable by restoring this block (see git history). */}
                     </div>
                   );
                 })()}
