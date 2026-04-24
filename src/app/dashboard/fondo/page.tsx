@@ -210,7 +210,7 @@ export default function FondoPage() {
   // Non-fondo users see their own fondo data (read-only user view)
   if (session.user.rol !== "fondo") {
     return (
-      <div className="min-h-screen bg-gray-50 text-gray-900">
+      <div className="min-h-screen bg-gray-50 text-gray-900" translate="no">
         <DashboardNavbar activePage="fondo" />
         <div className="pt-20 text-gray-900">
           <FondoUserView />
@@ -1324,12 +1324,20 @@ function BuscarAfiliadoTab() {
     );
   }, [allMembers, query]);
 
-  const loadProfile = async (user: SearchUser) => {
-    setLoadingProfile(true);
-    setSaldos(null);
-    setAportes([]);
-    setActividades([]);
-    setCreditos([]);
+  // Shared fetch. When `background` is true we skip the loader + the
+  // optimistic blanking of the saldos/aportes/etc. state, so an edit-save
+  // cycle doesn't flash the whole profile out and back in. Fewer mount/
+  // unmount cycles also means less surface for DOM-mutating extensions
+  // (e.g. Google Translate) to trip up React's reconciler — we've seen
+  // removeChild errors coming from that interaction.
+  const loadProfile = async (user: SearchUser, background = false) => {
+    if (!background) {
+      setLoadingProfile(true);
+      setSaldos(null);
+      setAportes([]);
+      setActividades([]);
+      setCreditos([]);
+    }
     try {
       const userId = user.user_id || user.id;
       const sRes = await fetch(`/api/fondo/saldos?user_id=${userId}`);
@@ -1341,7 +1349,7 @@ function BuscarAfiliadoTab() {
         if (Array.isArray(data.cartera)) setCreditos(data.cartera);
       }
     } finally {
-      setLoadingProfile(false);
+      if (!background) setLoadingProfile(false);
     }
   };
 
@@ -1355,7 +1363,7 @@ function BuscarAfiliadoTab() {
   };
 
   const refreshProfile = async () => {
-    if (selected) await loadProfile(selected);
+    if (selected) await loadProfile(selected, /* background = */ true);
   };
 
   const handlePatchAporte = async (id: string, patch: Record<string, unknown>) => {
@@ -1508,9 +1516,9 @@ function BuscarAfiliadoTab() {
             </div>
           ) : (
             <div className="mt-4 max-h-[480px] overflow-y-auto divide-y divide-gray-100 rounded-xl border border-gray-200">
-              {filteredMembers.map((u) => (
+              {filteredMembers.map((u, i) => (
                 <button
-                  key={u.id}
+                  key={u.id ? `m-${u.id}` : `m-idx-${i}`}
                   onClick={() => selectUser(u)}
                   className="w-full flex items-center justify-between px-4 py-3 hover:bg-[#f4a900]/[0.04] transition-colors text-left"
                 >
@@ -1659,7 +1667,7 @@ function BuscarAfiliadoTab() {
                               handlePatchAporte(id, { [field]: next });
                             };
                           return (
-                            <tr key={id || i} className="hover:bg-gray-50 transition-colors">
+                            <tr key={id ? `a-${id}` : `a-idx-${i}`} className="hover:bg-gray-50 transition-colors">
                               <td className="px-3 py-2">
                                 <input
                                   defaultValue={a.periodo}
@@ -1755,7 +1763,7 @@ function BuscarAfiliadoTab() {
                       <tbody className="divide-y divide-gray-100">
                         {actividades.map((a, i) => (
                           <tr
-                            key={a._id || i}
+                            key={a._id ? `act-${a._id}` : `act-idx-${i}`}
                             className="hover:bg-gray-50 transition-colors"
                           >
                             <td className="px-3 py-2">
@@ -1819,7 +1827,7 @@ function BuscarAfiliadoTab() {
                       const totalCuotas = (cr.numero_cuotas || (cr.cuotas_pagadas + cr.cuotas_restantes));
                       return (
                       <div
-                        key={cr._id || idx}
+                        key={cr._id ? `cr-${cr._id}` : `cr-idx-${idx}`}
                         className="rounded-xl border border-gray-200 overflow-hidden"
                       >
                         {/* Credit header with editable ID */}
