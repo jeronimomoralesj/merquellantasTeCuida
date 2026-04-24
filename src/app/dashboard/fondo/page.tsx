@@ -1498,15 +1498,32 @@ function HistorialTab() {
                 <div className="px-5 pb-5 space-y-4">
                   {(() => {
                     const movimientos = c.movimientos || [];
+                    const cid = (c._id || c.id) as string;
                     const computeTotal = (m: CycleRow): number => {
                       const credTotal = Array.isArray(m.creditos)
                         ? m.creditos.reduce((s, x) => s + (Number(x.monto) || 0), 0)
                         : (m.credito_pago_total || 0);
                       return (Number(m.aporte) || 0) + (Number(m.actividad) || 0) + credTotal;
                     };
+                    const grandTotal = movimientos.reduce((s, m) => s + computeTotal(m), 0);
 
                     return (
                       <>
+                        <div className="flex items-center justify-between gap-3 flex-wrap">
+                          <div className="text-xs text-gray-500">
+                            {movimientos.length} asociado{movimientos.length === 1 ? "" : "s"}
+                            {" · "}
+                            <span className="font-semibold text-gray-900">Total: {fmt(grandTotal)}</span>
+                          </div>
+                          <a
+                            href={`/api/fondo/ciclos/${cid}/reporte-pdf`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-900 text-white text-xs font-bold hover:bg-gray-700 transition"
+                          >
+                            <FileText size={13} /> Descargar PDF
+                          </a>
+                        </div>
                         <div className="overflow-x-auto rounded-xl border border-gray-200">
                           <table className="w-full text-sm">
                             <thead>
