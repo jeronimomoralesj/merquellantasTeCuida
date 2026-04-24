@@ -112,6 +112,47 @@ export async function GET(req: NextRequest) {
     return base;
   });
 
+  // When include_ciclo=1 we also want users who show up in the payroll PDF
+  // (users.cicloActual is set) but have no fondo_members record yet —
+  // otherwise their subtotal disappears from the ciclo form and the total
+  // on screen doesn't match the PDF's printed total. Return them as
+  // synthetic rows with zeroed saldos + a `not_member` flag so the UI can
+  // treat them appropriately (and the admin knows to enroll them).
+  if (includeCiclo) {
+    const existingUserIds = new Set(flattened.map((m) => String(m.user_id)));
+    const orphans = await db
+      .collection('users')
+      .find(
+        { cicloActual: { $exists: true } },
+        { projection: { nombre: 1, cedula: 1, email: 1, cargo_empleado: 1, departamento: 1, cicloActual: 1 } },
+      )
+      .toArray();
+    for (const u of orphans) {
+      const uid = u._id.toString();
+      if (existingUserIds.has(uid)) continue;
+      flattened.push({
+        id: uid,
+        user_id: uid,
+        nombre: u.nombre || '',
+        cedula: u.cedula || '',
+        email: u.email || '',
+        cargo_empleado: u.cargo_empleado || '',
+        departamento: u.departamento || '',
+        frecuencia: 'quincenal',
+        monto_aporte: 0,
+        saldo_permanente: 0,
+        saldo_social: 0,
+        saldo_actividad: 0,
+        saldo_intereses: 0,
+        fecha_afiliacion: null,
+        activo: true,
+        not_member: true,
+        cicloActual: u.cicloActual,
+      });
+    }
+    flattened.sort((a, b) => String(a.nombre).localeCompare(String(b.nombre), 'es'));
+  }
+
   return NextResponse.json(flattened);
 }
 

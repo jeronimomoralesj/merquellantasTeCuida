@@ -31,9 +31,27 @@ async function applyCycleMovements(
         created_at: new Date(),
       });
 
+      // Upsert so the saldo lands even for users who show up in the
+      // payroll PDF but don't have a fondo_members record yet — without
+      // the upsert, the updateOne is a noop and the contribution silently
+      // goes nowhere. $setOnInsert fills in the defaults so the synthetic
+      // member row is a valid member on subsequent reads.
       await db.collection('fondo_members').updateOne(
         { user_id: mov.user_id },
-        { $inc: { saldo_permanente: permanente, saldo_social: social } }
+        {
+          $inc: { saldo_permanente: permanente, saldo_social: social },
+          $setOnInsert: {
+            fecha_afiliacion: new Date(),
+            activo: true,
+            frecuencia: mov.frecuencia || 'quincenal',
+            monto_aporte: 0,
+            saldo_actividad: 0,
+            saldo_intereses: 0,
+            created_at: new Date(),
+            auto_enrolled_from_ciclo: true,
+          },
+        },
+        { upsert: true },
       );
     }
 
@@ -55,7 +73,21 @@ async function applyCycleMovements(
       const inc = tipo === 'aporte' ? monto : -monto;
       await db.collection('fondo_members').updateOne(
         { user_id: mov.user_id },
-        { $inc: { saldo_actividad: inc } }
+        {
+          $inc: { saldo_actividad: inc },
+          $setOnInsert: {
+            fecha_afiliacion: new Date(),
+            activo: true,
+            frecuencia: mov.frecuencia || 'quincenal',
+            monto_aporte: 0,
+            saldo_permanente: 0,
+            saldo_social: 0,
+            saldo_intereses: 0,
+            created_at: new Date(),
+            auto_enrolled_from_ciclo: true,
+          },
+        },
+        { upsert: true },
       );
     }
 
