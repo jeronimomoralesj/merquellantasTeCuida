@@ -23,6 +23,7 @@ import {
   Landmark,
   Upload,
   FileText,
+  Trash2,
 } from "lucide-react";
 import DashboardNavbar from "../navbar";
 import FondoUserView from "./user-view";
@@ -1331,6 +1332,43 @@ function BuscarAfiliadoTab() {
     if (selected) await loadProfile(selected);
   };
 
+  const handlePatchAporte = async (id: string, patch: Record<string, unknown>) => {
+    if (!id) return;
+    setSaving(true);
+    setAddError("");
+    try {
+      const res = await fetch("/api/fondo/aportes", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, ...patch }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || "Error");
+      await refreshProfile();
+    } catch (err) {
+      setAddError(err instanceof Error ? err.message : "Error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteAporte = async (id: string) => {
+    if (!id) return;
+    if (!confirm("¿Eliminar este aporte? El saldo del afiliado se ajustará en consecuencia.")) return;
+    setSaving(true);
+    setAddError("");
+    try {
+      const res = await fetch(`/api/fondo/aportes?id=${encodeURIComponent(id)}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error((await res.json()).error || "Error");
+      await refreshProfile();
+    } catch (err) {
+      setAddError(err instanceof Error ? err.message : "Error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleAddAporte = async (values: { monto_total: number; periodo: string; descripcion: string }) => {
     if (!selected) return;
     setSaving(true);
@@ -1573,33 +1611,73 @@ function BuscarAfiliadoTab() {
                           <th className="px-3 py-2 text-right">Permanente</th>
                           <th className="px-3 py-2 text-right">Social</th>
                           <th className="px-3 py-2">Fecha</th>
+                          <th className="px-3 py-2"></th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
-                        {aportes.map((a, i) => (
-                          <tr
-                            key={i}
-                            className="hover:bg-gray-50 transition-colors"
-                          >
-                            <td className="px-3 py-2 font-medium text-gray-900">
-                              {a.periodo}
-                            </td>
-                            <td className="px-3 py-2 text-right text-gray-600">
-                              {fmt(a.monto_total || 0)}
-                            </td>
-                            <td className="px-3 py-2 text-right text-gray-600">
-                              {fmt(a.monto_permanente || 0)}
-                            </td>
-                            <td className="px-3 py-2 text-right text-gray-600">
-                              {fmt(a.monto_social || 0)}
-                            </td>
-                            <td className="px-3 py-2 text-gray-500 text-xs">
-                              {a.fecha_ejecucion ? new Date(a.fecha_ejecucion).toLocaleDateString("es-CO") : "—"}
-                            </td>
-                          </tr>
-                        ))}
+                        {aportes.map((a, i) => {
+                          const id = a._id as string | undefined;
+                          const fechaStr = a.fecha_ejecucion
+                            ? new Date(a.fecha_ejecucion).toISOString().slice(0, 10)
+                            : "";
+                          const onBlurPatch = (field: string, parse: (v: string) => unknown, current: unknown) =>
+                            (e: React.FocusEvent<HTMLInputElement>) => {
+                              const next = parse(e.target.value);
+                              if (next === current || !id) return;
+                              handlePatchAporte(id, { [field]: next });
+                            };
+                          return (
+                            <tr key={id || i} className="hover:bg-gray-50 transition-colors">
+                              <td className="px-3 py-2">
+                                <input
+                                  defaultValue={a.periodo}
+                                  onBlur={onBlurPatch("periodo", (v) => v.trim(), a.periodo)}
+                                  onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                                  className="w-24 font-medium text-gray-900 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-[#f4a900] focus:outline-none transition-colors"
+                                />
+                              </td>
+                              <td className="px-3 py-2 text-right">
+                                <input
+                                  type="number"
+                                  min={0}
+                                  defaultValue={a.monto_total || 0}
+                                  onBlur={onBlurPatch("monto_total", (v) => Number(v) || 0, a.monto_total || 0)}
+                                  onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                                  className="w-28 text-right text-gray-600 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-[#f4a900] focus:outline-none transition-colors"
+                                />
+                              </td>
+                              <td className="px-3 py-2 text-right text-gray-400">
+                                {fmt(a.monto_permanente || 0)}
+                              </td>
+                              <td className="px-3 py-2 text-right text-gray-400">
+                                {fmt(a.monto_social || 0)}
+                              </td>
+                              <td className="px-3 py-2">
+                                <input
+                                  type="date"
+                                  defaultValue={fechaStr}
+                                  onBlur={onBlurPatch("fecha_ejecucion", (v) => v, fechaStr)}
+                                  className="text-xs text-gray-500 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-[#f4a900] focus:outline-none transition-colors"
+                                />
+                              </td>
+                              <td className="px-3 py-2 text-right">
+                                <button
+                                  onClick={() => id && handleDeleteAporte(id)}
+                                  disabled={!id || saving}
+                                  title="Eliminar aporte"
+                                  className="p-1.5 rounded-lg text-gray-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-40 transition-colors"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
+                    <p className="mt-2 text-[10px] text-gray-400">
+                      Permanente y Social se recalculan automáticamente (90% / 10% del aporte).
+                    </p>
                   </div>
                 ) : (
                   <p className="text-sm text-gray-400">
