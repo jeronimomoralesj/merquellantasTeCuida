@@ -54,6 +54,13 @@ export interface SolicitudPayload {
   numero_cuotas: number;
   frecuencia_pago: Frecuencia;
   motivo_solicitud: string | null;
+  // Populated in fondoMode — fondo creates credits as `activo` and needs
+  // to set these at creation time. The backend's POST /api/fondo/cartera
+  // already honours them when session.user.rol === 'fondo'.
+  user_id?: string;
+  fecha_desembolso?: string;
+  fecha_cuota_1?: string;
+  credito_id?: string;
   // Full structured Solicitud
   solicitud: {
     fecha_solicitud: string;
@@ -80,6 +87,12 @@ interface Props {
   onSubmit: (payload: SolicitudPayload) => Promise<void>;
   submitting?: boolean;
   error?: string | null;
+  // When true, the form is used by the fondo admin to create an active
+  // credit on behalf of a user. Adds fecha_desembolso / fecha_cuota_1 /
+  // credito_id fields, relaxes the deudor-signature requirement (fondo
+  // can capture it on paper and upload later), and changes the submit
+  // label to "Crear crédito".
+  fondoMode?: boolean;
   // Prefill for info_asociado
   prefill: Partial<AsociadoInfo>;
 }
@@ -307,6 +320,7 @@ export default function SolicitudCreditoForm({
   submitting,
   error,
   prefill,
+  fondoMode = false,
 }: Props) {
   // Línea de crédito
   const [lineaCredito, setLineaCredito] = useState<LineaCredito>("libre_inversion");
@@ -348,6 +362,17 @@ export default function SolicitudCreditoForm({
   // Firma + autorización
   const [firmaDeudor, setFirmaDeudor] = useState("");
   const [autorizacion, setAutorizacion] = useState(false);
+  // Fondo-only approval fields. Sensible defaults: disbursement today,
+  // first cuota today + one period.
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const defaultCuota1Iso = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 30);
+    return d.toISOString().slice(0, 10);
+  })();
+  const [fechaDesembolso, setFechaDesembolso] = useState(todayIso);
+  const [fechaCuota1, setFechaCuota1] = useState(defaultCuota1Iso);
+  const [creditoCode, setCreditoCode] = useState("");
   // Local error for validation
   const [localError, setLocalError] = useState<string | null>(null);
 
@@ -383,10 +408,17 @@ export default function SolicitudCreditoForm({
       return "Completa apellidos, nombres y cédula.";
     }
     if (!autorizacion) return "Debes aceptar la autorización para continuar.";
-    if (!firmaDeudor) return "Firma como deudor antes de enviar.";
+    // In fondoMode firmas are optional — the admin may capture them on
+    // paper and scan later. For self-service solicitudes they're still
+    // required evidence that the user consented.
+    if (!fondoMode && !firmaDeudor) return "Firma como deudor antes de enviar.";
     for (const c of codeudores) {
       if (!c.nombre.trim() || !c.cedula.trim()) return "Completa nombre y cédula de cada codeudor.";
-      if (!c.firma) return "Cada codeudor debe firmar.";
+      if (!fondoMode && !c.firma) return "Cada codeudor debe firmar.";
+    }
+    if (fondoMode) {
+      if (!fechaDesembolso) return "Ingresa la fecha de desembolso.";
+      if (!fechaCuota1) return "Ingresa la fecha de la primera cuota.";
     }
     return null;
   };
@@ -403,6 +435,13 @@ export default function SolicitudCreditoForm({
       numero_cuotas: cuotasN,
       frecuencia_pago: frecuencia,
       motivo_solicitud: destinacion || null,
+      ...(fondoMode
+        ? {
+            fecha_desembolso: fechaDesembolso,
+            fecha_cuota_1: fechaCuota1,
+            credito_id: creditoCode.trim() || undefined,
+          }
+        : {}),
       solicitud: {
         fecha_solicitud: new Date().toISOString(),
         linea_credito: lineaCredito,
@@ -804,6 +843,41 @@ export default function SolicitudCreditoForm({
             </div>
           </Section>
 
+          {/* fondo-only: approval dates + credit code. Shown before the
+              autorización so the admin sees it set up for activo state. */}
+          {fondoMode && (
+            <Section title="Datos de aprobación (solo fondo)">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <Field label="Fecha de desembolso">
+                  <input
+                    type="date"
+                    value={fechaDesembolso}
+                    onChange={(e) => setFechaDesembolso(e.target.value)}
+                    className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#f4a900]/40"
+                  />
+                </Field>
+                <Field label="Fecha primera cuota">
+                  <input
+                    type="date"
+                    value={fechaCuota1}
+                    onChange={(e) => setFechaCuota1(e.target.value)}
+                    className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#f4a900]/40"
+                  />
+                </Field>
+                <Field label="Código del crédito (opcional)">
+                  <TextInput
+                    value={creditoCode}
+                    onChange={setCreditoCode}
+                    placeholder="Ej: CR-2026-001"
+                  />
+                </Field>
+              </div>
+              <p className="mt-2 text-[11px] text-gray-500">
+                El crédito se creará en estado <b>activo</b> y el usuario lo verá inmediatamente en su cartera.
+              </p>
+            </Section>
+          )}
+
           {/* 7. Autorización + Firma */}
           <Section title="7. Autorización y firma">
             <div className="p-3 rounded-xl bg-gray-50 border border-gray-200 text-[11px] text-gray-600 leading-relaxed max-h-36 overflow-y-auto">
@@ -860,7 +934,9 @@ export default function SolicitudCreditoForm({
             disabled={submitting}
             className="px-5 py-2.5 rounded-xl bg-[#f4a900] text-white font-semibold text-sm shadow-md shadow-[#f4a900]/25 hover:bg-[#e68a00] disabled:opacity-50"
           >
-            {submitting ? "Enviando..." : "Enviar solicitud"}
+            {submitting
+              ? fondoMode ? "Creando..." : "Enviando..."
+              : fondoMode ? "Crear crédito" : "Enviar solicitud"}
           </button>
         </div>
       </div>

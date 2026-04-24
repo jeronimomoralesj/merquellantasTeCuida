@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import DashboardNavbar from "../navbar";
 import FondoUserView from "./user-view";
+import SolicitudCreditoForm, { type SolicitudPayload } from "./SolicitudCreditoForm";
 import {
   getCurrentCyclePeriodo,
   formatPeriodoLabel as formatPeriodoLabelLib,
@@ -2696,16 +2697,17 @@ function SolicitudesTab() {
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [error, setError] = useState("");
 
-  // Manual creation form
+  // Manual creation — pick a user, then open SolicitudCreditoForm in
+  // fondoMode. All the line/garantías/codeudores/documentos detail the
+  // self-service flow captures, fondo captures too.
   const [showManual, setShowManual] = useState(false);
   const [manualSearch, setManualSearch] = useState("");
   const [manualResults, setManualResults] = useState<UserLite[]>([]);
   const [manualUser, setManualUser] = useState<UserLite | null>(null);
-  const [manualValor, setManualValor] = useState("");
-  const [manualCuotas, setManualCuotas] = useState("12");
-  const [manualFrecuencia, setManualFrecuencia] = useState<"mensual" | "quincenal">("mensual");
-  const [manualExtraPago, setManualExtraPago] = useState("");
-  const [manualCreating, setManualCreating] = useState(false);
+  const [manualPrefill, setManualPrefill] = useState<Record<string, unknown> | null>(null);
+  const [manualFormOpen, setManualFormOpen] = useState(false);
+  const [manualSubmitting, setManualSubmitting] = useState(false);
+  const [manualError, setManualError] = useState<string | null>(null);
 
   // Bulk credit upload
   const [bulkUploading, setBulkUploading] = useState(false);
@@ -2845,30 +2847,47 @@ function SolicitudesTab() {
     }
   };
 
-  const createManualCredito = async () => {
-    if (!manualUser || !manualValor) return;
-    setManualCreating(true);
+  // Called after fondo picks a user from the search results. Loads the
+  // full user record so we can prefill direccion/barrio/telefono/etc.
+  // into the Solicitud form, then opens it.
+  const openManualFormFor = async (u: UserLite) => {
+    setManualUser(u);
+    setManualError(null);
+    try {
+      const res = await fetch(`/api/users/${u._id}`);
+      if (res.ok) setManualPrefill(await res.json());
+      else setManualPrefill(null);
+    } catch {
+      setManualPrefill(null);
+    }
+    setManualFormOpen(true);
+  };
+
+  const submitManualCredito = async (payload: SolicitudPayload) => {
+    if (!manualUser) return;
+    setManualSubmitting(true);
+    setManualError(null);
     try {
       const res = await fetch("/api/fondo/cartera", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          user_id: manualUser._id,
-          valor_prestamo: Number(manualValor),
-          numero_cuotas: Number(manualCuotas),
-          frecuencia_pago: manualFrecuencia,
-        }),
+        body: JSON.stringify({ user_id: manualUser._id, ...payload }),
       });
-      if (res.ok) {
-        setShowManual(false);
-        setManualUser(null);
-        setManualValor("");
-        setManualSearch("");
-        setManualResults([]);
-        await loadAll();
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error((d as { error?: string }).error || "Error al crear el crédito");
       }
+      setManualFormOpen(false);
+      setShowManual(false);
+      setManualUser(null);
+      setManualPrefill(null);
+      setManualSearch("");
+      setManualResults([]);
+      await loadAll();
+    } catch (e) {
+      setManualError(e instanceof Error ? e.message : "Error");
     } finally {
-      setManualCreating(false);
+      setManualSubmitting(false);
     }
   };
 
@@ -2886,7 +2905,10 @@ function SolicitudesTab() {
         <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">{error}</div>
       )}
 
-      {/* Manual creation */}
+      {/* Manual creation — fondo picks a user, then fills the same
+          Solicitud de Crédito form the self-service flow uses, plus the
+          fondo-only approval fields (fecha_desembolso, fecha_cuota_1,
+          credito_id). See SolicitudCreditoForm fondoMode. */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 sm:p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
@@ -2902,6 +2924,11 @@ function SolicitudesTab() {
         </div>
         {showManual && (
           <div className="space-y-4">
+            <p className="text-xs text-gray-500">
+              Busca al afiliado y completa el mismo formulario de solicitud que usan los usuarios.
+              Como fondo, además eliges la fecha de desembolso, la primera cuota y el código del crédito;
+              el crédito se crea ya <b>activo</b>.
+            </p>
             <div className="flex gap-2">
               <input
                 type="text"
@@ -2923,7 +2950,7 @@ function SolicitudesTab() {
                 {manualResults.map((u) => (
                   <button
                     key={u._id}
-                    onClick={() => { setManualUser(u); setManualResults([]); }}
+                    onClick={() => { setManualResults([]); openManualFormFor(u); }}
                     className="w-full text-left px-4 py-2.5 hover:bg-gray-50 text-sm"
                   >
                     <div className="font-medium text-gray-900">{u.nombre}</div>
@@ -2932,185 +2959,60 @@ function SolicitudesTab() {
                 ))}
               </div>
             )}
-            {manualUser && (
+            {manualUser && !manualFormOpen && (
               <div className="p-3 rounded-xl bg-orange-50 border border-orange-200 flex items-center justify-between">
                 <div className="text-sm">
                   <span className="font-semibold">{manualUser.nombre}</span>
                   <span className="ml-2 text-gray-500">CC: {manualUser.cedula}</span>
                 </div>
-                <button onClick={() => setManualUser(null)} className="text-xs text-gray-500 hover:text-gray-700">Cambiar</button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setManualFormOpen(true)}
+                    className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700"
+                  >
+                    Abrir formulario
+                  </button>
+                  <button
+                    onClick={() => { setManualUser(null); setManualPrefill(null); }}
+                    className="text-xs text-gray-500 hover:text-gray-700"
+                  >
+                    Cambiar
+                  </button>
+                </div>
               </div>
             )}
-            {manualUser && (() => {
-              const valor = Number(manualValor) || 0;
-              const cuotas = Math.max(1, Math.min(120, Number(manualCuotas) || 0));
-              const cuotasComoMeses = manualFrecuencia === "quincenal" ? cuotas / 2 : cuotas;
-              const tasa = cuotasComoMeses <= 12 ? 1.0 : cuotasComoMeses <= 24 ? 1.2 : 1.3;
-              const tasaPorPeriodo = (manualFrecuencia === "quincenal" ? tasa / 2 : tasa) / 100;
-              const showSchedule = valor > 0 && cuotas > 0;
-
-              // Standard amortization
-              const cuotaFija = showSchedule
-                ? tasaPorPeriodo === 0
-                  ? valor / cuotas
-                  : valor * (tasaPorPeriodo * Math.pow(1 + tasaPorPeriodo, cuotas)) / (Math.pow(1 + tasaPorPeriodo, cuotas) - 1)
-                : 0;
-
-              const extraPago = Number(manualExtraPago) || 0;
-              const pagoReal = Math.max(cuotaFija, cuotaFija + extraPago);
-
-              // Build schedule with optional extra payment
-              type SchedRow = { num: number; saldoInicial: number; cuota: number; interes: number; capital: number; saldoFinal: number };
-              const schedule: SchedRow[] = [];
-              if (showSchedule) {
-                let balance = valor;
-                for (let i = 0; i < cuotas && balance > 0; i++) {
-                  const interes = Math.round(balance * tasaPorPeriodo * 100) / 100;
-                  let pago = Math.round(pagoReal * 100) / 100;
-                  let capital = pago - interes;
-                  if (capital > balance || i === cuotas - 1) {
-                    capital = Math.round(balance * 100) / 100;
-                    pago = capital + interes;
-                  }
-                  const saldoFinal = Math.max(0, Math.round((balance - capital) * 100) / 100);
-                  schedule.push({ num: i + 1, saldoInicial: Math.round(balance * 100) / 100, cuota: pago, interes, capital, saldoFinal });
-                  balance = saldoFinal;
-                }
-              }
-
-              const totalInteres = schedule.reduce((s, r) => s + r.interes, 0);
-              const totalAPagar = schedule.reduce((s, r) => s + r.cuota, 0);
-
-              return (
-                <>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Valor del préstamo (COP)</label>
-                      <input
-                        type="number"
-                        min={1}
-                        value={manualValor}
-                        onChange={(e) => setManualValor(e.target.value)}
-                        className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#f4a900]/40 focus:border-[#f4a900]"
-                        placeholder="Ej: 5000000"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Número de cuotas (1-120)</label>
-                      <input
-                        type="number"
-                        min={1}
-                        max={120}
-                        value={manualCuotas}
-                        onChange={(e) => setManualCuotas(e.target.value)}
-                        className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#f4a900]/40 focus:border-[#f4a900]"
-                        placeholder="Ej: 12"
-                      />
-                      <p className="text-[9px] text-gray-500 mt-0.5">
-                        ≤12m: 1% · ≤24m: 1.2% · &gt;24m: 1.3%
-                      </p>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Frecuencia de pago</label>
-                      <select
-                        value={manualFrecuencia}
-                        onChange={(e) => setManualFrecuencia(e.target.value as "mensual" | "quincenal")}
-                        className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#f4a900]/40 focus:border-[#f4a900]"
-                      >
-                        <option value="mensual">Mensual (30 días)</option>
-                        <option value="quincenal">Quincenal (15 días)</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  {/* Summary + extra payment */}
-                  {showSchedule && (
-                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 p-4 rounded-xl bg-orange-50 border border-orange-100">
-                      <div>
-                        <p className="text-[10px] font-semibold text-orange-700 uppercase">Tasa</p>
-                        <p className="text-sm font-bold text-gray-900">{tasa}% mensual</p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] font-semibold text-orange-700 uppercase">Cuota fija</p>
-                        <p className="text-sm font-bold text-gray-900">{fmt(Math.round(cuotaFija))}</p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] font-semibold text-orange-700 uppercase">Total intereses</p>
-                        <p className="text-sm font-bold text-gray-900">{fmt(Math.round(totalInteres))}</p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] font-semibold text-orange-700 uppercase">Total a pagar</p>
-                        <p className="text-sm font-bold text-gray-900">{fmt(Math.round(totalAPagar))}</p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] font-semibold text-orange-700 uppercase">Cuotas reales</p>
-                        <p className="text-sm font-bold text-gray-900">{schedule.length}</p>
-                      </div>
-                    </div>
-                  )}
-
-                  {showSchedule && (
-                    <div>
-                      <div className="flex items-end gap-3 mb-2">
-                        <div className="flex-1">
-                          <label className="block text-xs font-medium text-gray-600 mb-1">Pago extra por cuota (opcional)</label>
-                          <input
-                            type="number"
-                            min={0}
-                            value={manualExtraPago}
-                            onChange={(e) => setManualExtraPago(e.target.value)}
-                            className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#f4a900]/40 focus:border-[#f4a900]"
-                            placeholder="0"
-                          />
-                        </div>
-                        {extraPago > 0 && (
-                          <div className="pb-1 text-xs text-emerald-700 font-semibold">
-                            Pago real: {fmt(Math.round(pagoReal))} · Terminas en {schedule.length} cuotas en vez de {cuotas}
-                          </div>
-                        )}
-                      </div>
-                      <div className="border border-gray-200 rounded-xl overflow-hidden max-h-64 overflow-y-auto">
-                        <table className="w-full text-xs">
-                          <thead className="bg-gray-50 sticky top-0">
-                            <tr className="text-left text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
-                              <th className="px-3 py-2">#</th>
-                              <th className="px-3 py-2 text-right">Saldo inicial</th>
-                              <th className="px-3 py-2 text-right">Cuota</th>
-                              <th className="px-3 py-2 text-right">Interés</th>
-                              <th className="px-3 py-2 text-right">Capital</th>
-                              <th className="px-3 py-2 text-right">Saldo final</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-gray-100">
-                            {schedule.map((row) => (
-                              <tr key={row.num} className="hover:bg-gray-50">
-                                <td className="px-3 py-1.5 font-medium text-gray-700">{row.num}</td>
-                                <td className="px-3 py-1.5 text-right font-mono text-gray-600">{fmt(row.saldoInicial)}</td>
-                                <td className="px-3 py-1.5 text-right font-mono font-semibold text-gray-900">{fmt(row.cuota)}</td>
-                                <td className="px-3 py-1.5 text-right font-mono text-gray-700">{fmt(row.interes)}</td>
-                                <td className="px-3 py-1.5 text-right font-mono text-gray-700">{fmt(row.capital)}</td>
-                                <td className="px-3 py-1.5 text-right font-mono text-gray-500">{fmt(row.saldoFinal)}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  )}
-
-                  <button
-                    onClick={createManualCredito}
-                    disabled={manualCreating || !manualValor}
-                    className="w-full px-4 py-2.5 rounded-xl bg-emerald-600 text-white font-bold hover:bg-emerald-700 disabled:opacity-50"
-                  >
-                    {manualCreating ? "Creando..." : "Crear crédito"}
-                  </button>
-                </>
-              );
-            })()}
+            {manualError && (
+              <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">{manualError}</div>
+            )}
           </div>
         )}
       </div>
+
+      {/* Fondo-mode SolicitudCreditoForm — same schema as the self-service
+          form but with approval-date fields and relaxed signature rules. */}
+      {manualUser && (
+        <SolicitudCreditoForm
+          open={manualFormOpen}
+          onClose={() => setManualFormOpen(false)}
+          fondoMode
+          submitting={manualSubmitting}
+          error={manualError}
+          prefill={{
+            nombres: String(manualPrefill?.nombre || manualUser.nombre || ""),
+            cedula: String(manualPrefill?.cedula || manualUser.cedula || ""),
+            empresa: String(manualPrefill?.empresa || "Merquellantas"),
+            seccion: String(manualPrefill?.departamento || manualPrefill?.centro_costo || ""),
+            cargo: String(manualPrefill?.cargo_empleado || ""),
+            direccion_residencia: String(manualPrefill?.direccion || ""),
+            barrio: String(manualPrefill?.barrio || ""),
+            telefono_fijo: String(manualPrefill?.telefono || ""),
+            celular: String(manualPrefill?.movil || ""),
+            ciudad: String(manualPrefill?.ciudad || ""),
+          }}
+          onSubmit={submitManualCredito}
+        />
+      )}
+
 
       {/* Bulk credit upload */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 sm:p-6">
