@@ -142,6 +142,9 @@ export async function POST(req: NextRequest) {
     const acumuladoIdx = headers.findIndex(
       (h) => h === 'ACUMULADO' || h === 'TOTAL' || h === 'SALDO'
     );
+    const carteraIdx = headers.findIndex(
+      (h) => h === 'CARTERA' || h === 'SALDO CARTERA' || h === 'DEUDA'
+    );
     const nombreIdx = headers.findIndex((h) => h === 'NOMBRE' || h === 'NOMBRES');
     const direccionIdx = headers.findIndex((h) => h === 'DIRECCION');
     const ciudadIdx = headers.findIndex((h) => h === 'CIUDAD');
@@ -178,6 +181,7 @@ export async function POST(req: NextRequest) {
     let actualizados = 0;
     let creados = 0;
     let noEncontrados = 0;
+    let creditosCreados = 0;
     const erroresList: { cedula: string; razon: string }[] = [];
 
     for (let i = 1; i < lines.length; i++) {
@@ -307,6 +311,40 @@ export async function POST(req: NextRequest) {
           created_at: new Date(),
         });
       }
+
+      // Seed a placeholder credit record from the CARTERA column. The CSV
+      // only gives us the outstanding total, not the original loan amount,
+      // cuotas, or interest breakdown — fondo finishes those fields via
+      // Buscar Afiliado → Cartera. The source tag lets a later re-upload
+      // replace this row cleanly without touching manually-created credits.
+      const cartera = carteraIdx !== -1 ? parseAmount(cols[carteraIdx]) : 0;
+      await db.collection('fondo_cartera').deleteMany({ user_id: userId, source: 'csv_import' });
+      if (cartera > 0) {
+        await db.collection('fondo_cartera').insertOne({
+          user_id: userId,
+          credito_id: `CSV-${cedula}`,
+          tasa_interes: 0,
+          frecuencia_pago: 'mensual',
+          fecha_solicitud: new Date(),
+          fecha_desembolso: null,
+          fecha_cuota_1: null,
+          fecha_termina: null,
+          valor_prestamo: cartera,
+          numero_cuotas: 1,
+          cuotas_pagadas: 0,
+          cuotas_restantes: 1,
+          saldo_capital: cartera,
+          saldo_interes: 0,
+          saldo_total: cartera,
+          estado: 'activo',
+          motivo_solicitud: 'Saldo de cartera cargado desde CSV — editar cuotas e intereses reales',
+          motivo_respuesta: null,
+          pagos: [],
+          source: 'csv_import',
+          created_at: new Date(),
+        });
+        creditosCreados++;
+      }
     }
 
     return NextResponse.json({
@@ -314,6 +352,7 @@ export async function POST(req: NextRequest) {
       total_procesados: lines.length - 1,
       actualizados,
       creados,
+      creditos_creados: creditosCreados,
       no_encontrados: noEncontrados,
       errores: erroresList.slice(0, 50), // limit to first 50
     });
