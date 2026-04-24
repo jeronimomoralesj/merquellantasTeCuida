@@ -99,6 +99,13 @@ export async function POST(req: NextRequest) {
   const daysPerCuota = frecuenciaPago === 'quincenal' ? 15 : 30;
   fechaTermina.setDate(fechaTermina.getDate() + daysPerCuota * numCuotas);
 
+  // body.solicitud is the full structured payload from SolicitudCreditoForm
+  // (línea de crédito, garantías, info del asociado, codeudores, documentos,
+  // firma e-signed as data URL, etc.). We persist it verbatim so the fondo
+  // user can later reconstruct / print the signed form. Kept as an opaque
+  // record — schema-validated on the client.
+  const solicitud = body.solicitud && typeof body.solicitud === 'object' ? body.solicitud : null;
+
   const doc = {
     user_id: targetUserId,
     credito_id: creditoIdAuto,
@@ -116,9 +123,10 @@ export async function POST(req: NextRequest) {
     saldo_interes: totalInteres,
     saldo_total: valorPrestamo + totalInteres,
     estado: isFondo ? 'activo' : 'pendiente',
-    motivo_solicitud: body.motivo_solicitud || null,
+    motivo_solicitud: body.motivo_solicitud || (solicitud?.destinacion_credito ?? null),
     motivo_respuesta: null,
     pagos: [],
+    solicitud,
     created_by: session.user.id,
     created_at: new Date(),
   };

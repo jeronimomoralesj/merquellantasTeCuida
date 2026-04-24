@@ -31,6 +31,7 @@ import {
   MessageCircle,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
+import SolicitudCreditoForm, { SolicitudPayload } from "./SolicitudCreditoForm";
 
 interface Saldos {
   permanente: number;
@@ -297,14 +298,22 @@ export default function FondoUserView() {
   // Request modals
   const [showCreditoForm, setShowCreditoForm] = useState(false);
   const [showRetiroForm, setShowRetiroForm] = useState(false);
-  const [creditoValor, setCreditoValor] = useState("");
-  const [creditoCuotas, setCreditoCuotas] = useState("12");
-  const [creditoFrecuencia, setCreditoFrecuencia] = useState<"quincenal" | "mensual">("mensual");
-  const [creditoMotivo, setCreditoMotivo] = useState("");
   const [retiroMonto, setRetiroMonto] = useState("");
   const [retiroMotivo, setRetiroMotivo] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+
+  // Full user profile (direccion/barrio/telefono/etc.) so we can prefill the
+  // Solicitud de Crédito form. Fetched once on mount, refreshed on open.
+  const [userProfile, setUserProfile] = useState<Record<string, unknown> | null>(null);
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch("/api/users/me");
+        if (res.ok) setUserProfile(await res.json());
+      } catch { /* non-fatal */ }
+    })();
+  }, []);
 
   const formatCurrency = (val: number): string => {
     return new Intl.NumberFormat("es-CO", {
@@ -858,243 +867,46 @@ export default function FondoUserView() {
         </a>
       </div>
 
-      {/* Solicitar Crédito Modal */}
-      {showCreditoForm && (() => {
-        const valor = Number(creditoValor) || 0;
-        const cuotas = Math.max(1, Math.min(120, Number(creditoCuotas) || 0));
-        const cuotasComoMeses = creditoFrecuencia === "quincenal" ? cuotas / 2 : cuotas;
-        const tasa = cuotasComoMeses <= 12 ? 1.0 : cuotasComoMeses <= 24 ? 1.2 : 1.3;
-        const tasaPorPeriodo = (creditoFrecuencia === "quincenal" ? tasa / 2 : tasa) / 100;
-        const showSchedule = valor > 0 && cuotas > 0;
-
-        // Standard amortization: fixed payment = P * r(1+r)^n / ((1+r)^n - 1)
-        const cuotaFija = showSchedule
-          ? tasaPorPeriodo === 0
-            ? valor / cuotas
-            : valor * (tasaPorPeriodo * Math.pow(1 + tasaPorPeriodo, cuotas)) / (Math.pow(1 + tasaPorPeriodo, cuotas) - 1)
-          : 0;
-
-        // Build amortization schedule
-        const today = new Date();
-        const daysBetween = creditoFrecuencia === "quincenal" ? 15 : 30;
-        const schedule: { num: number; fecha: Date; saldoInicial: number; cuota: number; interes: number; capital: number; saldoFinal: number }[] = [];
-        if (showSchedule) {
-          let balance = valor;
-          for (let i = 0; i < cuotas; i++) {
-            const fecha = new Date(today);
-            fecha.setDate(fecha.getDate() + daysBetween * (i + 1));
-            const interes = Math.round(balance * tasaPorPeriodo * 100) / 100;
-            let pago = Math.round(cuotaFija * 100) / 100;
-            let capital = pago - interes;
-            // Final period: adjust so balance hits exactly 0
-            if (i === cuotas - 1 || capital > balance) {
-              capital = Math.round(balance * 100) / 100;
-              pago = capital + interes;
+      {/* Solicitud de Crédito — full digital form with e-signature */}
+      <SolicitudCreditoForm
+        open={showCreditoForm}
+        onClose={() => { setShowCreditoForm(false); setFormError(null); }}
+        submitting={submitting}
+        error={formError}
+        prefill={{
+          nombres: String(userProfile?.nombre || session?.user?.nombre || ""),
+          cedula: String(userProfile?.cedula || session?.user?.cedula || ""),
+          empresa: String(userProfile?.empresa || "Merquellantas"),
+          seccion: String(userProfile?.departamento || userProfile?.centro_costo || ""),
+          cargo: String(userProfile?.cargo_empleado || ""),
+          direccion_residencia: String(userProfile?.direccion || ""),
+          barrio: String(userProfile?.barrio || ""),
+          telefono_fijo: String(userProfile?.telefono || ""),
+          celular: String(userProfile?.movil || ""),
+          ciudad: String(userProfile?.ciudad || ""),
+        }}
+        onSubmit={async (payload: SolicitudPayload) => {
+          setSubmitting(true);
+          setFormError(null);
+          try {
+            const res = await fetch("/api/fondo/cartera", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload),
+            });
+            if (!res.ok) {
+              const d = await res.json();
+              throw new Error(d.error || "Error");
             }
-            const saldoFinal = Math.max(0, Math.round((balance - capital) * 100) / 100);
-            schedule.push({ num: i + 1, fecha, saldoInicial: Math.round(balance * 100) / 100, cuota: pago, interes, capital, saldoFinal });
-            balance = saldoFinal;
+            setShowCreditoForm(false);
+            fetchData();
+          } catch (err) {
+            setFormError(err instanceof Error ? err.message : "Error");
+          } finally {
+            setSubmitting(false);
           }
-        }
-
-        const totalInteres = schedule.reduce((sum, r) => sum + r.interes, 0);
-        const totalAPagar = schedule.reduce((sum, r) => sum + r.cuota, 0);
-
-        return (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-            <div className="p-6 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
-              <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                <CreditCard className="w-5 h-5 text-[#f4a900]" />
-                Solicitar Crédito
-              </h3>
-              <button
-                onClick={() => { setShowCreditoForm(false); setFormError(null); }}
-                className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-              >
-                <X className="w-5 h-5 text-gray-500" />
-              </button>
-            </div>
-            <div className="p-6 space-y-4 overflow-y-auto flex-1">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Valor del préstamo (COP)</label>
-                  <input
-                    type="number"
-                    min={1}
-                    value={creditoValor}
-                    onChange={(e) => setCreditoValor(e.target.value)}
-                    className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#f4a900]/40 focus:border-[#f4a900]"
-                    placeholder="Ej: 5000000"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Número de cuotas (1-120)</label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={120}
-                    value={creditoCuotas}
-                    onChange={(e) => setCreditoCuotas(e.target.value)}
-                    className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#f4a900]/40 focus:border-[#f4a900]"
-                    placeholder="Ej: 15"
-                  />
-                  <p className="text-[10px] text-gray-500 mt-1">
-                    ≤12 meses: 1% mensual · ≤24: 1.2% · &gt;24: 1.3%
-                  </p>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Frecuencia de pago</label>
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setCreditoFrecuencia("quincenal")}
-                    className={`px-4 py-3 rounded-xl border-2 text-sm font-semibold transition ${
-                      creditoFrecuencia === "quincenal"
-                        ? "border-[#f4a900] bg-orange-50 text-orange-900"
-                        : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
-                    }`}
-                  >
-                    Cada 15 días
-                    <span className="block text-[10px] font-normal text-gray-500 mt-0.5">Quincenal</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setCreditoFrecuencia("mensual")}
-                    className={`px-4 py-3 rounded-xl border-2 text-sm font-semibold transition ${
-                      creditoFrecuencia === "mensual"
-                        ? "border-[#f4a900] bg-orange-50 text-orange-900"
-                        : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
-                    }`}
-                  >
-                    Cada 30 días
-                    <span className="block text-[10px] font-normal text-gray-500 mt-0.5">Mensual</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Summary */}
-              {showSchedule && (
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 rounded-xl bg-orange-50 border border-orange-100">
-                  <div>
-                    <p className="text-[10px] font-semibold text-orange-700 uppercase">Tasa</p>
-                    <p className="text-sm font-bold text-gray-900">{tasa}% mensual</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-semibold text-orange-700 uppercase">Cuota fija</p>
-                    <p className="text-sm font-bold text-gray-900">{formatCurrency(Math.round(cuotaFija * 100) / 100)}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-semibold text-orange-700 uppercase">Total intereses</p>
-                    <p className="text-sm font-bold text-gray-900">{formatCurrency(Math.round(totalInteres * 100) / 100)}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-semibold text-orange-700 uppercase">Total a pagar</p>
-                    <p className="text-sm font-bold text-gray-900">{formatCurrency(Math.round(totalAPagar * 100) / 100)}</p>
-                  </div>
-                </div>
-              )}
-
-              {/* Payment schedule */}
-              {showSchedule && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Tabla de pagos proyectada</label>
-                  <div className="border border-gray-200 rounded-xl overflow-hidden max-h-64 overflow-y-auto">
-                    <table className="w-full text-xs">
-                      <thead className="bg-gray-50 sticky top-0">
-                        <tr className="text-left text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
-                          <th className="px-3 py-2">#</th>
-                          <th className="px-3 py-2 text-right">Saldo inicial</th>
-                          <th className="px-3 py-2 text-right">Cuota</th>
-                          <th className="px-3 py-2 text-right">Interés</th>
-                          <th className="px-3 py-2 text-right">Capital</th>
-                          <th className="px-3 py-2 text-right">Saldo final</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-100">
-                        {schedule.map((row) => (
-                          <tr key={row.num} className="hover:bg-gray-50">
-                            <td className="px-3 py-1.5 font-medium text-gray-700">{row.num}</td>
-                            <td className="px-3 py-1.5 text-right font-mono text-gray-600">{formatCurrency(row.saldoInicial)}</td>
-                            <td className="px-3 py-1.5 text-right font-mono font-semibold text-gray-900">{formatCurrency(row.cuota)}</td>
-                            <td className="px-3 py-1.5 text-right font-mono text-gray-700">{formatCurrency(row.interes)}</td>
-                            <td className="px-3 py-1.5 text-right font-mono text-gray-700">{formatCurrency(row.capital)}</td>
-                            <td className="px-3 py-1.5 text-right font-mono text-gray-500">{formatCurrency(row.saldoFinal)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Motivo (opcional)</label>
-                <textarea
-                  rows={3}
-                  value={creditoMotivo}
-                  onChange={(e) => setCreditoMotivo(e.target.value)}
-                  className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#f4a900]/40 focus:border-[#f4a900] resize-y"
-                  placeholder="¿Para qué necesitas el crédito?"
-                />
-              </div>
-              {formError && (
-                <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">
-                  {formError}
-                </div>
-              )}
-            </div>
-            <div className="p-6 border-t border-gray-100 flex justify-end gap-3">
-              <button
-                onClick={() => { setShowCreditoForm(false); setFormError(null); }}
-                className="px-4 py-2 rounded-xl text-gray-700 bg-gray-100 hover:bg-gray-200 font-medium"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={async () => {
-                  setSubmitting(true);
-                  setFormError(null);
-                  try {
-                    const res = await fetch('/api/fondo/cartera', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({
-                        valor_prestamo: Number(creditoValor),
-                        numero_cuotas: Number(creditoCuotas),
-                        frecuencia_pago: creditoFrecuencia,
-                        motivo_solicitud: creditoMotivo || null,
-                      }),
-                    });
-                    if (!res.ok) {
-                      const d = await res.json();
-                      throw new Error(d.error || 'Error');
-                    }
-                    setShowCreditoForm(false);
-                    setCreditoValor("");
-                    setCreditoCuotas("12");
-                    setCreditoFrecuencia("mensual");
-                    setCreditoMotivo("");
-                    fetchData();
-                  } catch (err) {
-                    setFormError(err instanceof Error ? err.message : 'Error');
-                  } finally {
-                    setSubmitting(false);
-                  }
-                }}
-                disabled={submitting || !creditoValor || Number(creditoValor) <= 0}
-                className="px-5 py-2 rounded-xl bg-[#f4a900] text-black font-bold hover:bg-[#f4a900] disabled:opacity-50 disabled:cursor-not-allowed transition"
-              >
-                {submitting ? "Enviando..." : "Enviar solicitud"}
-              </button>
-            </div>
-          </div>
-        </div>
-        );
-      })()}
-
+        }}
+      />
       {/* Solicitar Retiro Modal */}
       {showRetiroForm && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
