@@ -486,15 +486,33 @@ function CicloActualTab() {
       changed = true;
       const aporte = ca.savings ? ca.savings.total : row.aporte;
       const actividad = ca.activities.reduce((sum, a) => sum + a.amount, 0) || row.actividad;
-      // Match credit payments by credit_id. If the PDF doesn't list a
-      // payment for this credit this cycle, zero the monto out instead
-      // of carrying the initial default — otherwise a stale placeholder
-      // like saldo/1 bleeds into the ciclo as a giant "aporte de crédito".
-      const creditos = row.creditos.map((cr) => {
+      // PDF credits always show up in the row — if a cartera entry
+      // matches by credit_id we link them (so approving the ciclo
+      // updates the right cartera balance), otherwise the PDF credit
+      // appears standalone. Cartera entries without a PDF match keep
+      // monto=0 — no payment proposed this cycle — which protects us
+      // from csv_import placeholders leaking saldo_total as the default.
+      const pdfMatchedIds = new Set<string>();
+      const creditos: CreditPayment[] = [];
+      for (const cr of row.creditos) {
         const pdfCredit = ca.credits.find((pc) => pc.credit_id === cr.credito_id);
-        if (pdfCredit) return { ...cr, monto: pdfCredit.total };
-        return { ...cr, monto: 0 };
-      });
+        if (pdfCredit) {
+          pdfMatchedIds.add(pdfCredit.credit_id);
+          creditos.push({ ...cr, monto: pdfCredit.total });
+        } else {
+          creditos.push({ ...cr, monto: 0 });
+        }
+      }
+      for (const pc of ca.credits) {
+        if (pdfMatchedIds.has(pc.credit_id)) continue;
+        creditos.push({
+          cartera_id: "", // not linked to a cartera row yet
+          credito_id: pc.credit_id,
+          monto: pc.total,
+          saldo_total: 0,
+          cuota_esperada: pc.total,
+        });
+      }
       return {
         ...row,
         aporte,
@@ -916,11 +934,24 @@ function CicloActualTab() {
                     Créditos activos ({row.creditos.length})
                   </label>
                   <div className="space-y-2">
-                    {row.creditos.map((cr, ci) => (
-                      <div key={cr.cartera_id} className="flex items-center gap-3 p-2 rounded-lg bg-gray-50 border border-gray-100">
+                    {row.creditos.map((cr, ci) => {
+                      const unlinked = !cr.cartera_id;
+                      return (
+                      <div key={cr.cartera_id || `pdf-${cr.credito_id}-${ci}`} className="flex items-center gap-3 p-2 rounded-lg bg-gray-50 border border-gray-100">
                         <div className="flex-1 min-w-0">
-                          <p className="text-xs font-semibold text-gray-700 truncate">Crédito {cr.credito_id}</p>
-                          <p className="text-[10px] text-gray-500">Saldo: {fmt(cr.saldo_total)} · Cuota esperada: {fmt(cr.cuota_esperada)}</p>
+                          <p className="text-xs font-semibold text-gray-700 truncate">
+                            Crédito {cr.credito_id}
+                            {unlinked && (
+                              <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-800 border border-amber-200 uppercase">
+                                Sin vincular
+                              </span>
+                            )}
+                          </p>
+                          <p className="text-[10px] text-gray-500">
+                            {unlinked
+                              ? "Del PDF — enlaza este crédito en Cartera para que el pago descuente saldo"
+                              : `Saldo: ${fmt(cr.saldo_total)} · Cuota esperada: ${fmt(cr.cuota_esperada)}`}
+                          </p>
                         </div>
                         <input
                           type="number"
@@ -930,7 +961,8 @@ function CicloActualTab() {
                           className="w-32 text-right rounded-lg border border-gray-200 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#f4a900]/40 focus:border-[#f4a900]"
                         />
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}
