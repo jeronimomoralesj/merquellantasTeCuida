@@ -232,8 +232,20 @@ function splitNombre(full: string): { nombres: string; primer_apellido: string; 
   return { nombres, primer_apellido: primer, segundo_apellido: segundo };
 }
 
+interface AmortRow {
+  num: number;
+  fecha: Date;
+  saldoInicial: number;
+  cuota: number;
+  interes: number;
+  capital: number;
+  saldoFinal: number;
+}
+
 function computeAmortization(valor: number, cuotas: number, frecuencia: Frecuencia) {
-  if (!valor || !cuotas || cuotas <= 0) return { cuotaFija: 0, totalInteres: 0, totalAPagar: 0, tasa: 0 };
+  if (!valor || !cuotas || cuotas <= 0) {
+    return { cuotaFija: 0, totalInteres: 0, totalAPagar: 0, tasa: 0, schedule: [] as AmortRow[] };
+  }
   const cuotasComoMeses = frecuencia === "quincenal" ? cuotas / 2 : cuotas;
   const tasa = cuotasComoMeses <= 12 ? 1.0 : cuotasComoMeses <= 24 ? 1.2 : 1.3;
   const tasaPorPeriodo = (frecuencia === "quincenal" ? tasa / 2 : tasa) / 100;
@@ -241,9 +253,14 @@ function computeAmortization(valor: number, cuotas: number, frecuencia: Frecuenc
     ? valor / cuotas
     : valor * (tasaPorPeriodo * Math.pow(1 + tasaPorPeriodo, cuotas)) / (Math.pow(1 + tasaPorPeriodo, cuotas) - 1);
 
+  const today = new Date();
+  const daysBetween = frecuencia === "quincenal" ? 15 : 30;
+  const schedule: AmortRow[] = [];
   let balance = valor;
   let totalInteres = 0;
   for (let i = 0; i < cuotas; i++) {
+    const fecha = new Date(today);
+    fecha.setDate(fecha.getDate() + daysBetween * (i + 1));
     const interes = Math.round(balance * tasaPorPeriodo * 100) / 100;
     let pago = Math.round(cuotaFija * 100) / 100;
     let capital = pago - interes;
@@ -251,15 +268,25 @@ function computeAmortization(valor: number, cuotas: number, frecuencia: Frecuenc
       capital = Math.round(balance * 100) / 100;
       pago = capital + interes;
     }
+    const saldoFinal = Math.max(0, Math.round((balance - capital) * 100) / 100);
+    schedule.push({
+      num: i + 1,
+      fecha,
+      saldoInicial: Math.round(balance * 100) / 100,
+      cuota: pago,
+      interes,
+      capital,
+      saldoFinal,
+    });
     totalInteres += interes;
-    balance = Math.max(0, Math.round((balance - capital) * 100) / 100);
+    balance = saldoFinal;
   }
-  const totalAPagar = valor + totalInteres;
   return {
     cuotaFija: Math.round(cuotaFija * 100) / 100,
     totalInteres: Math.round(totalInteres * 100) / 100,
-    totalAPagar: Math.round(totalAPagar * 100) / 100,
+    totalAPagar: Math.round((valor + totalInteres) * 100) / 100,
     tasa,
+    schedule,
   };
 }
 
@@ -536,6 +563,45 @@ export default function SolicitudCreditoForm({
                 <Stat label="Cuota + intereses" value={fmtCurrency(cuotaIntereses)} />
                 <Stat label="Total a pagar" value={fmtCurrency(amort.totalAPagar)} />
               </div>
+            )}
+
+            {/* Tabla de amortización — informational. The real dates get set
+                by the fondo admin on approval. We show the schedule here so
+                the user sees exactly how each payment breaks down before
+                committing. */}
+            {valorN > 0 && cuotasN > 0 && (
+              <details className="mt-3 rounded-xl border border-gray-200 bg-white">
+                <summary className="cursor-pointer px-3 py-2 text-xs font-semibold text-gray-700 select-none flex items-center justify-between">
+                  <span>Ver tabla de amortización ({cuotasN} cuotas)</span>
+                  <span className="text-[10px] font-normal text-gray-400">las fechas finales las define el fondo al aprobar</span>
+                </summary>
+                <div className="max-h-64 overflow-y-auto border-t border-gray-100">
+                  <table className="w-full text-xs">
+                    <thead className="bg-gray-50 sticky top-0">
+                      <tr className="text-left text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
+                        <th className="px-3 py-2">#</th>
+                        <th className="px-3 py-2 text-right">Saldo inicial</th>
+                        <th className="px-3 py-2 text-right">Cuota</th>
+                        <th className="px-3 py-2 text-right">Interés</th>
+                        <th className="px-3 py-2 text-right">Capital</th>
+                        <th className="px-3 py-2 text-right">Saldo final</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {amort.schedule.map((row) => (
+                        <tr key={row.num} className="hover:bg-gray-50">
+                          <td className="px-3 py-1.5 font-medium text-gray-700">{row.num}</td>
+                          <td className="px-3 py-1.5 text-right font-mono text-gray-600">{fmtCurrency(row.saldoInicial)}</td>
+                          <td className="px-3 py-1.5 text-right font-mono font-semibold text-gray-900">{fmtCurrency(row.cuota)}</td>
+                          <td className="px-3 py-1.5 text-right font-mono text-gray-700">{fmtCurrency(row.interes)}</td>
+                          <td className="px-3 py-1.5 text-right font-mono text-gray-700">{fmtCurrency(row.capital)}</td>
+                          <td className="px-3 py-1.5 text-right font-mono text-gray-500">{fmtCurrency(row.saldoFinal)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </details>
             )}
           </Section>
 

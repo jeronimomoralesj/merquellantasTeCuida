@@ -163,7 +163,19 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: 'Solo se pueden aprobar solicitudes pendientes' }, { status: 400 });
     }
 
-    const fechaCuota1 = body.fecha_cuota_1 ? new Date(body.fecha_cuota_1) : new Date();
+    // Accept both fecha_desembolso and fecha_cuota_1 from the approver. We
+    // used to hardcode fecha_desembolso to `new Date()`, which made it
+    // impossible to approve a retroactively-disbursed credit or schedule
+    // one for a near-future date.
+    const fechaDesembolso = body.fecha_desembolso ? new Date(body.fecha_desembolso) : new Date();
+    const fechaCuota1 = body.fecha_cuota_1 ? new Date(body.fecha_cuota_1) : fechaDesembolso;
+    if (isNaN(fechaDesembolso.getTime())) {
+      return NextResponse.json({ error: 'fecha_desembolso inválida' }, { status: 400 });
+    }
+    if (isNaN(fechaCuota1.getTime())) {
+      return NextResponse.json({ error: 'fecha_cuota_1 inválida' }, { status: 400 });
+    }
+
     const fechaTermina = new Date(fechaCuota1);
     const daysPerCuota = cartera.frecuencia_pago === 'quincenal' ? 15 : 30;
     fechaTermina.setDate(fechaTermina.getDate() + daysPerCuota * cartera.numero_cuotas);
@@ -175,7 +187,7 @@ export async function PUT(req: NextRequest) {
         $set: {
           estado: 'activo',
           credito_id: creditoId,
-          fecha_desembolso: new Date(),
+          fecha_desembolso: fechaDesembolso,
           fecha_cuota_1: fechaCuota1,
           fecha_termina: fechaTermina,
           aprobado_por: session.user.id,
