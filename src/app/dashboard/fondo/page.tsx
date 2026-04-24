@@ -388,11 +388,27 @@ function CicloActualTab() {
             user_id: string;
             credito_id?: string;
             cuotas_restantes: number;
+            numero_cuotas?: number;
             saldo_total: number;
+            fecha_desembolso?: string | null;
+            source?: string;
           }> = await cartRes.json();
           for (const c of credits) {
             if (c.cuotas_restantes <= 0) continue;
-            const cuota = Math.round(c.saldo_total / c.cuotas_restantes);
+            // CSV-imported rows are just a snapshot of the outstanding
+            // CARTERA balance with placeholder cuotas (numero_cuotas=1,
+            // cuotas_restantes=1, no fecha_desembolso). Doing saldo/1 for
+            // those gives a "default cuota" equal to the ENTIRE remaining
+            // balance — that's how a user ended up with a 139M monto in
+            // the ciclo. Skip that auto-default until the fondo has filled
+            // in real cuotas: leave monto at 0 so the row either gets
+            // overwritten by the PDF value on upload or is filled in
+            // manually.
+            const isPlaceholder =
+              c.source === "csv_import" && (!c.fecha_desembolso || (c.numero_cuotas ?? 0) <= 1);
+            const cuota = isPlaceholder
+              ? 0
+              : Math.round(c.saldo_total / c.cuotas_restantes);
             const arr = creditsByUser.get(c.user_id) || [];
             arr.push({
               cartera_id: c._id,
@@ -470,11 +486,14 @@ function CicloActualTab() {
       changed = true;
       const aporte = ca.savings ? ca.savings.total : row.aporte;
       const actividad = ca.activities.reduce((sum, a) => sum + a.amount, 0) || row.actividad;
-      // Match credit payments by credit_id
+      // Match credit payments by credit_id. If the PDF doesn't list a
+      // payment for this credit this cycle, zero the monto out instead
+      // of carrying the initial default — otherwise a stale placeholder
+      // like saldo/1 bleeds into the ciclo as a giant "aporte de crédito".
       const creditos = row.creditos.map((cr) => {
         const pdfCredit = ca.credits.find((pc) => pc.credit_id === cr.credito_id);
         if (pdfCredit) return { ...cr, monto: pdfCredit.total };
-        return cr;
+        return { ...cr, monto: 0 };
       });
       return {
         ...row,

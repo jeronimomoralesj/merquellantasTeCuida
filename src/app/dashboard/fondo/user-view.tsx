@@ -115,7 +115,7 @@ interface FondoData {
   retiros?: RetiroSolicitud[];
 }
 
-type TabKey = "estado" | "actividades" | "cartera" | "metas";
+type TabKey = "estado" | "actividades" | "cartera";
 
 const fmt = (n: number) =>
   new Intl.NumberFormat("es-CO", {
@@ -532,6 +532,10 @@ export default function FondoUserView() {
         </div>
       </div>
 
+      {/* Savings goals — lives right under Total Aportes so users see how
+          their current balance is progressing toward each goal at a glance. */}
+      <GoalsSection currentSavings={saldos.total_aportes || 0} />
+
       {/* Action buttons: request loan + request withdrawal (if eligible) */}
       <div className="flex flex-wrap gap-3">
         <button
@@ -576,7 +580,6 @@ export default function FondoUserView() {
             { key: "estado" as TabKey, label: "Estado de Cuenta", icon: Receipt },
             { key: "actividades" as TabKey, label: "Actividades", icon: BarChart3 },
             { key: "cartera" as TabKey, label: "Cartera", icon: CreditCard },
-            { key: "metas" as TabKey, label: "Mis Metas", icon: Target },
           ]).map(({ key, label, icon: Icon }) => (
             <button
               key={key}
@@ -853,10 +856,6 @@ export default function FondoUserView() {
             </div>
           )}
 
-          {/* Mis Metas Tab */}
-          {activeTab === "metas" && (
-            <GoalsSection currentSavings={saldos.total_aportes || 0} />
-          )}
         </div>
       </div>
 
