@@ -443,6 +443,46 @@ function KpiCard({
   );
 }
 
+function CicloKpi({
+  icon,
+  label,
+  value,
+  highlight,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  highlight?: boolean;
+}) {
+  return (
+    <div
+      className={`p-3 sm:p-4 ${
+        highlight ? "bg-[#f4a900]/[0.06]" : "bg-white"
+      }`}
+    >
+      <div className="flex items-center gap-1.5 mb-1">
+        <span
+          className={`w-6 h-6 rounded-md flex items-center justify-center ${
+            highlight ? "bg-[#f4a900]/20 text-[#9a6b00]" : "bg-gray-100 text-gray-600"
+          }`}
+        >
+          {icon}
+        </span>
+        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500 truncate">
+          {label}
+        </span>
+      </div>
+      <p
+        className={`text-base sm:text-lg font-extrabold leading-tight ${
+          highlight ? "text-[#9a6b00]" : "text-gray-900"
+        }`}
+      >
+        {value}
+      </p>
+    </div>
+  );
+}
+
 function TabPill({
   icon,
   label,
@@ -807,13 +847,28 @@ function CicloActualTab() {
     [visibleRows, filter]
   );
 
-  const cycleTotal = useMemo(
-    () => visibleRows.reduce((sum, row) => {
-      const creditTotal = row.creditos.reduce((s, c) => s + (c.monto || 0), 0);
-      return sum + (row.aporte || 0) + (row.actividad || 0) + creditTotal;
-    }, 0),
-    [visibleRows],
-  );
+  // Rolling KPIs for the cycle header. Broken out per-category so the
+  // admin can see what's driving the total at a glance (e.g. "this cycle
+  // is heavy on actividad, not so much aporte").
+  const kpis = useMemo(() => {
+    let aportes = 0;
+    let actividad = 0;
+    let creditos = 0;
+    for (const row of visibleRows) {
+      aportes += row.aporte || 0;
+      actividad += row.actividad || 0;
+      for (const c of row.creditos) creditos += c.monto || 0;
+    }
+    return {
+      usuarios: visibleRows.length,
+      aportes,
+      actividad,
+      creditos,
+      total: aportes + actividad + creditos,
+    };
+  }, [visibleRows]);
+
+  const cycleTotal = kpis.total;
 
   const handleSubmit = async () => {
     setSubmitting(true);
@@ -856,112 +911,201 @@ function CicloActualTab() {
   }
 
   // If a cycle already exists for this period and it's NOT in ajustes_admin state,
-  // show a "already submitted" message
+  // show a "already submitted" card with the submitted summary so the
+  // admin remembers exactly what was sent.
   if (existingCiclo && existingCiclo.estado !== "ajustes_admin") {
-    const stateLabels: Record<string, { label: string; color: string }> = {
-      enviado_admin: { label: "Enviado al administrador", color: "bg-amber-100 text-amber-800 border-amber-300" },
-      aprobado: { label: "Aprobado", color: "bg-emerald-100 text-emerald-800 border-emerald-300" },
-      rechazado: { label: "Rechazado", color: "bg-red-100 text-red-800 border-red-300" },
+    const stateInfo: Record<string, { label: string; tone: string; icon: React.ReactNode }> = {
+      enviado_admin: {
+        label: "Enviado al administrador",
+        tone: "bg-amber-50 text-amber-900 border-amber-200",
+        icon: <Clock className="w-4 h-4" />,
+      },
+      aprobado: {
+        label: "Aprobado",
+        tone: "bg-emerald-50 text-emerald-800 border-emerald-200",
+        icon: <Check className="w-4 h-4" />,
+      },
+      rechazado: {
+        label: "Rechazado",
+        tone: "bg-red-50 text-red-700 border-red-200",
+        icon: <X className="w-4 h-4" />,
+      },
     };
-    const stateInfo = stateLabels[existingCiclo.estado] || { label: existingCiclo.estado, color: "bg-gray-100 text-gray-800" };
+    const info = stateInfo[existingCiclo.estado] || {
+      label: existingCiclo.estado,
+      tone: "bg-gray-50 text-gray-700 border-gray-200",
+      icon: <Clock className="w-4 h-4" />,
+    };
+    const submittedTotal = (existingCiclo.movimientos || []).reduce((s, m) => {
+      const credTotal = Array.isArray(m.creditos)
+        ? m.creditos.reduce((a, c) => a + (Number(c.monto) || 0), 0)
+        : Number(m.credito_pago_total) || 0;
+      return s + (Number(m.aporte) || 0) + (Number(m.actividad) || 0) + credTotal;
+    }, 0);
     return (
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 text-center">
-        <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-amber-100 flex items-center justify-center">
-          <Check className="w-8 h-8 text-amber-600" />
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="p-6 sm:p-8 border-b border-gray-100 flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Ciclo</p>
+            <h2 className="text-xl sm:text-2xl font-extrabold text-gray-900 mt-1">{periodoLabel}</h2>
+            <span className={`mt-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${info.tone}`}>
+              {info.icon} {info.label}
+            </span>
+          </div>
+          <div className="text-right">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Total enviado</p>
+            <p className="text-2xl sm:text-3xl font-extrabold text-gray-900">{fmt(submittedTotal)}</p>
+            <p className="text-xs text-gray-500 mt-1">
+              {(existingCiclo.movimientos || []).length} usuarios
+            </p>
+          </div>
         </div>
-        <h2 className="text-xl font-bold text-gray-900 mb-2">Ciclo ya enviado</h2>
-        <p className="text-sm text-gray-600 mb-4">
-          Ya existe un ciclo para la <strong>{periodoLabel}</strong>.
-        </p>
-        <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border ${stateInfo.color}`}>
-          {stateInfo.label}
-        </span>
-        <p className="text-xs text-gray-500 mt-6">
+        <div className="p-6 text-sm text-gray-500 text-center">
           El próximo ciclo estará disponible cuando inicie la siguiente quincena.
-        </p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-      {/* Header */}
-      <div className="p-5 sm:p-6 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-            <Clock size={20} className="text-[#f4a900]" />
-            Ciclo Actual
-            {isAjustesMode && (
-              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-300">
-                Ajustes pendientes
-              </span>
-            )}
-          </h2>
-          <p className="text-sm text-gray-500 mt-1">
-            Periodo:{" "}
-            <span className="font-semibold text-gray-800">
+    <div className="space-y-4">
+      {/* ============== Top card: header + KPIs + submit ============== */}
+      <section className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="p-5 sm:p-6 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Ciclo actual</p>
+              {isAjustesMode && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200 uppercase tracking-wider">
+                  <Clock className="h-3 w-3" /> Ajustes pendientes
+                </span>
+              )}
+              {!isAjustesMode && pdfUploaded && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 uppercase tracking-wider">
+                  <Check className="h-3 w-3" /> PDF cargado
+                </span>
+              )}
+            </div>
+            <h2 className="text-xl sm:text-2xl font-extrabold text-gray-900 mt-1 flex items-center gap-2">
+              <Clock size={22} className="text-[#f4a900]" />
               {periodoLabel}
-            </span>
-          </p>
-        </div>
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="relative">
-            <Search
-              size={16}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-            />
-            <input
-              type="text"
-              placeholder="Filtrar por nombre o cédula..."
-              value={filter}
-              onChange={(e) => setFilter(e.target.value)}
-              className="pl-9 pr-4 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#f4a900]/40 focus:border-[#f4a900] w-56"
-            />
+            </h2>
           </div>
           <button
             onClick={handleSubmit}
             disabled={submitting}
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#f4a900] text-white font-semibold text-sm shadow-md shadow-[#f4a900]/25 hover:bg-[#e68a00] disabled:opacity-50 transition-all"
+            className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-[#f4a900] text-black font-bold text-sm shadow-md shadow-[#f4a900]/30 hover:bg-[#e68a00] disabled:opacity-50 transition-all"
           >
             {submitting ? (
-              <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
+              <div className="animate-spin h-4 w-4 border-2 border-black border-t-transparent rounded-full" />
             ) : (
               <Send size={16} />
             )}
-            {isAjustesMode ? "Aprobar y aplicar" : "Aprobar y Enviar"}
+            {isAjustesMode ? "Aprobar y aplicar" : "Aprobar y enviar"}
           </button>
         </div>
-      </div>
 
+        {/* KPI strip — every card is a running count that refreshes as
+            the fondo user tweaks rows. Grand total on the right so
+            "how big is this cycle" is the first thing your eye sees. */}
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-px bg-gray-100 border-t border-b border-gray-100">
+          <CicloKpi icon={<Users className="h-4 w-4" />} label="Usuarios" value={String(kpis.usuarios)} />
+          <CicloKpi icon={<DollarSign className="h-4 w-4" />} label="Aportes" value={fmt(kpis.aportes)} />
+          <CicloKpi icon={<Activity className="h-4 w-4" />} label="Actividad" value={fmt(kpis.actividad)} />
+          <CicloKpi icon={<CreditCard className="h-4 w-4" />} label="Créditos" value={fmt(kpis.creditos)} />
+          <CicloKpi
+            icon={<Landmark className="h-4 w-4" />}
+            label="Total del ciclo"
+            value={fmt(kpis.total)}
+            highlight
+          />
+        </div>
+      </section>
+
+      {/* Ajustes banner — only when fondo is fixing admin's budgets. */}
       {isAjustesMode && (
-        <div className="mx-5 mt-4 p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-sm">
-          <p className="font-semibold mb-1">El administrador ajustó los presupuestos de estos usuarios.</p>
-          <p className="text-xs">Solo se muestran los usuarios cuyo presupuesto cambió. Redistribuye el dinero entre las categorías sin sobrepasar el presupuesto. Al aprobar, los movimientos se aplicarán inmediatamente sin pasar por el administrador.</p>
+        <div className="rounded-2xl bg-amber-50 border border-amber-200 p-4 text-amber-900">
+          <p className="font-semibold text-sm mb-1">El administrador ajustó los presupuestos de estos usuarios.</p>
+          <p className="text-xs leading-relaxed">
+            Solo se muestran los usuarios cuyo presupuesto cambió. Redistribuye el dinero entre
+            las categorías sin sobrepasar el presupuesto. Al aprobar, los movimientos se
+            aplicarán inmediatamente sin pasar por el administrador.
+          </p>
         </div>
       )}
 
-      {/* Running total — mirrored at the bottom of the card so the fondo user
-          can see the ciclo size both before scrolling into the rows and after. */}
-      <div className="mx-5 mt-4 p-4 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-between">
-        <span className="text-sm font-semibold text-emerald-800">
-          Total del ciclo ({visibleRows.length} {visibleRows.length === 1 ? "usuario" : "usuarios"})
-        </span>
-        <span className="text-xl font-extrabold text-emerald-900">{fmt(cycleTotal)}</span>
-      </div>
-
-      {/* PDF Upload Section */}
-      <div className="mx-5 mt-4 p-4 rounded-xl bg-gray-50 border border-gray-200">
-        <div className="flex items-center gap-3 mb-3">
-          <FileText size={18} className="text-[#f4a900]" />
-          <div>
-            <p className="text-sm font-semibold text-gray-900">Cargar nómina (PDF)</p>
-            <p className="text-xs text-gray-500">Sube el PDF de nómina para actualizar automáticamente los datos del ciclo actual.</p>
-          </div>
+      {/* Status messages */}
+      {error && (
+        <div className="rounded-2xl bg-red-50 border border-red-200 p-3 text-red-700 text-sm flex items-center gap-2">
+          <AlertCircle size={16} /> {error}
         </div>
-        <div className="flex items-center gap-3">
-          <label className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-gray-200 text-sm font-semibold text-gray-700 cursor-pointer hover:border-[#f4a900]/40 hover:text-[#f4a900] transition-all">
-            <Upload size={16} />
-            {uploading ? "Procesando..." : "Seleccionar PDF"}
+      )}
+      {success && (
+        <div className="rounded-2xl bg-emerald-50 border border-emerald-200 p-3 text-emerald-700 text-sm flex items-center gap-2">
+          <Check size={16} /> {isAjustesMode ? "Ciclo aprobado y aplicado correctamente." : "Ciclo enviado exitosamente al administrador."}
+        </div>
+      )}
+
+      {/* ============== PDF upload zone ============== */}
+      {/* Before upload: a big, obvious dropzone. After a successful
+          upload we collapse to a compact summary chip so it doesn't
+          dominate the page while the admin is editing rows. */}
+      {!uploadResult ? (
+        <section className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 sm:p-6">
+          <div className="flex items-start gap-4 flex-wrap">
+            <div className="w-12 h-12 rounded-xl bg-[#f4a900]/10 text-[#f4a900] flex items-center justify-center flex-shrink-0">
+              <FileText className="h-6 w-6" />
+            </div>
+            <div className="flex-1 min-w-[240px]">
+              <p className="text-sm font-bold text-gray-900">Cargar nómina (PDF)</p>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Sube el PDF de la nómina para autocompletar aportes, actividades y abonos de
+                crédito por usuario, en el orden del PDF.
+              </p>
+            </div>
+            <label className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#f4a900] text-black text-sm font-bold cursor-pointer hover:bg-[#e68a00] transition disabled:opacity-50">
+              <Upload size={16} />
+              {uploading ? "Procesando..." : "Seleccionar PDF"}
+              <input
+                type="file"
+                accept=".pdf"
+                className="hidden"
+                disabled={uploading}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) handlePdfUpload(f);
+                  e.target.value = "";
+                }}
+              />
+            </label>
+          </div>
+          {uploadError && (
+            <div className="mt-3 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm flex items-center gap-2">
+              <AlertCircle size={14} /> {uploadError}
+            </div>
+          )}
+        </section>
+      ) : (
+        <section className="bg-emerald-50 border border-emerald-200 rounded-2xl p-3 sm:p-4 flex items-center gap-3 flex-wrap">
+          <Check className="h-5 w-5 text-emerald-700 flex-shrink-0" />
+          <div className="flex-1 min-w-[200px]">
+            <p className="text-sm font-bold text-emerald-900">Nómina cargada</p>
+            <p className="text-xs text-emerald-800/80">
+              {uploadResult.total_en_pdf} en PDF · {uploadResult.actualizados} actualizados
+              {uploadResult.no_encontrados > 0 ? ` · ${uploadResult.no_encontrados} no encontrados` : ""}
+            </p>
+            {uploadResult.cedulas_no_encontradas.length > 0 && (
+              <details className="mt-1">
+                <summary className="text-[11px] text-amber-800 cursor-pointer font-semibold">Ver cédulas no encontradas</summary>
+                <p className="mt-1 text-[11px] text-amber-700 break-words">
+                  {uploadResult.cedulas_no_encontradas.join(", ")}
+                </p>
+              </details>
+            )}
+          </div>
+          <label className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white border border-emerald-200 text-emerald-800 text-xs font-semibold cursor-pointer hover:bg-emerald-100 transition">
+            <Upload size={13} />
+            Reemplazar PDF
             <input
               type="file"
               accept=".pdf"
@@ -974,68 +1118,33 @@ function CicloActualTab() {
               }}
             />
           </label>
-          {uploading && <div className="animate-spin h-5 w-5 border-2 border-[#f4a900] border-t-transparent rounded-full" />}
-        </div>
-
-        {uploadError && (
-          <div className="mt-3 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm flex items-center gap-2">
-            <AlertCircle size={14} /> {uploadError}
-          </div>
-        )}
-
-        {uploadResult && (
-          <div className="mt-3 p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-sm">
-            <p className="font-semibold text-emerald-800 mb-1">PDF procesado correctamente</p>
-            <div className="grid grid-cols-3 gap-2 text-xs text-emerald-700">
-              <div>Total en PDF: <span className="font-bold">{uploadResult.total_en_pdf}</span></div>
-              <div>Actualizados: <span className="font-bold">{uploadResult.actualizados}</span></div>
-              <div>No encontrados: <span className="font-bold">{uploadResult.no_encontrados}</span></div>
-            </div>
-            {uploadResult.cedulas_no_encontradas.length > 0 && (
-              <p className="mt-2 text-xs text-amber-700">
-                Cédulas no encontradas: {uploadResult.cedulas_no_encontradas.join(", ")}
-              </p>
-            )}
-            {/* Temporary debug: raw text preview */}
-            {(() => {
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              const r = uploadResult as any;
-              if (!r._debug_raw_text_preview) return null;
-              return (
-                <details className="mt-3">
-                  <summary className="text-xs text-gray-500 cursor-pointer font-semibold">Debug: Raw PDF text (click to expand)</summary>
-                  <pre className="mt-2 p-2 bg-gray-900 text-green-400 text-[10px] rounded-lg overflow-auto max-h-80 whitespace-pre-wrap">
-                    {String(r._debug_raw_text_preview)}
-                  </pre>
-                  <pre className="mt-1 p-2 bg-gray-900 text-yellow-400 text-[10px] rounded-lg overflow-auto max-h-40 whitespace-pre-wrap">
-                    {JSON.stringify(r._debug_parsed_sample, null, 2)}
-                  </pre>
-                </details>
-              );
-            })()}
-          </div>
-        )}
-      </div>
-
-      {/* Messages */}
-      {error && (
-        <div className="mx-5 mt-4 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm flex items-center gap-2">
-          <AlertCircle size={16} /> {error}
-        </div>
-      )}
-      {success && (
-        <div className="mx-5 mt-4 p-3 rounded-xl bg-green-50 border border-green-200 text-green-700 text-sm flex items-center gap-2">
-          <Check size={16} /> {isAjustesMode ? "Ciclo aprobado y aplicado correctamente." : "Ciclo enviado exitosamente al administrador."}
-        </div>
+        </section>
       )}
 
-      {/* Cards-per-user layout (cleaner for the multi-credit case) */}
-      <div className="p-4 space-y-3">
+      {/* ============== Search + count ============== */}
+      <section className="bg-white rounded-2xl shadow-sm border border-gray-100 p-3 sm:p-4 flex items-center gap-3 flex-wrap">
+        <div className="relative flex-1 min-w-[200px]">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Filtrar por nombre o cédula..."
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            className="w-full pl-9 pr-4 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#f4a900]/40 focus:border-[#f4a900]"
+          />
+        </div>
+        <span className="text-xs text-gray-500 whitespace-nowrap">
+          {filtered.length} {filtered.length === 1 ? "usuario" : "usuarios"}
+          {pdfUploaded && manuallyAddedUsers.size > 0 ? ` · ${manuallyAddedUsers.size} agregados` : ""}
+        </span>
+      </section>
+
+      {/* ============== Per-user cards ============== */}
+      <section className="space-y-3">
         {filtered.length === 0 && (
-          <div className="text-center py-12 text-gray-400 text-sm">No se encontraron miembros.</div>
-        )}
-        {pdfUploaded && filtered.length > 0 && (
-          <p className="text-xs text-gray-500">Mostrando {filtered.length} usuario(s) del PDF{manuallyAddedUsers.size > 0 ? ` + ${manuallyAddedUsers.size} agregado(s)` : ""}</p>
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 py-12 text-center text-gray-400 text-sm">
+            No se encontraron miembros.
+          </div>
         )}
         {filtered.map((row) => {
           const idx = rows.findIndex((r) => r.user_id === row.user_id);
@@ -1045,21 +1154,40 @@ function CicloActualTab() {
           return (
             <div
               key={row.user_id}
-              className={`rounded-xl border ${overBudget ? "border-red-300 bg-red-50/30" : "border-gray-200 bg-white"} p-4`}
+              className={`rounded-2xl border shadow-sm transition ${
+                overBudget
+                  ? "border-red-300 bg-red-50/40"
+                  : "border-gray-200 bg-white hover:border-[#f4a900]/40"
+              } p-4 sm:p-5`}
             >
-              <div className="flex items-start justify-between flex-wrap gap-3 mb-3">
-                <div>
-                  <p className="font-bold text-gray-900">{row.nombre}</p>
-                  <p className="text-xs text-gray-500">CC {row.cedula}</p>
+              <div className="flex items-start justify-between flex-wrap gap-3 mb-4">
+                <div className="min-w-0">
+                  <p className="font-bold text-gray-900 truncate">{row.nombre}</p>
+                  <p className="text-xs text-gray-500 font-mono">CC {row.cedula}</p>
                 </div>
-                <div className="flex items-center gap-3 flex-wrap">
+                <div className="flex items-center gap-2 flex-wrap">
                   {budget !== undefined && (
-                    <div className={`px-3 py-1.5 rounded-lg border text-xs ${overBudget ? "bg-red-100 border-red-300 text-red-800" : "bg-amber-50 border-amber-200 text-amber-800"}`}>
-                      <span className="font-semibold">Presupuesto admin:</span> {fmt(budget)}
+                    <div
+                      className={`px-2.5 py-1 rounded-lg text-[11px] ${
+                        overBudget
+                          ? "bg-red-100 text-red-800"
+                          : "bg-amber-50 text-amber-800"
+                      }`}
+                    >
+                      <span className="font-semibold">Presupuesto:</span> {fmt(budget)}
                     </div>
                   )}
-                  <div className={`px-3 py-1.5 rounded-lg border text-xs ${overBudget ? "bg-red-100 border-red-300 text-red-800" : "bg-emerald-50 border-emerald-200 text-emerald-800"}`}>
-                    <span className="font-semibold">Total:</span> {fmt(total)}
+                  <div
+                    className={`px-3 py-1.5 rounded-lg ${
+                      overBudget
+                        ? "bg-red-100 text-red-900"
+                        : total > 0
+                        ? "bg-emerald-50 text-emerald-800"
+                        : "bg-gray-100 text-gray-500"
+                    }`}
+                  >
+                    <span className="text-[10px] font-bold uppercase tracking-wider opacity-70">Total</span>
+                    <span className="ml-1.5 text-sm font-extrabold">{fmt(total)}</span>
                   </div>
                 </div>
               </div>
@@ -1122,7 +1250,9 @@ function CicloActualTab() {
                           <p className="text-[10px] text-gray-500">
                             {unlinked
                               ? "Del PDF — enlaza este crédito en Cartera para que el pago descuente saldo"
-                              : `Saldo: ${fmt(cr.saldo_total)} · Cuota esperada: ${fmt(cr.cuota_esperada)}`}
+                              : cr.saldo_total > 0 || cr.cuota_esperada > 0
+                              ? `Saldo: ${fmt(cr.saldo_total)}${cr.cuota_esperada > 0 ? ` · Cuota esperada: ${fmt(cr.cuota_esperada)}` : ""}`
+                              : "Crédito sin cuotas configuradas — edítalo en Cartera"}
                           </p>
                         </div>
                         <input
@@ -1209,53 +1339,69 @@ function CicloActualTab() {
             </div>
           );
         })}
+      </section>
 
-        {filtered.length > 0 && (
-          <div className="mt-3 p-4 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-between">
-            <span className="text-sm font-semibold text-emerald-800">Total del ciclo</span>
-            <span className="text-xl font-extrabold text-emerald-900">{fmt(cycleTotal)}</span>
-          </div>
-        )}
-
-        {/* Add user button (visible after PDF upload) */}
-        {pdfUploaded && (
-          <div className="mt-2">
-            {!showAddUser ? (
-              <button
-                onClick={() => setShowAddUser(true)}
-                className="w-full py-3 rounded-xl border-2 border-dashed border-gray-300 text-gray-500 hover:border-[#f4a900] hover:text-[#f4a900] transition-colors flex items-center justify-center gap-2 text-sm font-semibold"
-              >
-                <UserPlus size={16} />
-                Agregar usuario no incluido en el PDF
-              </button>
-            ) : (
-              <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-2">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-semibold text-gray-700">Seleccionar usuario</p>
-                  <button onClick={() => setShowAddUser(false)} className="p-1 hover:bg-gray-100 rounded-full"><X size={16} className="text-gray-400" /></button>
-                </div>
-                <div className="max-h-48 overflow-y-auto divide-y divide-gray-100 border border-gray-200 rounded-lg">
-                  {rows
-                    .filter((r) => !cicloActualMap[r.user_id] && !manuallyAddedUsers.has(r.user_id))
-                    .map((r) => (
-                      <button
-                        key={r.user_id}
-                        onClick={() => {
-                          setManuallyAddedUsers((prev) => new Set(prev).add(r.user_id));
-                          setShowAddUser(false);
-                        }}
-                        className="w-full text-left px-3 py-2 hover:bg-orange-50 text-sm transition-colors"
-                      >
-                        <span className="font-medium text-gray-900">{r.nombre}</span>
-                        <span className="ml-2 text-xs text-gray-500">CC {r.cedula}</span>
-                      </button>
-                    ))}
-                </div>
+      {/* Add user button (visible after PDF upload) — outside the cards
+          section so it doesn't look like a user row. */}
+      {pdfUploaded && (
+        <div>
+          {!showAddUser ? (
+            <button
+              onClick={() => setShowAddUser(true)}
+              className="w-full py-3 rounded-2xl border-2 border-dashed border-gray-300 bg-white text-gray-500 hover:border-[#f4a900] hover:text-[#f4a900] transition-colors flex items-center justify-center gap-2 text-sm font-semibold"
+            >
+              <UserPlus size={16} />
+              Agregar usuario no incluido en el PDF
+            </button>
+          ) : (
+            <div className="rounded-2xl border border-gray-200 bg-white p-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold text-gray-700">Seleccionar usuario</p>
+                <button onClick={() => setShowAddUser(false)} className="p-1 hover:bg-gray-100 rounded-full"><X size={16} className="text-gray-400" /></button>
               </div>
-            )}
+              <div className="max-h-48 overflow-y-auto divide-y divide-gray-100 border border-gray-200 rounded-lg">
+                {rows
+                  .filter((r) => !cicloActualMap[r.user_id] && !manuallyAddedUsers.has(r.user_id))
+                  .map((r) => (
+                    <button
+                      key={r.user_id}
+                      onClick={() => {
+                        setManuallyAddedUsers((prev) => new Set(prev).add(r.user_id));
+                        setShowAddUser(false);
+                      }}
+                      className="w-full text-left px-3 py-2 hover:bg-orange-50 text-sm transition-colors"
+                    >
+                      <span className="font-medium text-gray-900">{r.nombre}</span>
+                      <span className="ml-2 text-xs text-gray-500">CC {r.cedula}</span>
+                    </button>
+                  ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ============== Sticky-feel footer with running total + submit ============== */}
+      {filtered.length > 0 && (
+        <section className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Total del ciclo</p>
+            <p className="text-2xl font-extrabold text-gray-900">{fmt(cycleTotal)}</p>
           </div>
-        )}
-      </div>
+          <button
+            onClick={handleSubmit}
+            disabled={submitting}
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#f4a900] text-black font-bold text-sm shadow-md shadow-[#f4a900]/30 hover:bg-[#e68a00] disabled:opacity-50"
+          >
+            {submitting ? (
+              <div className="animate-spin h-4 w-4 border-2 border-black border-t-transparent rounded-full" />
+            ) : (
+              <Send size={16} />
+            )}
+            {isAjustesMode ? "Aprobar y aplicar" : "Aprobar y enviar"}
+          </button>
+        </section>
+      )}
     </div>
   );
 }
