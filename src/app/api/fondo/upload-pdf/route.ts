@@ -283,7 +283,13 @@ export async function POST(req: NextRequest) {
     const notFoundCedulas: string[] = [];
     const updatedUsers: { cedula: string; name: string; credits: number; savings: boolean; activities: number }[] = [];
 
-    for (const parsed of parsedUsers) {
+    // Clear stale `cicloActual.order` values so a fresh upload re-establishes
+    // the document order (and users dropped from this run don't keep their
+    // previous index and re-appear mid-list).
+    await usersCollection.updateMany({ 'cicloActual.order': { $exists: true } }, { $unset: { 'cicloActual.order': '' } });
+
+    for (let i = 0; i < parsedUsers.length; i++) {
+      const parsed = parsedUsers[i];
       const dbUser = await usersCollection.findOne({ cedula: parsed.cedula });
       if (!dbUser) {
         notFound++;
@@ -299,6 +305,7 @@ export async function POST(req: NextRequest) {
               credits: parsed.credits,
               savings: parsed.savings,
               activities: parsed.activities,
+              order: i, // preserve PDF document order for the Ciclo Actual view
               uploaded_at: new Date(),
               uploaded_by: session.user.id,
             },

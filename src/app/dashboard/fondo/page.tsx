@@ -26,6 +26,10 @@ import {
 } from "lucide-react";
 import DashboardNavbar from "../navbar";
 import FondoUserView from "./user-view";
+import {
+  getCurrentCyclePeriodo,
+  formatPeriodoLabel as formatPeriodoLabelLib,
+} from "../../../lib/fondo-period";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -320,6 +324,7 @@ interface CicloActualData {
   credits: { credit_id: string; interest: number; capital: number; total: number }[];
   savings: { ahorro_permanente: number; ahorro_social: number; total: number } | null;
   activities: { description: string; amount: number }[];
+  order?: number;
   uploaded_at?: string;
 }
 
@@ -345,29 +350,12 @@ function CicloActualTab() {
   const [manuallyAddedUsers, setManuallyAddedUsers] = useState<Set<string>>(new Set());
   const [showAddUser, setShowAddUser] = useState(false);
 
-  // Compute current periodo (YYYY-MM-A or YYYY-MM-B)
-  const computeCurrentPeriodo = () => {
-    const now = new Date();
-    const day = now.getDate();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, "0");
-    const half = day <= 15 ? "A" : "B";
-    return `${year}-${month}-${half}`;
-  };
-
-  const formatPeriodoLabel = (p: string) => {
-    const [y, m, h] = p.split("-");
-    const monthNames = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
-    const monthLabel = monthNames[parseInt(m) - 1] || m;
-    return `${h === "A" ? "1ra quincena" : "2da quincena"} de ${monthLabel} ${y}`;
-  };
-
   useEffect(() => {
     (async () => {
       try {
-        const currentPeriodo = computeCurrentPeriodo();
+        const currentPeriodo = getCurrentCyclePeriodo();
         setPeriodo(currentPeriodo);
-        setPeriodoLabel(formatPeriodoLabel(currentPeriodo));
+        setPeriodoLabel(formatPeriodoLabelLib(currentPeriodo));
 
         // Check for existing cycle for this periodo first
         const ciclosRes = await fetch(`/api/fondo/ciclos?periodo=${currentPeriodo}`);
@@ -568,11 +556,32 @@ function CicloActualTab() {
   };
 
   // In ajustes_admin mode, only show users who actually have budget adjustments
-  // When PDF uploaded, only show users in the PDF + manually added
+  // When PDF uploaded, only show users in the PDF + manually added.
+  // Order: with a PDF uploaded we respect the PDF's document order
+  // (cicloActual.order set by /api/fondo/upload-pdf). Manually added users
+  // come after the PDF users in the order they were picked. Without a PDF
+  // we keep the default API ordering (name asc).
   const isAjustesMode = existingCiclo?.estado === "ajustes_admin";
   const visibleRows = useMemo(() => {
     if (isAjustesMode) return rows.filter((r) => budgetMap[r.user_id] !== undefined);
-    if (pdfUploaded) return rows.filter((r) => cicloActualMap[r.user_id] || manuallyAddedUsers.has(r.user_id));
+    if (pdfUploaded) {
+      const filtered = rows.filter(
+        (r) => cicloActualMap[r.user_id] || manuallyAddedUsers.has(r.user_id),
+      );
+      return [...filtered].sort((a, b) => {
+        const aInPdf = cicloActualMap[a.user_id];
+        const bInPdf = cicloActualMap[b.user_id];
+        // PDF users before manually added users
+        if (aInPdf && !bInPdf) return -1;
+        if (!aInPdf && bInPdf) return 1;
+        if (aInPdf && bInPdf) {
+          const ao = aInPdf.order ?? Number.MAX_SAFE_INTEGER;
+          const bo = bInPdf.order ?? Number.MAX_SAFE_INTEGER;
+          return ao - bo;
+        }
+        return 0;
+      });
+    }
     return rows;
   }, [rows, isAjustesMode, budgetMap, pdfUploaded, cicloActualMap, manuallyAddedUsers]);
 
@@ -1159,8 +1168,11 @@ function HistorialTab() {
 
 function BuscarAfiliadoTab() {
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<SearchUser[]>([]);
-  const [searching, setSearching] = useState(false);
+  // Load all members up front so the fondo user can scan the list without
+  // guessing a search term. The backend already sorts by nombre asc when no
+  // search param is passed.
+  const [allMembers, setAllMembers] = useState<SearchUser[]>([]);
+  const [loadingMembers, setLoadingMembers] = useState(true);
   const [selected, setSelected] = useState<SearchUser | null>(null);
 
   /* profile data */
@@ -1171,6 +1183,12 @@ function BuscarAfiliadoTab() {
   const [loadingProfile, setLoadingProfile] = useState(false);
 
   const [saving, setSaving] = useState(false);
+
+  /* manual-entry forms */
+  const [showAddAporte, setShowAddAporte] = useState(false);
+  const [showAddActividad, setShowAddActividad] = useState(false);
+  const [showAddCredit, setShowAddCredit] = useState(false);
+  const [addError, setAddError] = useState("");
 
   /* editable credito_id */
   const [editingCreditId, setEditingCreditId] = useState<string | null>(null);
@@ -1251,43 +1269,41 @@ function BuscarAfiliadoTab() {
   const toggleSection = (key: string) =>
     setOpenSections((p) => ({ ...p, [key]: !p[key] }));
 
-  const [searched, setSearched] = useState(false);
-
-  const handleSearch = async () => {
-    if (!query.trim()) return;
-    setSearching(true);
-    setSelected(null);
-    setResults([]);
-    setSearched(true);
-    try {
-      const res = await fetch(
-        `/api/fondo/members?search=${encodeURIComponent(query.trim())}`
-      );
-      if (res.ok) {
-        const data = await res.json();
-        setResults(Array.isArray(data) ? data : []);
-      } else {
-        setResults([]);
+  // Load all members on mount
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch("/api/fondo/members");
+        if (res.ok) {
+          const data = await res.json();
+          setAllMembers(Array.isArray(data) ? data : []);
+        }
+      } catch (err) {
+        console.error("Load members error:", err);
+      } finally {
+        setLoadingMembers(false);
       }
-    } catch (err) {
-      console.error('Search error:', err);
-      setResults([]);
-    } finally {
-      setSearching(false);
-    }
-  };
+    })();
+  }, []);
 
-  const selectUser = async (user: SearchUser) => {
-    setSelected(user);
+  // Client-side filter — lets the user scan by name or cédula without
+  // round-tripping to the server on every keystroke.
+  const filteredMembers = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return allMembers;
+    return allMembers.filter((m) =>
+      (m.nombre || "").toLowerCase().includes(q) ||
+      (m.cedula || "").toLowerCase().includes(q),
+    );
+  }, [allMembers, query]);
+
+  const loadProfile = async (user: SearchUser) => {
     setLoadingProfile(true);
     setSaldos(null);
     setAportes([]);
     setActividades([]);
     setCreditos([]);
     try {
-      // The /api/fondo/saldos endpoint expects the USER id (not member id).
-      // SearchUser.id from /api/fondo/members?search comes back as the member's _id,
-      // but the result also has user_id. From /api/fondo/members?search_users it's the user's _id.
       const userId = user.user_id || user.id;
       const sRes = await fetch(`/api/fondo/saldos?user_id=${userId}`);
       if (sRes.ok) {
@@ -1302,77 +1318,147 @@ function BuscarAfiliadoTab() {
     }
   };
 
+  const selectUser = async (user: SearchUser) => {
+    setSelected(user);
+    setShowAddAporte(false);
+    setShowAddActividad(false);
+    setShowAddCredit(false);
+    setAddError("");
+    await loadProfile(user);
+  };
+
+  const refreshProfile = async () => {
+    if (selected) await loadProfile(selected);
+  };
+
+  const handleAddAporte = async (values: { monto_total: number; periodo: string; descripcion: string }) => {
+    if (!selected) return;
+    setSaving(true);
+    setAddError("");
+    try {
+      const userId = selected.user_id || selected.id;
+      const res = await fetch("/api/fondo/aportes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: userId, ...values, tipo: "manual" }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || "Error");
+      setShowAddAporte(false);
+      await refreshProfile();
+    } catch (err) {
+      setAddError(err instanceof Error ? err.message : "Error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleAddActividad = async (values: { tipo: "aporte" | "retiro"; monto: number; descripcion: string }) => {
+    if (!selected) return;
+    setSaving(true);
+    setAddError("");
+    try {
+      const userId = selected.user_id || selected.id;
+      const res = await fetch("/api/fondo/actividad", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: userId, ...values }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || "Error");
+      setShowAddActividad(false);
+      await refreshProfile();
+    } catch (err) {
+      setAddError(err instanceof Error ? err.message : "Error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleAddCredit = async (values: {
+    valor_prestamo: number;
+    numero_cuotas: number;
+    frecuencia_pago: "mensual" | "quincenal";
+    credito_id: string;
+    fecha_cuota_1: string;
+    motivo_solicitud: string;
+  }) => {
+    if (!selected) return;
+    setSaving(true);
+    setAddError("");
+    try {
+      const userId = selected.user_id || selected.id;
+      const res = await fetch("/api/fondo/cartera", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: userId, ...values }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || "Error");
+      setShowAddCredit(false);
+      await refreshProfile();
+    } catch (err) {
+      setAddError(err instanceof Error ? err.message : "Error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
-      {/* Search bar */}
+      {/* Search + full members list */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 sm:p-6">
-        <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2 mb-4">
-          <Search size={20} className="text-[#f4a900]" />
-          Buscar Afiliado
-        </h2>
-        <div className="flex gap-3">
-          <div className="relative flex-1">
-            <Search
-              size={16}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-            />
-            <input
-              type="text"
-              placeholder="Buscar por nombre o cédula..."
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-              className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#f4a900]/40 focus:border-[#f4a900]"
-            />
-          </div>
-          <button
-            onClick={handleSearch}
-            disabled={searching}
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#f4a900] text-white font-semibold text-sm shadow-md shadow-[#f4a900]/25 hover:bg-[#e68a00] disabled:opacity-50 transition-all"
-          >
-            {searching ? (
-              <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
-            ) : (
-              <Search size={16} />
+        <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
+          <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+            <Search size={20} className="text-[#f4a900]" />
+            Buscar Afiliado
+            {!loadingMembers && (
+              <span className="text-xs font-normal text-gray-400">
+                ({filteredMembers.length}{query ? ` de ${allMembers.length}` : ""})
+              </span>
             )}
-            Buscar
-          </button>
+          </h2>
+        </div>
+        <div className="relative">
+          <Search
+            size={16}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+          />
+          <input
+            type="text"
+            placeholder="Filtrar por nombre o cédula..."
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#f4a900]/40 focus:border-[#f4a900]"
+          />
         </div>
 
-        {/* Results */}
-        {!selected && results.length > 0 && (
-          <div className="mt-4 divide-y divide-gray-100 rounded-xl border border-gray-200 overflow-hidden">
-            {results.map((u) => (
-              <button
-                key={u.id}
-                onClick={() => selectUser(u)}
-                className="w-full flex items-center justify-between px-4 py-3 hover:bg-[#f4a900]/[0.04] transition-colors text-left"
-              >
-                <div>
-                  <p className="font-medium text-gray-900">{u.nombre || 'Sin nombre'}</p>
-                  <p className="text-xs text-gray-500">CC: {u.cedula || '—'}</p>
-                </div>
-                <ChevronRight size={16} className="text-gray-400" />
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* Loading state */}
-        {!selected && searching && (
-          <div className="mt-4 p-6 rounded-xl border border-gray-200 text-center text-sm text-gray-500 flex items-center justify-center gap-2">
-            <div className="animate-spin h-4 w-4 border-2 border-[#f4a900] border-t-transparent rounded-full" />
-            Buscando...
-          </div>
-        )}
-
-        {/* Empty state after a search */}
-        {!selected && !searching && searched && results.length === 0 && (
-          <div className="mt-4 p-6 rounded-xl border border-dashed border-gray-200 text-center text-sm text-gray-500">
-            No se encontraron afiliados con ese criterio.
-            <br />
-            <span className="text-xs text-gray-400">Solo se buscan usuarios afiliados a Fonalmerque. Para crear una nueva afiliación usa la pestaña &quot;Nuevo Afiliado&quot;.</span>
-          </div>
+        {/* Members list — always shown (scrollable). Clicking one expands the
+            profile below. */}
+        {!selected && (
+          loadingMembers ? (
+            <div className="mt-4 p-6 rounded-xl border border-gray-200 text-center text-sm text-gray-500 flex items-center justify-center gap-2">
+              <div className="animate-spin h-4 w-4 border-2 border-[#f4a900] border-t-transparent rounded-full" />
+              Cargando afiliados...
+            </div>
+          ) : filteredMembers.length === 0 ? (
+            <div className="mt-4 p-6 rounded-xl border border-dashed border-gray-200 text-center text-sm text-gray-500">
+              {query ? "Ningún afiliado coincide con ese filtro." : "No hay afiliados registrados."}
+            </div>
+          ) : (
+            <div className="mt-4 max-h-[480px] overflow-y-auto divide-y divide-gray-100 rounded-xl border border-gray-200">
+              {filteredMembers.map((u) => (
+                <button
+                  key={u.id}
+                  onClick={() => selectUser(u)}
+                  className="w-full flex items-center justify-between px-4 py-3 hover:bg-[#f4a900]/[0.04] transition-colors text-left"
+                >
+                  <div>
+                    <p className="font-medium text-gray-900">{u.nombre || "Sin nombre"}</p>
+                    <p className="text-xs text-gray-500">CC: {u.cedula || "—"}</p>
+                  </div>
+                  <ChevronRight size={16} className="text-gray-400" />
+                </button>
+              ))}
+            </div>
+          )
         )}
       </div>
 
@@ -1399,6 +1485,12 @@ function BuscarAfiliadoTab() {
               <X size={18} />
             </button>
           </div>
+
+          {addError && (
+            <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm flex items-center gap-2">
+              <AlertCircle size={16} /> {addError}
+            </div>
+          )}
 
           {loadingProfile ? (
             <div className="flex justify-center py-12">
@@ -1455,6 +1547,22 @@ function BuscarAfiliadoTab() {
                 open={openSections.aportes}
                 onToggle={() => toggleSection("aportes")}
               >
+                <div className="mb-3 flex justify-end">
+                  {!showAddAporte ? (
+                    <button
+                      onClick={() => setShowAddAporte(true)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#f4a900]/10 text-[#9a6b00] border border-[#f4a900]/30 text-xs font-semibold hover:bg-[#f4a900]/20"
+                    >
+                      <UserPlus size={14} /> Agregar aporte
+                    </button>
+                  ) : (
+                    <AddAporteForm
+                      saving={saving}
+                      onCancel={() => setShowAddAporte(false)}
+                      onSubmit={handleAddAporte}
+                    />
+                  )}
+                </div>
                 {aportes.length > 0 ? (
                   <div className="overflow-x-auto rounded-xl border border-gray-200">
                     <table className="w-full text-sm">
@@ -1507,6 +1615,22 @@ function BuscarAfiliadoTab() {
                 open={openSections.actividades}
                 onToggle={() => toggleSection("actividades")}
               >
+                <div className="mb-3 flex justify-end">
+                  {!showAddActividad ? (
+                    <button
+                      onClick={() => setShowAddActividad(true)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#f4a900]/10 text-[#9a6b00] border border-[#f4a900]/30 text-xs font-semibold hover:bg-[#f4a900]/20"
+                    >
+                      <UserPlus size={14} /> Agregar actividad
+                    </button>
+                  ) : (
+                    <AddActividadForm
+                      saving={saving}
+                      onCancel={() => setShowAddActividad(false)}
+                      onSubmit={handleAddActividad}
+                    />
+                  )}
+                </div>
                 {actividades.length > 0 ? (
                   <div className="overflow-x-auto rounded-xl border border-gray-200">
                     <table className="w-full text-sm">
@@ -1563,6 +1687,22 @@ function BuscarAfiliadoTab() {
                 open={openSections.cartera}
                 onToggle={() => toggleSection("cartera")}
               >
+                <div className="mb-3 flex justify-end">
+                  {!showAddCredit ? (
+                    <button
+                      onClick={() => setShowAddCredit(true)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#f4a900]/10 text-[#9a6b00] border border-[#f4a900]/30 text-xs font-semibold hover:bg-[#f4a900]/20"
+                    >
+                      <UserPlus size={14} /> Agregar crédito
+                    </button>
+                  ) : (
+                    <AddCreditForm
+                      saving={saving}
+                      onCancel={() => setShowAddCredit(false)}
+                      onSubmit={handleAddCredit}
+                    />
+                  )}
+                </div>
                 {creditos.length > 0 ? (
                   <div className="space-y-4">
                     {creditos.map((cr, idx) => {
@@ -1952,6 +2092,216 @@ function CollapsibleSection({
         )}
       </button>
       {open && <div className="px-5 pb-5">{children}</div>}
+    </div>
+  );
+}
+
+/* ================================================================== */
+/*  ADD-ENTRY FORMS (used inside Buscar Afiliado)                      */
+/* ================================================================== */
+
+function AddAporteForm({
+  saving,
+  onCancel,
+  onSubmit,
+}: {
+  saving: boolean;
+  onCancel: () => void;
+  onSubmit: (values: { monto_total: number; periodo: string; descripcion: string }) => void;
+}) {
+  const [monto, setMonto] = useState("");
+  const defaultPeriod = new Date().toISOString().slice(0, 7);
+  const [periodo, setPeriodo] = useState(defaultPeriod);
+  const [descripcion, setDescripcion] = useState("");
+  const valid = Number(monto) > 0;
+  return (
+    <div className="w-full max-w-xl p-3 rounded-xl border border-[#f4a900]/30 bg-[#f4a900]/[0.04] space-y-2">
+      <p className="text-xs font-semibold text-gray-700">Nuevo aporte (90% permanente / 10% social)</p>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+        <input
+          type="number"
+          placeholder="Monto total"
+          min={0}
+          value={monto}
+          onChange={(e) => setMonto(e.target.value)}
+          className="rounded-lg border border-gray-200 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#f4a900]/40"
+        />
+        <input
+          type="text"
+          placeholder="Periodo (YYYY-MM)"
+          value={periodo}
+          onChange={(e) => setPeriodo(e.target.value)}
+          className="rounded-lg border border-gray-200 px-2 py-1.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#f4a900]/40"
+        />
+        <input
+          type="text"
+          placeholder="Descripción (opcional)"
+          value={descripcion}
+          onChange={(e) => setDescripcion(e.target.value)}
+          className="rounded-lg border border-gray-200 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#f4a900]/40"
+        />
+      </div>
+      <div className="flex justify-end gap-2">
+        <button onClick={onCancel} className="px-3 py-1.5 rounded-lg bg-gray-100 text-gray-600 text-xs font-semibold hover:bg-gray-200">Cancelar</button>
+        <button
+          onClick={() => onSubmit({ monto_total: Number(monto), periodo, descripcion })}
+          disabled={!valid || saving}
+          className="px-3 py-1.5 rounded-lg bg-[#f4a900] text-white text-xs font-bold hover:bg-[#e68a00] disabled:opacity-50"
+        >
+          Guardar
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function AddActividadForm({
+  saving,
+  onCancel,
+  onSubmit,
+}: {
+  saving: boolean;
+  onCancel: () => void;
+  onSubmit: (values: { tipo: "aporte" | "retiro"; monto: number; descripcion: string }) => void;
+}) {
+  const [tipo, setTipo] = useState<"aporte" | "retiro">("aporte");
+  const [monto, setMonto] = useState("");
+  const [descripcion, setDescripcion] = useState("");
+  const valid = Number(monto) > 0;
+  return (
+    <div className="w-full max-w-xl p-3 rounded-xl border border-[#f4a900]/30 bg-[#f4a900]/[0.04] space-y-2">
+      <p className="text-xs font-semibold text-gray-700">Nueva actividad</p>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+        <select
+          value={tipo}
+          onChange={(e) => setTipo(e.target.value as "aporte" | "retiro")}
+          className="rounded-lg border border-gray-200 px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#f4a900]/40"
+        >
+          <option value="aporte">Aporte</option>
+          <option value="retiro">Retiro</option>
+        </select>
+        <input
+          type="number"
+          placeholder="Monto"
+          min={0}
+          value={monto}
+          onChange={(e) => setMonto(e.target.value)}
+          className="rounded-lg border border-gray-200 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#f4a900]/40"
+        />
+        <input
+          type="text"
+          placeholder="Descripción"
+          value={descripcion}
+          onChange={(e) => setDescripcion(e.target.value)}
+          className="rounded-lg border border-gray-200 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#f4a900]/40"
+        />
+      </div>
+      <div className="flex justify-end gap-2">
+        <button onClick={onCancel} className="px-3 py-1.5 rounded-lg bg-gray-100 text-gray-600 text-xs font-semibold hover:bg-gray-200">Cancelar</button>
+        <button
+          onClick={() => onSubmit({ tipo, monto: Number(monto), descripcion })}
+          disabled={!valid || saving}
+          className="px-3 py-1.5 rounded-lg bg-[#f4a900] text-white text-xs font-bold hover:bg-[#e68a00] disabled:opacity-50"
+        >
+          Guardar
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function AddCreditForm({
+  saving,
+  onCancel,
+  onSubmit,
+}: {
+  saving: boolean;
+  onCancel: () => void;
+  onSubmit: (values: {
+    valor_prestamo: number;
+    numero_cuotas: number;
+    frecuencia_pago: "mensual" | "quincenal";
+    credito_id: string;
+    fecha_cuota_1: string;
+    motivo_solicitud: string;
+  }) => void;
+}) {
+  const [valor, setValor] = useState("");
+  const [cuotas, setCuotas] = useState("12");
+  const [frecuencia, setFrecuencia] = useState<"mensual" | "quincenal">("mensual");
+  const [creditoId, setCreditoId] = useState("");
+  const [fechaCuota1, setFechaCuota1] = useState(new Date().toISOString().slice(0, 10));
+  const [motivo, setMotivo] = useState("");
+  const valid = Number(valor) > 0 && Number(cuotas) > 0 && Number(cuotas) <= 120;
+  return (
+    <div className="w-full max-w-2xl p-3 rounded-xl border border-[#f4a900]/30 bg-[#f4a900]/[0.04] space-y-2">
+      <p className="text-xs font-semibold text-gray-700">Nuevo crédito (se crea activo con amortización estándar)</p>
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+        <input
+          type="number"
+          placeholder="Valor préstamo"
+          min={0}
+          value={valor}
+          onChange={(e) => setValor(e.target.value)}
+          className="rounded-lg border border-gray-200 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#f4a900]/40"
+        />
+        <input
+          type="number"
+          placeholder="Número de cuotas"
+          min={1}
+          max={120}
+          value={cuotas}
+          onChange={(e) => setCuotas(e.target.value)}
+          className="rounded-lg border border-gray-200 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#f4a900]/40"
+        />
+        <select
+          value={frecuencia}
+          onChange={(e) => setFrecuencia(e.target.value as "mensual" | "quincenal")}
+          className="rounded-lg border border-gray-200 px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#f4a900]/40"
+        >
+          <option value="mensual">Mensual</option>
+          <option value="quincenal">Quincenal</option>
+        </select>
+        <input
+          type="text"
+          placeholder="Código (opcional)"
+          value={creditoId}
+          onChange={(e) => setCreditoId(e.target.value)}
+          className="rounded-lg border border-gray-200 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#f4a900]/40"
+        />
+        <input
+          type="date"
+          value={fechaCuota1}
+          onChange={(e) => setFechaCuota1(e.target.value)}
+          className="rounded-lg border border-gray-200 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#f4a900]/40"
+        />
+        <input
+          type="text"
+          placeholder="Motivo (opcional)"
+          value={motivo}
+          onChange={(e) => setMotivo(e.target.value)}
+          className="rounded-lg border border-gray-200 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#f4a900]/40"
+        />
+      </div>
+      <div className="flex justify-end gap-2">
+        <button onClick={onCancel} className="px-3 py-1.5 rounded-lg bg-gray-100 text-gray-600 text-xs font-semibold hover:bg-gray-200">Cancelar</button>
+        <button
+          onClick={() =>
+            onSubmit({
+              valor_prestamo: Number(valor),
+              numero_cuotas: Number(cuotas),
+              frecuencia_pago: frecuencia,
+              credito_id: creditoId,
+              fecha_cuota_1: fechaCuota1,
+              motivo_solicitud: motivo,
+            })
+          }
+          disabled={!valid || saving}
+          className="px-3 py-1.5 rounded-lg bg-[#f4a900] text-white text-xs font-bold hover:bg-[#e68a00] disabled:opacity-50"
+        >
+          Crear
+        </button>
+      </div>
     </div>
   );
 }
