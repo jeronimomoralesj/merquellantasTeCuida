@@ -16,6 +16,7 @@ import {
 import { useSession } from 'next-auth/react';
 import JefeSelector, { type JefeOption } from './JefeSelector';
 import { uploadFileChunked } from '../../../lib/uploadChunked';
+import { countVacationDays } from '../../../lib/colombia-holidays';
 
 interface VacationBalance {
   days: number | null;
@@ -79,21 +80,12 @@ const VacacionesForm = () => {
   const exceedsAvailable =
     availableDays != null && diasVacaciones > 0 && diasVacaciones > availableDays;
 
-  // Calculate vacation days whenever dates change
+  // Cuenta días hábiles de vacaciones: excluye domingos y festivos
+  // nacionales colombianos (fijos, Ley Emiliani, y relativos a Pascua).
+  // Ver src/lib/colombia-holidays.ts.
   useEffect(() => {
     if (formData.fechaInicio && formData.fechaFin) {
-      const startDate = new Date(formData.fechaInicio);
-      const endDate = new Date(formData.fechaFin);
-      
-      if (endDate >= startDate) {
-        // Calculate the difference in time
-        const timeDifference = endDate.getTime() - startDate.getTime();
-        // Convert to days and add 1 to include both start and end dates
-        const daysDifference = Math.ceil(timeDifference / (1000 * 3600 * 24)) + 1;
-        setDiasVacaciones(daysDifference);
-      } else {
-        setDiasVacaciones(0);
-      }
+      setDiasVacaciones(countVacationDays(formData.fechaInicio, formData.fechaFin));
     } else {
       setDiasVacaciones(0);
     }
@@ -354,6 +346,9 @@ const VacacionesForm = () => {
                     Total de días de vacaciones: <span className="font-bold">{diasVacaciones} día{diasVacaciones !== 1 ? 's' : ''}</span>
                   </span>
                 </div>
+                <p className="text-[11px] text-blue-700/80 mt-1.5 ml-7">
+                  No cuentan los domingos ni los festivos nacionales.
+                </p>
               </div>
             )}
           </div>

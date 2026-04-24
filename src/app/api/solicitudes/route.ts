@@ -4,6 +4,7 @@ import { getDb } from '../../../lib/db';
 import { ObjectId } from 'mongodb';
 import { auth } from '../../../lib/auth';
 import { sendApprovalEmail } from '../../../lib/send-approval-email';
+import { countVacationDays } from '../../../lib/colombia-holidays';
 
 // 30 days of validity for the approval link — long enough that the jefe can handle
 // the request at their own pace but short enough that stale tokens get garbage-collected.
@@ -83,6 +84,14 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Recalculate dias_vacaciones server-side so the stored value always
+  // matches our count logic (excluye domingos y festivos), incluso si el
+  // cliente está usando una versión vieja que mandaba los días corridos.
+  const computedDias =
+    body.tipo === 'vacaciones' && body.fechaInicio && body.fechaFin
+      ? countVacationDays(String(body.fechaInicio), String(body.fechaFin))
+      : null;
+
   const result = await db.collection('solicitudes').insertOne({
     user_id: session.user.id,
     nombre: session.user.nombre,
@@ -92,7 +101,7 @@ export async function POST(req: NextRequest) {
     description: body.description || null,
     fecha_inicio: body.fechaInicio || null,
     fecha_fin: body.fechaFin || null,
-    dias_vacaciones: body.diasVacaciones || null,
+    dias_vacaciones: computedDias ?? body.diasVacaciones ?? null,
     fecha: body.fecha || null,
     tiempo_inicio: body.tiempoInicio || null,
     tiempo_fin: body.tiempoFin || null,
