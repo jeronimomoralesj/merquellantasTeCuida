@@ -90,68 +90,45 @@ export default function GoalsSection({ currentSavings }: { currentSavings: numbe
   };
 
   return (
-    <div className="space-y-4">
-      {/* Intro card */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800 text-white p-5 sm:p-6">
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0 opacity-30"
-          style={{
-            backgroundImage:
-              "radial-gradient(circle at 15% 30%, #f4a900 0, transparent 45%), radial-gradient(circle at 85% 80%, #f4a900 0, transparent 35%)",
-          }}
-        />
-        <div className="relative flex items-start justify-between gap-4 flex-wrap">
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <Target className="w-4 h-4 text-[#f4a900]" />
-              <span className="text-xs font-semibold uppercase tracking-wider text-[#f4a900]">Mis metas</span>
-            </div>
-            <h2 className="text-xl sm:text-2xl font-extrabold leading-tight">
-              Ahorra con un propósito
-            </h2>
-            <p className="mt-1 text-sm text-white/70 max-w-md">
-              Define un objetivo (viaje, curso, colchón de emergencia...) y mira tu progreso
-              en función de tu <span className="font-semibold text-white">Total Aportes</span>
-              (permanente + social) con cada quincena que ahorras en Fonalmerque.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => { setEditing(null); setShowForm(true); }}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#f4a900] text-black font-bold text-sm hover:bg-[#f4a900]/90 transition flex-shrink-0"
-          >
-            <Plus className="w-4 h-4" /> Nueva meta
-          </button>
-        </div>
+    <div className="space-y-3">
+      {/* Compact header row — previous version was a full black hero
+          with copy the user had already read once. This collapses the
+          intro into a single title + "Nueva meta" button. */}
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-sm font-bold text-gray-900 flex items-center gap-1.5">
+          <Target className="w-4 h-4 text-[#f4a900]" />
+          Mis metas
+          {goals.length > 0 && (
+            <span className="text-xs font-normal text-gray-400">({goals.length})</span>
+          )}
+        </h2>
+        <button
+          type="button"
+          onClick={() => { setEditing(null); setShowForm(true); }}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#f4a900] text-black text-xs font-bold hover:bg-[#e68a00] transition"
+        >
+          <Plus className="w-3.5 h-3.5" /> Nueva meta
+        </button>
       </div>
 
       {error && (
-        <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">
+        <div className="p-2.5 rounded-lg bg-red-50 border border-red-200 text-red-700 text-xs">
           {error}
         </div>
       )}
 
       {loading ? (
-        <div className="py-12 text-center text-sm text-gray-500">Cargando metas...</div>
+        <div className="py-6 text-center text-xs text-gray-500">Cargando metas...</div>
       ) : goals.length === 0 ? (
-        <div className="p-8 rounded-2xl border-2 border-dashed border-gray-200 text-center">
-          <div className="w-14 h-14 rounded-full bg-orange-100 flex items-center justify-center mx-auto mb-3">
-            <Sparkles className="w-7 h-7 text-[#f4a900]" />
-          </div>
-          <p className="font-bold text-gray-900 mb-1">Aún no tienes metas</p>
-          <p className="text-sm text-gray-500 max-w-md mx-auto mb-4">
-            Agrega tu primera meta: puede ser ahorrar para unas vacaciones, una deuda
-            que quieras pagar o simplemente un fondo de emergencia.
-          </p>
-          <button
-            type="button"
-            onClick={() => { setEditing(null); setShowForm(true); }}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#f4a900] text-white font-semibold text-sm hover:bg-[#e68a00]"
-          >
-            <Plus className="w-4 h-4" /> Crear mi primera meta
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => { setEditing(null); setShowForm(true); }}
+          className="w-full py-5 rounded-xl border-2 border-dashed border-gray-200 text-gray-500 hover:border-[#f4a900] hover:text-[#f4a900] transition flex flex-col items-center justify-center gap-1.5 text-xs"
+        >
+          <Sparkles className="w-5 h-5 text-[#f4a900]" />
+          <span className="font-semibold">Define tu primera meta</span>
+          <span className="text-[11px] text-gray-400">Progreso según tu Total Aportes</span>
+        </button>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {goals.map((g) => (
