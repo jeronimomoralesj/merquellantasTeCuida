@@ -27,13 +27,21 @@ export async function GET() {
 
   const stats = agg[0] || { avg_permanente: 0, avg_social: 0, max_permanente: 0, total_ahorrado: 0 };
 
-  // Count active credits
-  const activeCredits = await db.collection('fondo_cartera').countDocuments({ estado: 'activo' });
+  // Count active credits + pending solicitudes so the admin dashboard
+  // can surface actionable counts at a glance.
+  const [activeCredits, pendingCredits, pendingRetiros] = await Promise.all([
+    db.collection('fondo_cartera').countDocuments({ estado: 'activo' }),
+    db.collection('fondo_cartera').countDocuments({ estado: 'pendiente' }),
+    db.collection('fondo_retiros').countDocuments({ estado: 'pendiente' }),
+  ]);
 
   return NextResponse.json({
     total_afiliados: totalMembers,
     promedio_ahorro: Math.round((stats.avg_permanente || 0) + (stats.avg_social || 0)),
     total_ahorrado: Math.round(stats.total_ahorrado || 0),
     creditos_activos: activeCredits,
+    creditos_pendientes: pendingCredits,
+    retiros_pendientes: pendingRetiros,
+    solicitudes_pendientes: pendingCredits + pendingRetiros,
   });
 }

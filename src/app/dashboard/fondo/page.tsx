@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import {
   Search,
@@ -177,22 +177,54 @@ const estadoBadge = (estado: string) => {
 
 type TabId = "ciclo" | "solicitudes" | "historial" | "buscar" | "nuevo" | "csv";
 
-const tabs: { id: TabId; label: string; icon: React.ReactNode }[] = [
-  { id: "ciclo", label: "Ciclo Actual", icon: <DollarSign size={16} /> },
-  { id: "solicitudes", label: "Solicitudes", icon: <CreditCard size={16} /> },
-  { id: "historial", label: "Historial Ciclos", icon: <History size={16} /> },
-  { id: "buscar", label: "Buscar Afiliado", icon: <Search size={16} /> },
-  { id: "nuevo", label: "Nuevo Afiliado", icon: <UserPlus size={16} /> },
-  { id: "csv", label: "Cargar CSV", icon: <Wallet size={16} /> },
+interface TabDef { id: TabId; label: string; icon: React.ReactNode }
+
+// Grouped tabs — the nav renders a thin divider between groups so the
+// three concerns (cycle work / member work / data ingest) read
+// semantically instead of as one flat bar of buttons.
+const TAB_GROUPS: TabDef[][] = [
+  [
+    { id: "ciclo", label: "Ciclo Actual", icon: <DollarSign size={16} /> },
+    { id: "solicitudes", label: "Solicitudes", icon: <CreditCard size={16} /> },
+    { id: "historial", label: "Historial", icon: <History size={16} /> },
+  ],
+  [
+    { id: "buscar", label: "Buscar Afiliado", icon: <Search size={16} /> },
+    { id: "nuevo", label: "Nuevo Afiliado", icon: <UserPlus size={16} /> },
+  ],
+  [
+    { id: "csv", label: "Cargar CSV", icon: <Wallet size={16} /> },
+  ],
 ];
 
 /* ================================================================== */
 /*  MAIN PAGE                                                          */
 /* ================================================================== */
 
+interface AdminStats {
+  total_afiliados: number;
+  total_ahorrado: number;
+  creditos_activos: number;
+  creditos_pendientes: number;
+  retiros_pendientes: number;
+  solicitudes_pendientes: number;
+}
+
 export default function FondoPage() {
   const { data: session, status } = useSession();
   const [activeTab, setActiveTab] = useState<TabId>("ciclo");
+  const [stats, setStats] = useState<AdminStats | null>(null);
+
+  const refreshStats = useCallback(async () => {
+    try {
+      const res = await fetch("/api/fondo/stats");
+      if (res.ok) setStats(await res.json());
+    } catch { /* non-fatal */ }
+  }, []);
+
+  useEffect(() => {
+    if (session?.user?.rol === "fondo") refreshStats();
+  }, [session, refreshStats]);
 
   /* ---- auth gate ---- */
 
@@ -220,25 +252,28 @@ export default function FondoPage() {
     );
   }
 
+  const pendingCount = stats?.solicitudes_pendientes ?? 0;
+
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900">
+    <div className="min-h-screen bg-gray-50 text-gray-900" translate="no">
       <DashboardNavbar activePage="fondo" />
 
-      <div className="pt-20 px-4 sm:px-6 lg:px-8 pb-12 text-gray-900">
-        <div className="max-w-7xl mx-auto text-gray-900">
-          {/* HERO */}
-          <section className="relative mb-8 overflow-hidden rounded-3xl bg-black text-white shadow-xl">
+      <div className="pt-20 px-4 sm:px-6 lg:px-8 pb-12">
+        <div className="max-w-7xl mx-auto space-y-5">
+          {/* HERO — title on the left, live KPIs on the right. Clicking a
+              KPI jumps to the tab that owns that metric. */}
+          <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-gray-950 via-gray-900 to-gray-900 text-white shadow-xl">
             <div
               aria-hidden
               className="pointer-events-none absolute inset-0 opacity-40"
               style={{
                 backgroundImage:
-                  "radial-gradient(circle at 12% 20%, #f4a900 0, transparent 45%), radial-gradient(circle at 88% 90%, #f4a900 0, transparent 35%)",
+                  "radial-gradient(circle at 8% 15%, #f4a900 0, transparent 45%), radial-gradient(circle at 95% 95%, #f4a900 0, transparent 40%)",
               }}
             />
             <div
               aria-hidden
-              className="pointer-events-none absolute inset-0 opacity-[0.06]"
+              className="pointer-events-none absolute inset-0 opacity-[0.05]"
               style={{
                 backgroundImage:
                   "linear-gradient(#ffffff 1px, transparent 1px), linear-gradient(90deg, #ffffff 1px, transparent 1px)",
@@ -247,65 +282,201 @@ export default function FondoPage() {
             />
             <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-[#f4a900] to-transparent" />
 
-            <div className="relative p-6 sm:p-8 lg:p-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="relative p-5 sm:p-7 grid gap-6 lg:grid-cols-[1fr_2fr] lg:items-center">
               <div>
-                <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#f4a900]/15 text-[#f4a900] text-xs font-semibold uppercase tracking-wider border border-[#f4a900]/30">
-                  <Landmark className="h-3.5 w-3.5" /> Fonalmerque
+                <span className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-[#f4a900]/15 text-[#f4a900] text-[10px] font-bold uppercase tracking-wider border border-[#f4a900]/30">
+                  <Landmark className="h-3 w-3" /> Fonalmerque · Admin
                 </span>
-                <h1 className="mt-3 text-2xl sm:text-3xl lg:text-4xl font-extrabold leading-tight">
+                <h1 className="mt-2.5 text-2xl sm:text-3xl font-extrabold leading-tight">
                   Panel del <span className="text-[#f4a900]">Fonalmerque</span>
                 </h1>
-                <p className="mt-2 text-sm sm:text-base text-white/70">
-                  Gestiona ciclos, aportes y afiliados de Fonalmerque.
+                <p className="mt-1.5 text-sm text-white/60 max-w-md">
+                  Ciclos de nómina, solicitudes, afiliados y cartera — todo en un solo lugar.
                 </p>
               </div>
-              <div className="flex flex-wrap gap-2">
-                {[
-                  { icon: DollarSign, label: "Aportes" },
-                  { icon: Users, label: "Afiliados" },
-                  { icon: CreditCard, label: "Cartera" },
-                  { icon: Activity, label: "Actividad" },
-                ].map((c) => (
-                  <span
-                    key={c.label}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-xs font-semibold text-white/80"
-                  >
-                    <c.icon className="h-3.5 w-3.5 text-[#f4a900]" />
-                    {c.label}
-                  </span>
-                ))}
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                <KpiCard
+                  icon={<Users className="h-4 w-4" />}
+                  label="Afiliados activos"
+                  value={stats ? String(stats.total_afiliados) : "—"}
+                  tint="emerald"
+                />
+                <KpiCard
+                  icon={<DollarSign className="h-4 w-4" />}
+                  label="Total ahorrado"
+                  value={stats ? formatCompactCOP(stats.total_ahorrado) : "—"}
+                  tint="blue"
+                />
+                <KpiCard
+                  icon={<CreditCard className="h-4 w-4" />}
+                  label="Créditos activos"
+                  value={stats ? String(stats.creditos_activos) : "—"}
+                  tint="amber"
+                />
+                <KpiCard
+                  icon={<Clock className="h-4 w-4" />}
+                  label="Pendientes"
+                  value={stats ? String(stats.solicitudes_pendientes) : "—"}
+                  tint={pendingCount > 0 ? "red" : "slate"}
+                  onClick={() => setActiveTab("solicitudes")}
+                  pulse={pendingCount > 0}
+                />
               </div>
             </div>
           </section>
 
-          {/* Tabs */}
-          <div className="mb-6 flex flex-wrap gap-2">
-            {tabs.map((t) => (
-              <button
-                key={t.id}
-                onClick={() => setActiveTab(t.id)}
-                className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 ${
-                  activeTab === t.id
-                    ? "bg-[#f4a900] text-white shadow-md shadow-[#f4a900]/25"
-                    : "bg-white text-gray-600 border border-gray-200 hover:border-[#f4a900]/40 hover:text-[#f4a900]"
-                }`}
-              >
-                {t.icon}
-                {t.label}
-              </button>
-            ))}
+          {/* Tab nav — pills grouped into three sections, horizontally
+              scrollable on narrow viewports, with a live count badge on
+              Solicitudes. Hugging a thin container so the active pill
+              reads as a real segmented control. */}
+          <div className="bg-white rounded-2xl border border-gray-200 p-1.5 overflow-x-auto">
+            <div className="flex items-center gap-1 min-w-max">
+              {TAB_GROUPS.map((group, gi) => (
+                <React.Fragment key={gi}>
+                  {gi > 0 && <div className="h-6 w-px bg-gray-200 mx-1 flex-shrink-0" />}
+                  {group.map((t) => (
+                    <TabPill
+                      key={t.id}
+                      icon={t.icon}
+                      label={t.label}
+                      active={activeTab === t.id}
+                      badge={t.id === "solicitudes" && pendingCount > 0 ? pendingCount : undefined}
+                      onClick={() => setActiveTab(t.id)}
+                    />
+                  ))}
+                </React.Fragment>
+              ))}
+            </div>
           </div>
 
           {/* Tab content */}
-          {activeTab === "ciclo" && <CicloActualTab />}
-          {activeTab === "solicitudes" && <SolicitudesTab />}
-          {activeTab === "historial" && <HistorialTab />}
-          {activeTab === "buscar" && <BuscarAfiliadoTab />}
-          {activeTab === "nuevo" && <NuevoAfiliadoTab />}
-          {activeTab === "csv" && <CargarCsvTab />}
+          <div>
+            {activeTab === "ciclo" && <CicloActualTab />}
+            {activeTab === "solicitudes" && <SolicitudesTab />}
+            {activeTab === "historial" && <HistorialTab />}
+            {activeTab === "buscar" && <BuscarAfiliadoTab />}
+            {activeTab === "nuevo" && <NuevoAfiliadoTab />}
+            {activeTab === "csv" && <CargarCsvTab />}
+          </div>
         </div>
       </div>
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Admin shell bits                                                   */
+/* ------------------------------------------------------------------ */
+
+// "$35M" / "$850K" / "$1.2B" — compact currency for tight KPI cards.
+// Falls back to full COP format for values below a million.
+function formatCompactCOP(n: number | null | undefined): string {
+  const v = Math.abs(Number(n) || 0);
+  if (v < 1_000_000) {
+    return new Intl.NumberFormat("es-CO", {
+      style: "currency",
+      currency: "COP",
+      minimumFractionDigits: 0,
+    }).format(v);
+  }
+  if (v < 1_000_000_000) {
+    return `$${(v / 1_000_000).toFixed(v >= 10_000_000 ? 0 : 1)}M`;
+  }
+  return `$${(v / 1_000_000_000).toFixed(1)}B`;
+}
+
+type KpiTint = "emerald" | "blue" | "amber" | "red" | "slate";
+
+const KPI_TINT: Record<KpiTint, { icon: string; text: string }> = {
+  emerald: { icon: "bg-emerald-500/15 text-emerald-300", text: "text-white" },
+  blue:    { icon: "bg-sky-500/15 text-sky-300",          text: "text-white" },
+  amber:   { icon: "bg-amber-500/15 text-amber-300",      text: "text-white" },
+  red:     { icon: "bg-red-500/20 text-red-300",          text: "text-white" },
+  slate:   { icon: "bg-white/10 text-white/70",           text: "text-white/80" },
+};
+
+function KpiCard({
+  icon,
+  label,
+  value,
+  tint,
+  onClick,
+  pulse,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  tint: KpiTint;
+  onClick?: () => void;
+  pulse?: boolean;
+}) {
+  const palette = KPI_TINT[tint];
+  const Wrapper = onClick ? "button" : "div";
+  return (
+    <Wrapper
+      onClick={onClick}
+      className={`relative group text-left p-3 rounded-xl bg-white/5 border border-white/10 backdrop-blur-sm transition-all ${
+        onClick ? "hover:bg-white/10 hover:border-white/20 active:scale-[0.98] cursor-pointer" : ""
+      }`}
+    >
+      <div className="flex items-center gap-2 mb-1.5">
+        <span className={`w-7 h-7 rounded-lg flex items-center justify-center ${palette.icon}`}>
+          {icon}
+        </span>
+        <span className="text-[10px] font-bold uppercase tracking-wider text-white/60 truncate">
+          {label}
+        </span>
+      </div>
+      <p className={`text-xl sm:text-2xl font-extrabold leading-none ${palette.text}`}>
+        {value}
+      </p>
+      {pulse && (
+        <span
+          aria-hidden
+          className="absolute top-2 right-2 inline-flex h-2 w-2 rounded-full bg-red-400"
+        >
+          <span className="absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75 animate-ping" />
+        </span>
+      )}
+    </Wrapper>
+  );
+}
+
+function TabPill({
+  icon,
+  label,
+  active,
+  badge,
+  onClick,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  active: boolean;
+  badge?: number;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`relative inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-semibold whitespace-nowrap transition ${
+        active
+          ? "bg-[#f4a900] text-black shadow-md shadow-[#f4a900]/20"
+          : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+      }`}
+    >
+      {icon}
+      {label}
+      {badge !== undefined && badge > 0 && (
+        <span
+          className={`ml-1 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold ${
+            active ? "bg-black/15 text-black" : "bg-red-100 text-red-700"
+          }`}
+        >
+          {badge}
+        </span>
+      )}
+    </button>
   );
 }
 
