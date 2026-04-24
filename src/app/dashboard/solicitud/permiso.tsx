@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Upload,
   CheckCircle,
@@ -10,6 +10,7 @@ import {
   FileText,
   X,
   UserCheck,
+  Umbrella,
 } from 'lucide-react';
 import { useSession } from 'next-auth/react';
 import JefeSelector, { type JefeOption } from './JefeSelector';
@@ -38,6 +39,23 @@ const PermisoForm = () => {
   const [formError, setFormError] = useState('');
   const [fileError, setFileError] = useState(false);
   const [jefe, setJefe] = useState<JefeOption | null>(null);
+
+  // Vacation balance chip — shown in the permiso form header so the user
+  // can decide mid-flow whether a permiso makes more sense than just
+  // pulling from their accumulated vacation days.
+  const [vacationDays, setVacationDays] = useState<number | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/vacations/me');
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        if (!cancelled) setVacationDays(typeof data.days === 'number' ? data.days : null);
+      } catch { /* ignore */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   const validateForm = () => {
     if (!formData.description.trim()) {
@@ -210,6 +228,14 @@ const PermisoForm = () => {
       </div>
       
       <form onSubmit={handleSubmit} className="p-4 sm:p-6">
+        {vacationDays !== null && (
+          <div className="mb-4 inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold">
+            <Umbrella className="h-3.5 w-3.5" />
+            Tienes <b>{Number(vacationDays).toFixed(vacationDays % 1 === 0 ? 0 : 2)}</b>
+            {vacationDays === 1 ? ' día de vacaciones disponible' : ' días de vacaciones disponibles'}
+          </div>
+        )}
+
         {formError && (
           <div className="mb-6 bg-red-50 border border-red-200 text-red-600 rounded-lg p-4 flex items-start">
             <AlertCircle className="h-5 w-5 mr-3 mt-0.5 flex-shrink-0" />
