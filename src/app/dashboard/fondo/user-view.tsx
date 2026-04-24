@@ -32,6 +32,7 @@ import {
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import SolicitudCreditoForm, { SolicitudPayload } from "./SolicitudCreditoForm";
+import GoalsSection from "./GoalsSection";
 
 interface Saldos {
   permanente: number;
@@ -114,7 +115,7 @@ interface FondoData {
   retiros?: RetiroSolicitud[];
 }
 
-type TabKey = "estado" | "actividades" | "cartera";
+type TabKey = "estado" | "actividades" | "cartera" | "metas";
 
 const fmt = (n: number) =>
   new Intl.NumberFormat("es-CO", {
@@ -575,6 +576,7 @@ export default function FondoUserView() {
             { key: "estado" as TabKey, label: "Estado de Cuenta", icon: Receipt },
             { key: "actividades" as TabKey, label: "Actividades", icon: BarChart3 },
             { key: "cartera" as TabKey, label: "Cartera", icon: CreditCard },
+            { key: "metas" as TabKey, label: "Mis Metas", icon: Target },
           ]).map(({ key, label, icon: Icon }) => (
             <button
               key={key}
@@ -849,6 +851,11 @@ export default function FondoUserView() {
                 </div>
               )}
             </div>
+          )}
+
+          {/* Mis Metas Tab */}
+          {activeTab === "metas" && (
+            <GoalsSection currentSavings={(saldos.permanente || 0) + (saldos.social || 0)} />
           )}
         </div>
       </div>
