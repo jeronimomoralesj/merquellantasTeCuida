@@ -129,36 +129,72 @@ async function scrapeOne(
   // Modal: "Número Identificación" input
   const cedulaInput = sel('formSeleccionarEmpleadoselEmp:numeroDocumentoDecselEmp:numeroDocumentoselEmp');
   await page.waitForSelector(cedulaInput, { timeout: 15_000, state: 'visible' });
-  await page.fill(cedulaInput, cedula);
 
-  // Click "Consultar"
-  await page.click(sel('formSeleccionarEmpleadoselEmp:btnBuscarselEmp'));
+  // Fill + commit + Consultar, then verify the table is actually filtered down
+  // to rows matching our cedula. Without the commit step (change + Tab), the
+  // Consultar click races Playwright's fill and Heinsohn submits an empty
+  // cedula filter — returning the FULL employee list. In that state the
+  // row-level checkbox click does not translate to a server-side selection,
+  // and the subsequent "Actualizar" closes the modal without populating the
+  // main form, which is what produced the "waitForFunction timeout" errors.
+  //
+  // States we have to distinguish after Consultar:
+  //   1. filter applied, 1+ rows all containing our cedula   → ready
+  //   2. filter applied, 0 rows (table gone/empty)           → not in Heinsohn,
+  //      fail fast (retrying won't help)
+  //   3. filter NOT applied, unfiltered employee list        → race, retry
+  type SearchState = 'ready' | 'not-found' | 'unfiltered' | 'pending';
+  const readState = async (): Promise<SearchState> => {
+    return page.evaluate((wantedCedula: string) => {
+      const inp = document.querySelector(
+        '#formSeleccionarEmpleadoselEmp\\:numeroDocumentoDecselEmp\\:numeroDocumentoselEmp',
+      ) as HTMLInputElement | null;
+      const filterStuck = !!inp && inp.value.trim() === wantedCedula;
+      const table = document.querySelector(
+        'table[id*="tablaEmpleadosselEmp"]',
+      ) as HTMLTableElement | null;
+      const rows = table
+        ? Array.from(table.querySelectorAll('tr.rich-table-firstrow, tr.rich-table-row'))
+        : [];
+      if (rows.length === 0) return filterStuck ? 'not-found' : 'pending';
+      const allMatch = rows.every((r) =>
+        (((r as HTMLElement).innerText || r.textContent) ?? '')
+          .replace(/\s+/g, ' ')
+          .includes(wantedCedula),
+      );
+      if (allMatch) return 'ready';
+      return 'unfiltered';
+    }, cedula) as Promise<SearchState>;
+  };
 
-  // Wait until the search results include a row with our cedula. We don't save a
-  // handle — RichFaces rerenders the tbody on every AJAX tick and any reference
-  // goes stale. Everything that follows uses content-based selectors so each
-  // retry re-queries the live DOM.
-  await page
-    .waitForFunction(
-      (wantedCedula: string) => {
-        const table = document.querySelector(
-          'table[id*="tablaEmpleadosselEmp"]',
-        ) as HTMLTableElement | null;
-        if (!table) return false;
-        return Array.from(
-          table.querySelectorAll('tr.rich-table-firstrow, tr.rich-table-row'),
-        ).some((r) =>
-          (((r as HTMLElement).innerText || r.textContent) ?? '')
-            .replace(/\s+/g, ' ')
-            .includes(wantedCedula),
-        );
-      },
-      cedula,
-      { timeout: 20_000 },
-    )
-    .catch(() => {
-      throw new Error(`Heinsohn no devolvió resultados para ${cedula}`);
-    });
+  let finalState: SearchState = 'pending';
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await page.fill(cedulaInput, '');
+    await page.fill(cedulaInput, cedula);
+    await page.dispatchEvent(cedulaInput, 'change');
+    await page.press(cedulaInput, 'Tab');
+
+    await page.click(sel('formSeleccionarEmpleadoselEmp:btnBuscarselEmp'));
+
+    // Give the AJAX a moment to settle; then poll until we get a terminal
+    // state (ready / not-found) or until we confirm it's unfiltered.
+    let state: SearchState = 'pending';
+    const deadline = Date.now() + 15_000;
+    while (Date.now() < deadline) {
+      await page.waitForTimeout(400);
+      state = await readState();
+      if (state === 'ready' || state === 'not-found' || state === 'unfiltered') break;
+    }
+    finalState = state;
+    if (state === 'ready' || state === 'not-found') break;
+    // 'unfiltered' or 'pending' → retry the search
+  }
+  if (finalState === 'not-found') {
+    throw new Error(`Cédula ${cedula} no encontrada en Heinsohn`);
+  }
+  if (finalState !== 'ready') {
+    throw new Error(`Heinsohn no devolvió resultados filtrados para ${cedula}`);
+  }
 
   // Click the checkbox inside the ACTUAL data row. Important constraints:
   //   - restrict to tr.rich-table-firstrow / rich-table-row (data rows only);
