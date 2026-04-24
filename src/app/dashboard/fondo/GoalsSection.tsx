@@ -112,7 +112,8 @@ export default function GoalsSection({ currentSavings }: { currentSavings: numbe
             </h2>
             <p className="mt-1 text-sm text-white/70 max-w-md">
               Define un objetivo (viaje, curso, colchón de emergencia...) y mira tu progreso
-              con cada quincena que ahorras en Fonalmerque.
+              en función de tu <span className="font-semibold text-white">Total Aportes</span>
+              (permanente + social) con cada quincena que ahorras en Fonalmerque.
             </p>
           </div>
           <button

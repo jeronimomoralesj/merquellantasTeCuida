@@ -855,7 +855,7 @@ export default function FondoUserView() {
 
           {/* Mis Metas Tab */}
           {activeTab === "metas" && (
-            <GoalsSection currentSavings={(saldos.permanente || 0) + (saldos.social || 0)} />
+            <GoalsSection currentSavings={saldos.total_aportes || 0} />
           )}
         </div>
       </div>
