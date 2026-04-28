@@ -26,7 +26,12 @@ export async function GET() {
 
   try {
     const res = await fetch(UPSTREAM, {
-      headers: { [headerName]: headerValue, Accept: 'application/json' },
+      headers: {
+        [headerName]: headerValue,
+        Accept: '*/*',
+        'User-Agent': 'PostmanRuntime/7.36.0',
+        'Accept-Encoding': 'gzip, deflate, br',
+      },
       cache: 'no-store',
     });
     if (!res.ok) {
