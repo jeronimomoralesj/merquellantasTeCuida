@@ -15,7 +15,6 @@ import {
   Cell,
   Tooltip,
   ResponsiveContainer,
-  Legend,
 } from "recharts";
 
 interface SalesAlert {
@@ -66,6 +65,36 @@ function normalizeAlert(raw: string): AlertKey {
 function formatNumber(n: number): string {
   if (n == null || Number.isNaN(n)) return "0";
   return n.toLocaleString("es-CO", { maximumFractionDigits: 2 });
+}
+
+const MONTHS_ES = [
+  "ENE",
+  "FEB",
+  "MAR",
+  "ABR",
+  "MAY",
+  "JUN",
+  "JUL",
+  "AGO",
+  "SEP",
+  "OCT",
+  "NOV",
+  "DIC",
+];
+
+function currentPeriodLabel(): string {
+  const now = new Date();
+  return `${MONTHS_ES[now.getMonth()]} ${now.getFullYear()}`;
+}
+
+function matchesCurrentPeriod(name: string): boolean {
+  const target = currentPeriodLabel();
+  const normalized = (name || "")
+    .toUpperCase()
+    .replace(/\./g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return normalized === target;
 }
 
 export default function StatsSeguimientoVentas({
@@ -119,14 +148,21 @@ export default function StatsSeguimientoVentas({
     };
   }, [isOpen]);
 
+  const periodLabel = currentPeriodLabel();
+
+  const periodData = useMemo(
+    () => data.filter((item) => matchesCurrentPeriod(item.name)),
+    [data]
+  );
+
   const sorted = useMemo(() => {
-    return [...data].sort((a, b) => {
+    return [...periodData].sort((a, b) => {
       const ai = ORDER.indexOf(normalizeAlert(a.alert));
       const bi = ORDER.indexOf(normalizeAlert(b.alert));
       if (ai !== bi) return ai - bi;
       return (a.employee || "").localeCompare(b.employee || "");
     });
-  }, [data]);
+  }, [periodData]);
 
   const counts = useMemo(() => {
     const c: Record<AlertKey, number> = {
@@ -135,13 +171,15 @@ export default function StatsSeguimientoVentas({
       VERDE: 0,
       OTRO: 0,
     };
-    for (const item of data) c[normalizeAlert(item.alert)] += 1;
+    for (const item of periodData) c[normalizeAlert(item.alert)] += 1;
     return c;
-  }, [data]);
+  }, [periodData]);
 
   const chartData = ORDER
     .map((k) => ({ name: k, value: counts[k], color: COLORS[k] }))
     .filter((d) => d.value > 0);
+
+  const totalForChart = chartData.reduce((s, d) => s + d.value, 0);
 
   if (!isOpen) return null;
 
@@ -157,7 +195,8 @@ export default function StatsSeguimientoVentas({
                 Seguimiento de Ventas
               </h2>
               <p className="text-sm text-gray-600 mt-1">
-                Total registros: {data.length}
+                Periodo: <span className="font-semibold">{periodLabel}</span>{" "}
+                · {periodData.length} registros
               </p>
             </div>
           </div>
@@ -208,7 +247,7 @@ export default function StatsSeguimientoVentas({
                 />
                 <SummaryCard
                   label="Total"
-                  value={data.length}
+                  value={periodData.length}
                   color="text-gray-800"
                   bg="bg-gray-50 border-gray-200"
                   icon={<TrendingUp className="h-7 w-7 text-[#f4a900]" />}
@@ -216,42 +255,134 @@ export default function StatsSeguimientoVentas({
               </div>
 
               {/* Doughnut */}
-              <div className="bg-gray-50 rounded-xl p-4 sm:p-6">
-                <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-4">
-                  Distribución por estado
-                </h3>
+              <div className="bg-white rounded-2xl p-4 sm:p-6 border border-gray-100 shadow-sm">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-base sm:text-lg font-semibold text-gray-900">
+                    Distribución por estado
+                  </h3>
+                  <span className="text-xs font-semibold text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
+                    {periodLabel}
+                  </span>
+                </div>
+
                 {chartData.length === 0 ? (
-                  <p className="text-sm text-gray-500 text-center py-8">
-                    Sin datos para graficar
+                  <p className="text-sm text-gray-500 text-center py-12">
+                    Sin datos para {periodLabel}
                   </p>
                 ) : (
-                  <div className="w-full h-72">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={chartData}
-                          dataKey="value"
-                          nameKey="name"
-                          cx="50%"
-                          cy="50%"
-                          innerRadius={70}
-                          outerRadius={110}
-                          paddingAngle={2}
-                          label={({ name, value }) => `${name}: ${value}`}
-                        >
-                          {chartData.map((entry) => (
-                            <Cell key={entry.name} fill={entry.color} />
-                          ))}
-                        </Pie>
-                        <Tooltip
-                          formatter={(value: number, name: string) => [
-                            value,
-                            name,
-                          ]}
-                        />
-                        <Legend />
-                      </PieChart>
-                    </ResponsiveContainer>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+                    <div className="relative w-full h-80">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <defs>
+                            {chartData.map((entry) => (
+                              <linearGradient
+                                key={`g-${entry.name}`}
+                                id={`grad-${entry.name}`}
+                                x1="0"
+                                y1="0"
+                                x2="0"
+                                y2="1"
+                              >
+                                <stop
+                                  offset="0%"
+                                  stopColor={entry.color}
+                                  stopOpacity={1}
+                                />
+                                <stop
+                                  offset="100%"
+                                  stopColor={entry.color}
+                                  stopOpacity={0.7}
+                                />
+                              </linearGradient>
+                            ))}
+                          </defs>
+                          <Pie
+                            data={chartData}
+                            dataKey="value"
+                            nameKey="name"
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={85}
+                            outerRadius={130}
+                            paddingAngle={3}
+                            cornerRadius={6}
+                            stroke="#fff"
+                            strokeWidth={2}
+                            startAngle={90}
+                            endAngle={-270}
+                            isAnimationActive
+                          >
+                            {chartData.map((entry) => (
+                              <Cell
+                                key={entry.name}
+                                fill={`url(#grad-${entry.name})`}
+                              />
+                            ))}
+                          </Pie>
+                          <Tooltip
+                            formatter={(value: number, name: string) => {
+                              const pct =
+                                totalForChart > 0
+                                  ? ((value / totalForChart) * 100).toFixed(1)
+                                  : "0";
+                              return [`${value} (${pct}%)`, name];
+                            }}
+                            contentStyle={{
+                              borderRadius: 8,
+                              border: "1px solid #e5e7eb",
+                              boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+                            }}
+                          />
+                        </PieChart>
+                      </ResponsiveContainer>
+                      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                        <span className="text-3xl sm:text-4xl font-extrabold text-gray-900">
+                          {totalForChart}
+                        </span>
+                        <span className="text-xs uppercase tracking-wider text-gray-500 mt-1">
+                          Vendedores
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      {chartData.map((entry) => {
+                        const pct =
+                          totalForChart > 0
+                            ? (entry.value / totalForChart) * 100
+                            : 0;
+                        return (
+                          <div
+                            key={entry.name}
+                            className="flex items-center gap-3"
+                          >
+                            <span
+                              className="w-3 h-3 rounded-full flex-shrink-0"
+                              style={{ background: entry.color }}
+                            />
+                            <span className="text-sm font-semibold text-gray-700 w-20">
+                              {entry.name}
+                            </span>
+                            <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                              <div
+                                className="h-full rounded-full transition-all"
+                                style={{
+                                  width: `${pct}%`,
+                                  background: entry.color,
+                                }}
+                              />
+                            </div>
+                            <span className="text-sm font-bold text-gray-900 w-12 text-right">
+                              {entry.value}
+                            </span>
+                            <span className="text-xs text-gray-500 w-12 text-right">
+                              {pct.toFixed(1)}%
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
               </div>
@@ -328,7 +459,7 @@ export default function StatsSeguimientoVentas({
                             colSpan={9}
                             className="py-6 text-center text-gray-500"
                           >
-                            Sin registros
+                            Sin registros para {periodLabel}
                           </td>
                         </tr>
                       )}
