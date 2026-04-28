@@ -150,11 +150,18 @@ export default function SolicitudesCard() {
   const formatShortDate = (dateStr: string): string => {
     if (!dateStr) return 'No disponible';
     try {
-      const date = new Date(dateStr);
+      // Las fechas tipo 'YYYY-MM-DD' (sin tz) las parsea JS como UTC; al
+      // formatearlas con la zona local (UTC-5 en Colombia) se corren un día
+      // hacia atrás. Forzamos UTC para mostrar exactamente lo que está en BD.
+      const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr);
+      const date = m
+        ? new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])))
+        : new Date(dateStr);
       return date.toLocaleDateString("es-ES", {
         day: "numeric",
         month: "short",
         year: "numeric",
+        timeZone: "UTC",
       });
     } catch (error) {
       return "error:" + error;
