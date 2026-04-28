@@ -82,19 +82,69 @@ const MONTHS_ES = [
   "DIC",
 ];
 
-function currentPeriodLabel(): string {
+function previousPeriodLabel(): string {
   const now = new Date();
-  return `${MONTHS_ES[now.getMonth()]} ${now.getFullYear()}`;
+  const month = now.getMonth() === 0 ? 11 : now.getMonth() - 1;
+  const year =
+    now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
+  return `${MONTHS_ES[month]} ${year}`;
 }
 
-function matchesCurrentPeriod(name: string): boolean {
-  const target = currentPeriodLabel();
+function matchesPreviousPeriod(name: string): boolean {
+  const target = previousPeriodLabel();
   const normalized = (name || "")
     .toUpperCase()
     .replace(/\./g, "")
     .replace(/\s+/g, " ")
     .trim();
   return normalized === target;
+}
+
+interface EmployeeRow {
+  employeeId: number;
+  employee: string;
+  group: string;
+  position: string;
+  lines: string[];
+  commitments: number;
+  sales: number;
+  worstAlert: AlertKey;
+}
+
+const WORST_ORDER: Record<AlertKey, number> = {
+  ROJO: 0,
+  AMARILLO: 1,
+  VERDE: 2,
+  OTRO: 3,
+};
+
+function aggregateByEmployee(rows: SalesAlert[]): EmployeeRow[] {
+  const map = new Map<number, EmployeeRow>();
+  for (const r of rows) {
+    const key = r.employeeId;
+    const alert = normalizeAlert(r.alert);
+    const existing = map.get(key);
+    if (!existing) {
+      map.set(key, {
+        employeeId: r.employeeId,
+        employee: (r.employee || "").trim(),
+        group: r.group,
+        position: r.position,
+        lines: [r.line],
+        commitments: r.commitments || 0,
+        sales: r.sales || 0,
+        worstAlert: alert,
+      });
+    } else {
+      existing.commitments += r.commitments || 0;
+      existing.sales += r.sales || 0;
+      if (!existing.lines.includes(r.line)) existing.lines.push(r.line);
+      if (WORST_ORDER[alert] < WORST_ORDER[existing.worstAlert]) {
+        existing.worstAlert = alert;
+      }
+    }
+  }
+  return [...map.values()];
 }
 
 export default function StatsSeguimientoVentas({
@@ -148,17 +198,18 @@ export default function StatsSeguimientoVentas({
     };
   }, [isOpen]);
 
-  const periodLabel = currentPeriodLabel();
+  const periodLabel = previousPeriodLabel();
 
   const periodData = useMemo(
-    () => data.filter((item) => matchesCurrentPeriod(item.name)),
+    () => data.filter((item) => matchesPreviousPeriod(item.name)),
     [data]
   );
 
   const sorted = useMemo(() => {
-    return [...periodData].sort((a, b) => {
-      const ai = ORDER.indexOf(normalizeAlert(a.alert));
-      const bi = ORDER.indexOf(normalizeAlert(b.alert));
+    const aggregated = aggregateByEmployee(periodData);
+    return aggregated.sort((a, b) => {
+      const ai = ORDER.indexOf(a.worstAlert);
+      const bi = ORDER.indexOf(b.worstAlert);
       if (ai !== bi) return ai - bi;
       return (a.employee || "").localeCompare(b.employee || "");
     });
@@ -171,9 +222,9 @@ export default function StatsSeguimientoVentas({
       VERDE: 0,
       OTRO: 0,
     };
-    for (const item of periodData) c[normalizeAlert(item.alert)] += 1;
+    for (const row of sorted) c[row.worstAlert] += 1;
     return c;
-  }, [periodData]);
+  }, [sorted]);
 
   const chartData = ORDER
     .map((k) => ({ name: k, value: counts[k], color: COLORS[k] }))
@@ -196,7 +247,7 @@ export default function StatsSeguimientoVentas({
               </h2>
               <p className="text-sm text-gray-600 mt-1">
                 Periodo: <span className="font-semibold">{periodLabel}</span>{" "}
-                · {periodData.length} registros
+                · {sorted.length} vendedores · {periodData.length} líneas
               </p>
             </div>
           </div>
@@ -246,8 +297,8 @@ export default function StatsSeguimientoVentas({
                   icon={<CheckCircle className="h-7 w-7 text-green-500" />}
                 />
                 <SummaryCard
-                  label="Total"
-                  value={periodData.length}
+                  label="Vendedores"
+                  value={sorted.length}
                   color="text-gray-800"
                   bg="bg-gray-50 border-gray-200"
                   icon={<TrendingUp className="h-7 w-7 text-[#f4a900]" />}
@@ -400,34 +451,32 @@ export default function StatsSeguimientoVentas({
                         <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700">Empleado</th>
                         <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700">Cargo</th>
                         <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700">Grupo</th>
-                        <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700">Línea</th>
+                        <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700">Líneas</th>
                         <th className="text-right py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700">Compromiso</th>
                         <th className="text-right py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700">Ventas</th>
                         <th className="text-right py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700">Cumpl. %</th>
-                        <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700">Periodo</th>
                       </tr>
                     </thead>
                     <tbody>
                       {sorted.map((row) => {
-                        const key = normalizeAlert(row.alert);
                         const pct =
                           row.commitments > 0
                             ? (row.sales / row.commitments) * 100
                             : 0;
                         return (
                           <tr
-                            key={`${row.documentId}-${row.employeeId}-${row.line}`}
+                            key={row.employeeId}
                             className="border-b border-gray-100 hover:bg-white"
                           >
                             <td className="py-2 sm:py-3 px-2 sm:px-4">
                               <span
-                                className={`inline-flex items-center px-2 py-0.5 rounded-full border text-xs font-semibold ${BG[key]}`}
+                                className={`inline-flex items-center px-2 py-0.5 rounded-full border text-xs font-semibold ${BG[row.worstAlert]}`}
                               >
-                                {key}
+                                {row.worstAlert}
                               </span>
                             </td>
                             <td className="py-2 sm:py-3 px-2 sm:px-4 text-gray-900 font-medium">
-                              {(row.employee || "").trim()}
+                              {row.employee}
                             </td>
                             <td className="py-2 sm:py-3 px-2 sm:px-4 text-gray-600">
                               {row.position}
@@ -436,7 +485,7 @@ export default function StatsSeguimientoVentas({
                               {row.group}
                             </td>
                             <td className="py-2 sm:py-3 px-2 sm:px-4 text-gray-600">
-                              {row.line}
+                              {row.lines.join(", ")}
                             </td>
                             <td className="py-2 sm:py-3 px-2 sm:px-4 text-gray-700 text-right">
                               {formatNumber(row.commitments)}
@@ -447,16 +496,13 @@ export default function StatsSeguimientoVentas({
                             <td className="py-2 sm:py-3 px-2 sm:px-4 text-gray-700 text-right">
                               {pct.toFixed(1)}%
                             </td>
-                            <td className="py-2 sm:py-3 px-2 sm:px-4 text-gray-500">
-                              {row.name}
-                            </td>
                           </tr>
                         );
                       })}
                       {sorted.length === 0 && (
                         <tr>
                           <td
-                            colSpan={9}
+                            colSpan={8}
                             className="py-6 text-center text-gray-500"
                           >
                             Sin registros para {periodLabel}
