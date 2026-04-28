@@ -12,7 +12,8 @@ export async function GET() {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
   }
 
-  const apiKey = (process.env.MQPLATFORM_REPORT_KEY || '').trim();
+  const rawKey = process.env.MQPLATFORM_REPORT_KEY || '';
+  const apiKey = rawKey.trim();
   if (!apiKey) {
     return NextResponse.json(
       { error: 'Falta MQPLATFORM_REPORT_KEY en variables de entorno' },
@@ -24,14 +25,19 @@ export async function GET() {
   const headerName = (process.env.MQPLATFORM_REPORT_HEADER || 'Authorization').trim();
   const headerValue = scheme ? `${scheme} ${apiKey}` : apiKey;
 
+  const keyFingerprint = {
+    rawLength: rawKey.length,
+    trimmedLength: apiKey.length,
+    first4: apiKey.slice(0, 4),
+    last4: apiKey.slice(-4),
+    hasInnerWhitespace: /\s/.test(apiKey),
+    hasNonAscii: /[^\x20-\x7E]/.test(apiKey),
+    looksLikeGuid: /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(apiKey),
+  };
+
   try {
     const res = await fetch(UPSTREAM, {
-      headers: {
-        [headerName]: headerValue,
-        Accept: '*/*',
-        'User-Agent': 'PostmanRuntime/7.36.0',
-        'Accept-Encoding': 'gzip, deflate, br',
-      },
+      headers: { [headerName]: headerValue },
       cache: 'no-store',
     });
     if (!res.ok) {
@@ -44,7 +50,7 @@ export async function GET() {
         status: res.status,
         headerName,
         scheme: scheme || '(none)',
-        keyLength: apiKey.length,
+        keyFingerprint,
         upstreamHeaders,
         body,
       });
@@ -54,7 +60,7 @@ export async function GET() {
           status: res.status,
           headerNameSent: headerName,
           schemeSent: scheme || '(none)',
-          keyLength: apiKey.length,
+          keyFingerprint,
           upstreamHeaders,
           body: body.slice(0, 800),
         },
