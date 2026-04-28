@@ -1,10 +1,51 @@
 import { NextResponse } from 'next/server';
+import https from 'https';
 import { auth } from '../../../lib/auth';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const UPSTREAM = 'https://shared-mqplatform-prod.azurewebsites.net/api/report/documentsalerts';
+const UPSTREAM_HOST = 'shared-mqplatform-prod.azurewebsites.net';
+const UPSTREAM_PATH = '/api/report/documentsalerts';
+
+interface UpstreamResult {
+  status: number;
+  body: string;
+  headers: Record<string, string>;
+}
+
+function callUpstream(headerName: string, headerValue: string): Promise<UpstreamResult> {
+  return new Promise((resolve, reject) => {
+    const req = https.request(
+      {
+        host: UPSTREAM_HOST,
+        path: UPSTREAM_PATH,
+        method: 'GET',
+        protocol: 'https:',
+        headers: { [headerName]: headerValue },
+      },
+      (res) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (c: Buffer) => chunks.push(c));
+        res.on('end', () => {
+          const headers: Record<string, string> = {};
+          for (const [k, v] of Object.entries(res.headers)) {
+            if (Array.isArray(v)) headers[k] = v.join(', ');
+            else if (v != null) headers[k] = String(v);
+          }
+          resolve({
+            status: res.statusCode || 0,
+            body: Buffer.concat(chunks).toString('utf8'),
+            headers,
+          });
+        });
+        res.on('error', reject);
+      }
+    );
+    req.on('error', reject);
+    req.end();
+  });
+}
 
 export async function GET() {
   const session = await auth();
@@ -36,39 +77,38 @@ export async function GET() {
   };
 
   try {
-    const res = await fetch(UPSTREAM, {
-      headers: { [headerName]: headerValue },
-      cache: 'no-store',
-    });
-    if (!res.ok) {
-      const body = await res.text().catch(() => '');
-      const upstreamHeaders: Record<string, string> = {};
-      res.headers.forEach((v, k) => {
-        upstreamHeaders[k] = v;
-      });
+    const result = await callUpstream(headerName, headerValue);
+    if (result.status < 200 || result.status >= 300) {
       console.error('sales-alerts upstream non-2xx', {
-        status: res.status,
+        status: result.status,
         headerName,
         scheme: scheme || '(none)',
         keyFingerprint,
-        upstreamHeaders,
-        body,
+        upstreamHeaders: result.headers,
+        body: result.body,
       });
       return NextResponse.json(
         {
           error: 'Error consultando reporte',
-          status: res.status,
+          status: result.status,
           headerNameSent: headerName,
           schemeSent: scheme || '(none)',
           keyFingerprint,
-          upstreamHeaders,
-          body: body.slice(0, 800),
+          upstreamHeaders: result.headers,
+          body: result.body.slice(0, 800),
+          via: 'node-https',
         },
         { status: 502 }
       );
     }
-    const data = await res.json();
-    return NextResponse.json(data);
+    try {
+      return NextResponse.json(JSON.parse(result.body));
+    } catch {
+      return new NextResponse(result.body, {
+        status: 200,
+        headers: { 'content-type': result.headers['content-type'] || 'application/json' },
+      });
+    }
   } catch (err) {
     console.error('sales-alerts proxy error', err);
     return NextResponse.json({ error: 'Error de red', detail: String(err) }, { status: 502 });
