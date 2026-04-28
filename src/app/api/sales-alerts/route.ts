@@ -12,7 +12,7 @@ export async function GET() {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
   }
 
-  const apiKey = process.env.MQPLATFORM_REPORT_KEY;
+  const apiKey = (process.env.MQPLATFORM_REPORT_KEY || '').trim();
   if (!apiKey) {
     return NextResponse.json(
       { error: 'Falta MQPLATFORM_REPORT_KEY en variables de entorno' },
