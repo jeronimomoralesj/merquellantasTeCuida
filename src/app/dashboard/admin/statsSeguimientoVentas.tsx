@@ -84,12 +84,25 @@ export default function StatsSeguimientoVentas({
         setLoading(true);
         setError(null);
         const res = await fetch("/api/sales-alerts", { cache: "no-store" });
-        if (!res.ok) throw new Error("Error al cargar el reporte");
-        const json = (await res.json()) as SalesAlert[];
-        if (!cancelled) setData(Array.isArray(json) ? json : []);
+        const payload = await res.json().catch(() => null);
+        if (!res.ok) {
+          const detail =
+            payload && typeof payload === "object"
+              ? `${payload.error ?? "Error"}${
+                  payload.status ? ` (HTTP ${payload.status})` : ""
+                }${payload.body ? ` — ${payload.body}` : ""}`
+              : `HTTP ${res.status}`;
+          throw new Error(detail);
+        }
+        if (!cancelled) setData(Array.isArray(payload) ? payload : []);
       } catch (err) {
         console.error(err);
-        if (!cancelled) setError("No se pudo cargar el seguimiento de ventas");
+        if (!cancelled)
+          setError(
+            err instanceof Error
+              ? err.message
+              : "No se pudo cargar el seguimiento de ventas"
+          );
       } finally {
         if (!cancelled) setLoading(false);
       }
