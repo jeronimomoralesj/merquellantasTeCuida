@@ -580,9 +580,19 @@ function DecidedBanner({ estado }: { estado: 'aprobado' | 'rechazado' }) {
 function SolicitudSummary({ s }: { s: Solicitud }) {
   const formatDate = (d: string | null) => {
     if (!d) return '—';
-    const date = new Date(d);
+    // 'YYYY-MM-DD' sin tz se parsea como UTC y al renderizar en hora local
+    // (UTC-5 en Colombia) se corre un día hacia atrás. Lo forzamos a UTC.
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(d);
+    const date = m
+      ? new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])))
+      : new Date(d);
     if (isNaN(date.getTime())) return d;
-    return date.toLocaleDateString('es-CO', { year: 'numeric', month: 'long', day: 'numeric' });
+    return date.toLocaleDateString('es-CO', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      timeZone: 'UTC',
+    });
   };
   return (
     <div className="space-y-4">
