@@ -8,6 +8,7 @@ import {
   Activity,
   DollarSign,
   FileText,
+  TrendingUp,
   ChevronRight,
   type LucideIcon,
 } from "lucide-react";
@@ -17,8 +18,16 @@ import StatsVacaciones from "./statsVacaciones";
 import StatsIncapacidad from "./statsIncapacidad";
 import StatsCesantias from "./statsCesantias";
 import StatsPermisos from "./statsPermisos";
+import StatsSeguimientoVentas from "./statsSeguimientoVentas";
 
-type StatsView = "main" | "mood" | "vacaciones" | "incapacidad" | "cesantias" | "permisos";
+type StatsView =
+  | "main"
+  | "mood"
+  | "vacaciones"
+  | "incapacidad"
+  | "cesantias"
+  | "permisos"
+  | "ventas";
 
 interface StatItem {
   view: StatsView;
@@ -33,6 +42,7 @@ const ITEMS: StatItem[] = [
   { view: "incapacidad", label: "Incapacidades", description: "Ausencias por salud", icon: Activity },
   { view: "cesantias", label: "Cesantías", description: "Retiros y movimientos", icon: DollarSign },
   { view: "permisos", label: "Permisos", description: "Solicitudes de permiso", icon: FileText },
+  { view: "ventas", label: "Seguimiento Ventas", description: "Cumplimiento por vendedor", icon: TrendingUp },
 ];
 
 export default function Stats() {
@@ -90,6 +100,7 @@ export default function Stats() {
       <StatsIncapacidad isOpen={currentView === "incapacidad"} onClose={() => setCurrentView("main")} />
       <StatsCesantias isOpen={currentView === "cesantias"} onClose={() => setCurrentView("main")} />
       <StatsPermisos isOpen={currentView === "permisos"} onClose={() => setCurrentView("main")} />
+      <StatsSeguimientoVentas isOpen={currentView === "ventas"} onClose={() => setCurrentView("main")} />
     </div>
   );
 }
