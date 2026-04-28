@@ -86,11 +86,18 @@ export default function StatsSeguimientoVentas({
         const res = await fetch("/api/sales-alerts", { cache: "no-store" });
         const payload = await res.json().catch(() => null);
         if (!res.ok) {
+          if (payload && typeof payload === "object") {
+            console.error("sales-alerts proxy detail", payload);
+          }
           const detail =
             payload && typeof payload === "object"
               ? `${payload.error ?? "Error"}${
                   payload.status ? ` (HTTP ${payload.status})` : ""
-                }${payload.body ? ` — ${payload.body}` : ""}`
+                }${
+                  payload.body
+                    ? ` — ${String(payload.body).slice(0, 200)}`
+                    : ""
+                } [revisa la consola para detalles]`
               : `HTTP ${res.status}`;
           throw new Error(detail);
         }

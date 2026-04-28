@@ -20,15 +20,39 @@ export async function GET() {
     );
   }
 
+  const scheme = (process.env.MQPLATFORM_REPORT_SCHEME || '').trim();
+  const headerName = (process.env.MQPLATFORM_REPORT_HEADER || 'Authorization').trim();
+  const headerValue = scheme ? `${scheme} ${apiKey}` : apiKey;
+
   try {
     const res = await fetch(UPSTREAM, {
-      headers: { Authorization: apiKey },
+      headers: { [headerName]: headerValue, Accept: 'application/json' },
       cache: 'no-store',
     });
     if (!res.ok) {
       const body = await res.text().catch(() => '');
+      const upstreamHeaders: Record<string, string> = {};
+      res.headers.forEach((v, k) => {
+        upstreamHeaders[k] = v;
+      });
+      console.error('sales-alerts upstream non-2xx', {
+        status: res.status,
+        headerName,
+        scheme: scheme || '(none)',
+        keyLength: apiKey.length,
+        upstreamHeaders,
+        body,
+      });
       return NextResponse.json(
-        { error: 'Error consultando reporte', status: res.status, body: body.slice(0, 500) },
+        {
+          error: 'Error consultando reporte',
+          status: res.status,
+          headerNameSent: headerName,
+          schemeSent: scheme || '(none)',
+          keyLength: apiKey.length,
+          upstreamHeaders,
+          body: body.slice(0, 800),
+        },
         { status: 502 }
       );
     }
@@ -36,6 +60,6 @@ export async function GET() {
     return NextResponse.json(data);
   } catch (err) {
     console.error('sales-alerts proxy error', err);
-    return NextResponse.json({ error: 'Error de red' }, { status: 502 });
+    return NextResponse.json({ error: 'Error de red', detail: String(err) }, { status: 502 });
   }
 }
