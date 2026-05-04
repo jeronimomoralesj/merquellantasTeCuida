@@ -678,6 +678,9 @@ function CicloActualTab() {
         if (m.cicloActual) map[m.user_id] = m.cicloActual;
       }
       setCicloActualMap(map);
+      // If members already have cicloActual data, a PDF was uploaded previously —
+      // restore the "PDF uploaded" view so non-PDF users stay hidden across reloads.
+      if (Object.keys(map).length > 0) setPdfUploaded(true);
     } catch { /* ignore */ }
   }, []);
 
