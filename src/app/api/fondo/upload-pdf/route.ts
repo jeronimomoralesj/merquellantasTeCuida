@@ -283,10 +283,11 @@ export async function POST(req: NextRequest) {
     const notFoundCedulas: string[] = [];
     const updatedUsers: { cedula: string; name: string; credits: number; savings: boolean; activities: number }[] = [];
 
-    // Clear stale `cicloActual.order` values so a fresh upload re-establishes
-    // the document order (and users dropped from this run don't keep their
-    // previous index and re-appear mid-list).
-    await usersCollection.updateMany({ 'cicloActual.order': { $exists: true } }, { $unset: { 'cicloActual.order': '' } });
+    // Clear `cicloActual` from every user so a fresh upload starts clean —
+    // users dropped from the new PDF must not keep stale data from a prior
+    // run, otherwise they'd still match the "in-PDF" filter on the Ciclo
+    // Actual view and re-appear in the list.
+    await usersCollection.updateMany({ cicloActual: { $exists: true } }, { $unset: { cicloActual: '' } });
 
     for (let i = 0; i < parsedUsers.length; i++) {
       const parsed = parsedUsers[i];
