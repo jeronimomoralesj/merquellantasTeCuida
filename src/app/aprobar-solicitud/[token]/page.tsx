@@ -17,6 +17,9 @@ import {
   Send,
   UserCheck,
   X,
+  ChevronLeft,
+  ChevronRight,
+  Users as UsersIcon,
 } from 'lucide-react';
 
 interface JefeOption {
@@ -227,6 +230,8 @@ export default function AprobarSolicitudPage({
 
             <div className="p-5 sm:p-6">
               <SolicitudSummary s={solicitud} />
+
+              <TeamCalendar token={token} current={solicitud} />
 
               <div className="mt-6">
                 <label className="block text-[11px] uppercase tracking-wider font-bold text-gray-500 mb-1.5">
@@ -675,6 +680,256 @@ function Field({
         {label}
       </p>
       {children}
+    </div>
+  );
+}
+
+interface TeamCalendarItem {
+  id: string;
+  user_id: string | null;
+  nombre: string;
+  tipo: string;
+  estado: string;
+  fecha: string | null;
+  fecha_inicio: string | null;
+  fecha_fin: string | null;
+  tiempo_inicio: string | null;
+  tiempo_fin: string | null;
+}
+
+// 'YYYY-MM-DD' → Date at UTC midnight. Storing date-only strings parsed in
+// local tz can shift the day in Colombia (UTC-5); we keep everything in UTC.
+function parseYmdUTC(s: string | null | undefined): Date | null {
+  if (!s) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+  if (!m) return null;
+  return new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+}
+
+function ymdUTC(d: Date): string {
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(
+    d.getUTCDate(),
+  ).padStart(2, '0')}`;
+}
+
+function TeamCalendar({ token, current }: { token: string; current: Solicitud }) {
+  const [items, setItems] = useState<TeamCalendarItem[] | null>(null);
+  const [error, setError] = useState(false);
+  const initialMonth = (() => {
+    const seed =
+      parseYmdUTC(current.fecha_inicio) || parseYmdUTC(current.fecha) || new Date();
+    return new Date(Date.UTC(seed.getUTCFullYear(), seed.getUTCMonth(), 1));
+  })();
+  const [month, setMonth] = useState<Date>(initialMonth);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch(`/api/solicitudes/by-token/${token}/team-calendar`);
+        if (!res.ok) {
+          setError(true);
+          return;
+        }
+        const data = await res.json();
+        setItems(data.items ?? []);
+      } catch {
+        setError(true);
+      }
+    })();
+  }, [token]);
+
+  const currentRange = (() => {
+    if (current.tipo === 'vacaciones') {
+      const s = parseYmdUTC(current.fecha_inicio);
+      const e = parseYmdUTC(current.fecha_fin) || s;
+      return { start: s, end: e };
+    }
+    const f = parseYmdUTC(current.fecha);
+    return { start: f, end: f };
+  })();
+
+  // Pre-bin everyone's leave by day for O(1) lookup while rendering cells.
+  const byDay = new Map<string, TeamCalendarItem[]>();
+  if (items) {
+    for (const it of items) {
+      if (current.id && it.id === current.id) continue; // current request is shown via highlight, not as a teammate
+      const start = parseYmdUTC(it.fecha_inicio) || parseYmdUTC(it.fecha);
+      const end = parseYmdUTC(it.fecha_fin) || parseYmdUTC(it.fecha) || start;
+      if (!start || !end) continue;
+      const cursor = new Date(start.getTime());
+      while (cursor.getTime() <= end.getTime()) {
+        const key = ymdUTC(cursor);
+        const arr = byDay.get(key) ?? [];
+        arr.push(it);
+        byDay.set(key, arr);
+        cursor.setUTCDate(cursor.getUTCDate() + 1);
+      }
+    }
+  }
+
+  const year = month.getUTCFullYear();
+  const monthIdx = month.getUTCMonth();
+  const firstOfMonth = new Date(Date.UTC(year, monthIdx, 1));
+  const daysInMonth = new Date(Date.UTC(year, monthIdx + 1, 0)).getUTCDate();
+  // Grid starts on Monday — common in es-CO calendars.
+  const leadDow = (firstOfMonth.getUTCDay() + 6) % 7;
+  const totalCells = Math.ceil((leadDow + daysInMonth) / 7) * 7;
+
+  const monthLabel = firstOfMonth.toLocaleDateString('es-CO', {
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
+  const todayKey = ymdUTC(new Date());
+
+  const goPrev = () => setMonth(new Date(Date.UTC(year, monthIdx - 1, 1)));
+  const goNext = () => setMonth(new Date(Date.UTC(year, monthIdx + 1, 1)));
+
+  return (
+    <div className="mt-6 border border-gray-200 rounded-xl overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-200">
+        <div className="flex items-center gap-2">
+          <UsersIcon className="h-4 w-4 text-[#f4a900]" />
+          <p className="text-[11px] uppercase tracking-wider font-bold text-gray-600">
+            Calendario del equipo
+          </p>
+        </div>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={goPrev}
+            className="p-1.5 rounded-md text-gray-600 hover:text-gray-900 hover:bg-white"
+            aria-label="Mes anterior"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <p className="text-sm font-semibold text-gray-900 capitalize min-w-[8.5rem] text-center">
+            {monthLabel}
+          </p>
+          <button
+            type="button"
+            onClick={goNext}
+            className="p-1.5 rounded-md text-gray-600 hover:text-gray-900 hover:bg-white"
+            aria-label="Mes siguiente"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+
+      {items === null && !error && (
+        <div className="p-8 text-center text-xs text-gray-500 flex items-center justify-center gap-2">
+          <Loader2 className="h-3 w-3 animate-spin" /> Cargando calendario del equipo...
+        </div>
+      )}
+      {error && (
+        <div className="p-6 text-center text-xs text-gray-500">
+          No pudimos cargar el calendario del equipo.
+        </div>
+      )}
+      {items !== null && !error && (
+        <div className="p-3">
+          <div className="grid grid-cols-7 text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-1">
+            {['L', 'M', 'X', 'J', 'V', 'S', 'D'].map((d, i) => (
+              <div key={i} className="text-center py-1">
+                {d}
+              </div>
+            ))}
+          </div>
+          <div className="grid grid-cols-7 gap-1">
+            {Array.from({ length: totalCells }).map((_, i) => {
+              const dayNum = i - leadDow + 1;
+              const inMonth = dayNum >= 1 && dayNum <= daysInMonth;
+              const cellDate = inMonth ? new Date(Date.UTC(year, monthIdx, dayNum)) : null;
+              const key = cellDate ? ymdUTC(cellDate) : '';
+              const dayItems = key ? byDay.get(key) ?? [] : [];
+              const isCurrentReq =
+                inMonth &&
+                currentRange.start &&
+                currentRange.end &&
+                cellDate!.getTime() >= currentRange.start.getTime() &&
+                cellDate!.getTime() <= currentRange.end.getTime();
+              const isToday = key === todayKey;
+              return (
+                <div
+                  key={i}
+                  className={`min-h-[64px] rounded-md border p-1 text-left text-[10px] ${
+                    !inMonth
+                      ? 'bg-gray-50 border-gray-100 text-gray-300'
+                      : isCurrentReq
+                      ? 'bg-[#f4a900]/15 border-[#f4a900]'
+                      : 'bg-white border-gray-100'
+                  }`}
+                >
+                  {inMonth && (
+                    <>
+                      <div className="flex items-center justify-between">
+                        <span
+                          className={`font-bold ${
+                            isToday ? 'text-[#b47e00]' : 'text-gray-700'
+                          }`}
+                        >
+                          {dayNum}
+                        </span>
+                        {isCurrentReq && (
+                          <span className="text-[8px] font-extrabold uppercase text-[#b47e00]">
+                            esta
+                          </span>
+                        )}
+                      </div>
+                      <div className="mt-0.5 space-y-0.5">
+                        {dayItems.slice(0, 2).map((it) => (
+                          <div
+                            key={it.id}
+                            title={`${it.nombre} · ${it.tipo}${
+                              it.estado === 'pendiente' ? ' (pendiente)' : ''
+                            }`}
+                            className={`truncate rounded px-1 py-[1px] text-[9px] leading-tight ${
+                              it.tipo === 'vacaciones'
+                                ? it.estado === 'pendiente'
+                                  ? 'bg-amber-50 text-amber-800 border border-amber-200 border-dashed'
+                                  : 'bg-emerald-100 text-emerald-800'
+                                : it.estado === 'pendiente'
+                                ? 'bg-sky-50 text-sky-800 border border-sky-200 border-dashed'
+                                : 'bg-sky-100 text-sky-800'
+                            }`}
+                          >
+                            {it.nombre.split(' ')[0]}
+                          </div>
+                        ))}
+                        {dayItems.length > 2 && (
+                          <div className="text-[9px] text-gray-500 px-1">
+                            +{dayItems.length - 2} más
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-gray-500">
+            <span className="inline-flex items-center gap-1">
+              <span className="w-2.5 h-2.5 rounded-sm bg-emerald-100 border border-emerald-200" />
+              Vacaciones
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <span className="w-2.5 h-2.5 rounded-sm bg-sky-100 border border-sky-200" />
+              Permiso
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <span className="w-2.5 h-2.5 rounded-sm border border-dashed border-gray-400" />
+              Pendiente
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <span className="w-2.5 h-2.5 rounded-sm bg-[#f4a900]/30 border border-[#f4a900]" />
+              Esta solicitud
+            </span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
