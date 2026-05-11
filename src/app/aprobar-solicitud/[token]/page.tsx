@@ -198,6 +198,7 @@ export default function AprobarSolicitudPage({
                   <p className="text-sm text-gray-800 whitespace-pre-wrap">{solicitud.motivo_respuesta}</p>
                 </div>
               )}
+              <TeamCalendar token={token} current={solicitud} />
               <p className="mt-6 text-xs text-gray-500 text-center">
                 Gracias por gestionar esta solicitud. Puedes cerrar esta pestaña.
               </p>
